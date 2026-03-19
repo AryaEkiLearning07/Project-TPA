@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --font-base: 'Nunito', 'Segoe UI', sans-serif;
+  --font-display: 'Baloo 2', 'Nunito', sans-serif;
+  --color-bg: #f8ecff;
+  --color-bg-soft: #fff6fd;
+  --color-surface: #ffffff;
+  --color-border: #ead3f6;
+  --color-text: #2f2144;
+  --color-text-muted: #6f5b88;
+  --color-primary: #ff5ba6;
+  --color-primary-strong: #eb2f8a;
+  --color-accent: #7d5cff;
+  --color-sunny: #ff9ed6;
+  --color-danger: #d84074;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-base);
+  background:
+    radial-gradient(circle at 10% 14%, rgba(255, 108, 182, 0.35), transparent 46%),
+    radial-gradient(circle at 90% 10%, rgba(132, 100, 255, 0.3), transparent 40%),
+    radial-gradient(circle at 75% 85%, rgba(255, 165, 218, 0.3), transparent 46%),
+    linear-gradient(
+      180deg,
+      var(--color-bg-soft) 0%,
+      #f9f1ff 34%,
+      var(--color-bg) 100%
+    );
+  background-attachment: fixed;
+  color: var(--color-text);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(135, 108, 178, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(135, 108, 178, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(circle at 30% 20%, black 20%, transparent 78%);
+  z-index: -1;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+::selection {
+  background: rgba(255, 91, 166, 0.3);
+  color: var(--color-text);
+}

@@ -1,0 +1,430 @@
+# PRODUCTIONS FASE - AUDIT & RENCANA IMPLEMENTASI
+
+Dokumen ini merangkum hasil analisis kesiapan production untuk platform TPA, fokus pada keamanan data, serta langkah setup dari nol menggunakan mini PC + Cloudflare + domain.
+
+## 1) Ringkasan Kondisi Saat Ini
+
+Status saat ini: **BELUM SIAP PRODUKSI**.
+
+Alasan utama:
+- Ada celah akses endpoint sensitif.
+- Manajemen kredensial dan sesi masih berisiko tinggi.
+- Data sensitif (dump DB, upload foto/signature) sudah ada di workspace.
+- Runtime masih mode development.
+- Build/lint belum hijau.
+
+---
+
+## 2) Hasil Analisis + Tindakan yang Harus Dilakukan
+
+### A. Temuan Kritis (Blocker)
+
+1. Endpoint data inti belum konsisten diproteksi `requireAuth`/`requireRoles`.
+- Risiko: data anak/insiden/observasi bisa diakses tidak sesuai role.
+- Harus dilakukan:
+  - Audit semua route.
+  - Wajibkan middleware auth + role.
+  - Tambahkan test akses 401/403 per endpoint.
+
+2. Folder upload di-serve publik langsung (`/uploads` static).
+- Risiko: foto/signature sensitif bisa diakses jika URL diketahui.
+- Harus dilakukan:
+  - Stop public static untuk data sensitif.
+  - Ganti ke endpoint terproteksi auth.
+  - Gunakan signed URL jangka pendek jika perlu akses file.
+
+3. Default admin credential lemah + fallback hardcoded.
+- Risiko: account takeover.
+- Harus dilakukan:
+  - Hapus fallback default password dari kode.
+  - Wajib env production berisi password random kuat.
+  - Nonaktifkan perilaku reset admin otomatis saat startup production.
+
+4. Session token disimpan plaintext di database.
+- Risiko: jika DB dump bocor, sesi aktif bisa langsung dipakai.
+- Harus dilakukan:
+  - Simpan hash token (bukan token mentah).
+  - Implement token rotation + revocation.
+  - Kurangi TTL sesi dan enforce logout pada credential change.
+
+5. Endpoint backup mengeluarkan seluruh data sensitif (`users`, `auth_sessions`, PII).
+- Risiko: backup file jadi single point of catastrophic leak.
+- Harus dilakukan:
+  - Batasi isi backup (exclude session, field sensitif).
+  - Enkripsi backup (AES-256) sebelum disimpan/dikirim.
+  - Simpan backup di storage terkontrol + retention policy.
+
+6. Token dan data aplikasi disimpan di `localStorage`.
+- Risiko: jika ada XSS, token dan data bisa dicuri.
+- Harus dilakukan:
+  - Pindah ke HttpOnly Secure SameSite cookies.
+  - Terapkan CSP ketat.
+  - Minimalkan data sensitif di browser storage.
+
+7. Error internal DB diekspos ke client (`sqlMessage`, detail error).
+- Risiko: mempermudah reconnaissance attacker.
+- Harus dilakukan:
+  - Return pesan generik ke client.
+  - Detail error hanya di server log.
+  - Bedakan mode dev vs prod untuk error output.
+
+### Status Eksekusi Point A (Update 12 Maret 2026)
+- [x] A1: Proteksi route sensitif sudah diperketat dengan `requireAuth` + `requireRoles` + guard absensi petugas pada route operasional utama.
+- [x] A2: Akses file upload tidak lagi publik; endpoint `/uploads` sekarang wajib autentikasi dan role valid.
+- [x] A3: Bootstrap admin di production dinonaktifkan default; fallback default credential production dihapus.
+- [x] A4: Session token disimpan dalam bentuk hash (`SHA-256`) di DB, plus revocation saat login ulang dan saat kredensial petugas berubah.
+- [x] A5: Backup admin kini terenkripsi (`AES-256-GCM`) dan kolom sensitif (`password_hash`, metadata IP/User-Agent) disanitasi; tabel `auth_sessions` dikeluarkan dari backup.
+- [x] A6: Flow auth dipindah ke HttpOnly cookie (`Secure`/`SameSite` configurable), header bearer/localStorage token tidak lagi dipakai di frontend.
+- [x] A7: Sanitasi error internal server/DB sudah diterapkan agar detail sensitif tidak bocor ke client production.
+
+Catatan validasi:
+- Build global masih gagal karena error TypeScript yang sudah ada sebelumnya (modul observasi, supply, dan beberapa unused vars frontend), bukan dari patch keamanan Point A.
+
+### B. Temuan Tinggi
+
+1. Runtime produksi masih pakai flow development (`npm run dev`, watcher).
+- Harus dilakukan:
+  - Produksi wajib `npm run build` + `node dist`.
+  - Gunakan process manager (`systemd`/`pm2`) tanpa mode watch.
+
+2. Belum ada hardening middleware standar.
+- Harus dilakukan:
+  - Tambahkan `helmet`.
+  - Tambahkan rate limiter (global + login endpoint).
+  - Set trusted proxy dengan benar.
+  - Batasi body size per endpoint.
+
+3. Lockout login terlalu ringan (3 percobaan, 30 detik).
+- Harus dilakukan:
+  - Naikkan durasi lockout progresif.
+  - Tambahkan per-IP throttling.
+  - Pertimbangkan challenge/CAPTCHA untuk pola brute-force.
+
+4. DB user masih cenderung root/konfigurasi longgar.
+- Harus dilakukan:
+  - Buat user DB khusus aplikasi (least privilege).
+  - Password kuat, non-empty.
+  - Batasi akses DB hanya dari host internal.
+
+### Status Eksekusi Point B (Update 12 Maret 2026)
+- [x] B1: Jalur runtime production dipisah dari dev dengan script baru (`start/status/restart` production) agar tidak menggunakan watcher.
+- [x] B2: Hardening middleware ditambahkan (security headers/CSP, trust proxy, rate limit global + khusus login, dan guard ukuran payload per endpoint).
+- [x] B3: Lockout login ditingkatkan menjadi progresif (bukan fixed 30 detik) dan ditambah throttle berbasis IP untuk endpoint login.
+- [x] B4: Validasi konfigurasi production memblokir `DB_USER=root` dan `DB_PASSWORD` kosong saat `NODE_ENV=production`.
+
+Catatan implementasi:
+- Untuk rate limit dipakai middleware internal in-memory (tanpa dependency eksternal), sehingga tetap bisa jalan pada environment offline/dev.
+- Operasional production tetap disarankan memakai reverse proxy + service manager (Nginx/systemd/pm2) saat masuk go-live final.
+
+### C. Temuan Operasional
+
+1. Build/lint belum lulus.
+- Harus dilakukan:
+  - Selesaikan error TypeScript dan lint sampai hijau.
+  - Jadikan build+lint sebagai gate sebelum deploy.
+
+2. Belum ada CI/CD dan test automation yang memadai.
+- Harus dilakukan:
+  - Setup pipeline (lint, build, smoke test).
+  - Tambahkan test auth, role access, backup flow, upload security.
+
+3. Artefak sensitif ada di workspace (SQL dump, log, upload).
+- Harus dilakukan:
+  - Pisahkan data production dari repository.
+  - Tambahkan aturan ignore + kebijakan data retention.
+  - Rotasi credential jika pernah tersebar.
+
+---
+
+## 3) Urutan Kerja Menuju Production (Prioritas Eksekusi)
+
+## Fase 0 - Freeze dan Keamanan Dasar
+- Freeze fitur baru sementara.
+- Rotasi semua password (admin, DB, akun staf test).
+- Hapus akun test/default.
+- Audit endpoint auth/role.
+
+## Fase 1 - Hardening Aplikasi
+- Tutup semua endpoint sensitif dengan middleware.
+- Hapus static public akses file sensitif.
+- Implement cookie-based auth aman.
+- Sanitasi error response.
+- Tambahkan helmet + rate limiting.
+
+## Fase 2 - Stabilitas Build dan QA
+- Bersihkan error TypeScript/lint.
+- Tambah test minimal (auth, role, upload, backup).
+- Validasi restore backup di environment staging.
+
+## Fase 3 - Infrastruktur Production
+- Setup OS mini PC, firewall, user non-root.
+- Setup database production dengan user terpisah.
+- Setup reverse proxy.
+- Setup observability (logs, metrics, alert).
+
+## Fase 4 - Go Live Bertahap
+- Deploy ke staging internal.
+- UAT + penetration checklist.
+- Cutover DNS.
+- Monitoring ketat 7 hari pertama.
+
+---
+
+## 4) Setup Dari Nol: Mini PC + Cloudflare + Domain
+
+Rekomendasi arsitektur: **Cloudflare Tunnel** (lebih aman daripada buka port publik langsung).
+
+### 4.1 Persiapan Mini PC
+
+Rekomendasi OS: Ubuntu Server 24.04 LTS.
+
+Langkah:
+1. Install OS bersih.
+2. Buat user admin non-root.
+3. Update sistem:
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+4. Install tool dasar:
+```bash
+sudo apt install -y curl git ufw fail2ban nginx
+```
+5. Hardening SSH:
+  - disable root login.
+  - pakai SSH key, bukan password.
+6. Aktifkan firewall:
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow OpenSSH
+sudo ufw enable
+```
+
+### 4.2 Setup Domain ke Cloudflare
+
+1. Tambahkan domain ke Cloudflare.
+2. Ubah nameserver domain registrar ke nameserver Cloudflare.
+3. Tunggu propagasi aktif.
+
+### 4.3 Setup Cloudflare Tunnel (Recommended)
+
+1. Install cloudflared:
+```bash
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared stable main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt update && sudo apt install -y cloudflared
+```
+2. Login tunnel:
+```bash
+cloudflared tunnel login
+```
+3. Buat tunnel:
+```bash
+cloudflared tunnel create tpa-prod
+```
+4. Buat DNS route:
+```bash
+cloudflared tunnel route dns tpa-prod app.domainanda.com
+cloudflared tunnel route dns tpa-prod api.domainanda.com
+```
+5. Buat config `/etc/cloudflared/config.yml`:
+```yaml
+tunnel: <TUNNEL_ID>
+credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: app.domainanda.com
+    service: http://localhost:8080
+  - hostname: api.domainanda.com
+    service: http://localhost:4000
+  - service: http_status:404
+```
+6. Jalankan sebagai service:
+```bash
+sudo cloudflared service install
+sudo systemctl enable cloudflared
+sudo systemctl start cloudflared
+```
+
+### 4.4 Setup Database Production
+
+1. Install MySQL/MariaDB lokal atau gunakan managed DB.
+2. Buat database + user aplikasi khusus:
+```sql
+CREATE DATABASE tpa_prod CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'tpa_app'@'localhost' IDENTIFIED BY 'PASSWORD_KUAT_RANDOM';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX ON tpa_prod.* TO 'tpa_app'@'localhost';
+FLUSH PRIVILEGES;
+```
+3. Import schema bersih (tanpa data dummy/sensitif).
+4. Nonaktifkan remote root login.
+
+### 4.5 Deploy Aplikasi
+
+1. Siapkan source code production branch.
+2. Buat env production (`server/.env`):
+```env
+NODE_ENV=production
+PORT=4000
+CORS_ORIGIN=https://app.domainanda.com
+SESSION_HOURS=8
+
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=tpa_app
+DB_PASSWORD=PASSWORD_KUAT_RANDOM
+DB_NAME=tpa_prod
+DB_CONNECTION_LIMIT=20
+
+ADMIN_NAME=Admin Utama
+ADMIN_EMAIL=admin@domainanda.com
+ADMIN_PASSWORD=PASSWORD_SANGAT_KUAT_RANDOM
+```
+3. Build frontend + backend (wajib lulus):
+```bash
+npm ci
+npm run build
+cd server
+npm ci
+npm run build
+```
+4. Serve frontend statis via Nginx di `localhost:8080`.
+5. Jalankan backend sebagai service (`systemd` atau `pm2`).
+
+### 4.6 Nginx (Frontend) Contoh Minimal
+
+`/etc/nginx/sites-available/tpa-app`:
+```nginx
+server {
+    listen 8080;
+    server_name localhost;
+    root /opt/tpa/frontend-dist;
+    index index.html;
+
+    location / {
+        try_files $uri /index.html;
+    }
+}
+```
+
+Aktifkan:
+```bash
+sudo ln -s /etc/nginx/sites-available/tpa-app /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 4.7 Backend Service (systemd) Contoh
+
+`/etc/systemd/system/tpa-backend.service`:
+```ini
+[Unit]
+Description=TPA Backend
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/tpa/server
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/tpa/server/.env
+User=tpa
+Group=tpa
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Aktifkan:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable tpa-backend
+sudo systemctl start tpa-backend
+sudo systemctl status tpa-backend
+```
+
+---
+
+## 5) Checklist Go-Live (Wajib Hijau)
+
+- [ ] Semua endpoint sensitif terproteksi auth+role.
+- [ ] Upload sensitif tidak public static.
+- [ ] Tidak ada default credential.
+- [ ] Session token tidak disimpan plaintext.
+- [ ] Error internal tidak bocor ke client.
+- [ ] Build frontend/backend sukses.
+- [ ] Lint critical error = 0.
+- [ ] Backup terenkripsi + restore test sukses.
+- [ ] Monitoring + alert aktif.
+- [ ] Dokumen incident response tersedia.
+
+---
+
+## 6) Monitoring dan Operasional Harian
+
+Wajib dipantau:
+- Health API (`/health`, DB check internal-only).
+- Error rate 5xx.
+- Failed login spike.
+- Disk growth (uploads, logs, backup).
+- Umur sertifikat/tunnel Cloudflare.
+
+Jadwal:
+- Harian: cek service + error log + failed login.
+- Mingguan: test restore backup sampel.
+- Bulanan: rotasi secret kunci kritikal.
+
+---
+
+## 7) Catatan Penting untuk Kasus Anda (Mini PC + Cloudflare)
+
+Karena server berada di mini PC (kemungkinan jaringan rumah/kantor kecil):
+- Gunakan Cloudflare Tunnel agar **tanpa port forwarding**.
+- Jangan expose port 4000/3306 ke internet.
+- Batasi akses SSH via key + allowlist IP jika memungkinkan.
+- Simpan backup terenkripsi di lokasi terpisah (misal object storage/cloud drive terenkripsi), bukan hanya di mini PC.
+
+---
+
+## 8) Rencana Eksekusi 14 Hari (Disarankan)
+
+Hari 1-2:
+- Hardening OS + firewall + SSH.
+- Setup Cloudflare + tunnel.
+
+Hari 3-5:
+- Perbaiki auth/role route.
+- Nonaktifkan public static uploads.
+- Perbaiki manajemen credential/session.
+
+Hari 6-8:
+- Selesaikan build/lint.
+- Tambahkan test smoke/security dasar.
+
+Hari 9-10:
+- Setup DB production + backup encrypted + restore test.
+
+Hari 11-12:
+- Deploy staging di mini PC.
+- UAT dan security checklist.
+
+Hari 13-14:
+- Cutover domain production.
+- Monitoring intensif dan perbaikan cepat.
+
+---
+
+## 9) Status Auto-Compress Gambar (Update)
+
+Status saat ini: **SUDAH ADA, tetapi belum sepenuhnya konsisten di sisi client.**
+
+Temuan:
+- Server sudah auto-compress gambar ke WebP saat menyimpan file (`server/src/utils/base64-storage.ts` -> `compressImage` di `server/src/utils/image-compress.ts`).
+- Banyak form frontend juga sudah compress sebelum kirim (contoh `compressImageToDataUrl` di beberapa komponen upload).
+- Namun upload foto anak di `src/features/petugas/data-anak/DataAnakPage.tsx` masih membaca file langsung dengan `FileReader` tanpa pre-compress client.
+
+Apa yang harus dilakukan:
+- Jadikan server-side compression tetap sebagai kontrol utama (tetap wajib).
+- Standarkan semua upload frontend untuk memakai util `compressImageToDataUrl`, termasuk upload foto anak.
+- Tambahkan validasi ukuran file di frontend (contoh tolak > 5MB sebelum proses).
+- Tambahkan QA check: upload gambar besar (mis. > 8MB), verifikasi ukuran output file di `/uploads` sudah turun signifikan.
