@@ -7,6 +7,7 @@ const landingRoot = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   root: landingRoot,
+  publicDir: resolve(landingRoot, '../../public'),
   plugins: [react()],
   server: {
     host: true,

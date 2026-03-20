@@ -34,7 +34,7 @@ export type MonitoringSubTab =
     | 'berita-acara'
     | 'kehadiran-petugas'
     | 'layanan'
-export type SettingsSubTab = 'petugas' | 'logs' | 'backup'
+export type SettingsSubTab = 'petugas' | 'orang-tua' | 'logs' | 'backup'
 
 export interface AdminNavigationState {
     scope: 'admin'
@@ -54,7 +54,7 @@ export const isMonitoringSubTab = (value: unknown): value is MonitoringSubTab =>
     value === 'layanan'
 
 export const isSettingsSubTab = (value: unknown): value is SettingsSubTab =>
-    value === 'petugas' || value === 'logs' || value === 'backup'
+    value === 'petugas' || value === 'orang-tua' || value === 'logs' || value === 'backup'
 
 export const isAdminNavigationState = (value: unknown): value is AdminNavigationState => {
     if (typeof value !== 'object' || value === null) {
@@ -147,6 +147,12 @@ export const settingsSubTabs = [
         icon: UserCog,
     },
     {
+        key: 'orang-tua',
+        label: 'Akun Orang Tua',
+        description: 'Monitoring akun orang tua yang sudah daftar',
+        icon: UsersRound,
+    },
+    {
         key: 'logs',
         label: 'Log Aktivitas',
         description: 'Pantau riwayat aktivitas sistem',
@@ -176,7 +182,7 @@ export const sidebarTitles: Record<AdminSidebarKey, { title: string; subtitle: s
     },
     settings: {
         title: 'Pengaturan',
-        subtitle: 'Kelola petugas, log aktivitas, dan backup data',
+        subtitle: 'Kelola petugas, akun orang tua, log aktivitas, dan backup data',
     },
 }
 

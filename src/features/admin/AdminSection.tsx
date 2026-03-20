@@ -14,6 +14,7 @@ import {
   childApi,
   incidentApi,
   observationApi,
+  parentAccountApi,
 } from '../../services/api'
 import DataAnakPage from '../petugas/data-anak/DataAnakPage'
 import { downloadBeritaAcaraPdf } from '../petugas/berita-acara/beritaAcaraPdf'
@@ -28,6 +29,7 @@ import BillingPage from './rekap-monitoring/BillingPage'
 import ManajemenPetugasPage from './pengaturan/ManajemenPetugasPage'
 import LogAktivitasPage from './pengaturan/LogAktivitasPage'
 import BackupPage from './pengaturan/BackupPage'
+import ManajemenAkunOrangTuaPage from './pengaturan/ManajemenAkunOrangTuaPage'
 import type {
   ActivityLogEntry,
   AppData,
@@ -35,6 +37,7 @@ import type {
   ChildProfile,
   ChildProfileInput,
   ConfirmDialogOptions,
+  ParentAccount,
   ServiceBillingSummaryResponse,
   ServiceBillingHistoryResponse,
   ServiceBillingPeriodInput,
@@ -243,6 +246,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const [settingsTab, setSettingsTab] = useState<SettingsSubTab>('petugas')
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([])
+  const [parentAccounts, setParentAccounts] = useState<ParentAccount[]>([])
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([])
   const [staffAttendanceRecapRows, setStaffAttendanceRecapRows] = useState<
     StaffAttendanceRecapRow[]
@@ -301,6 +305,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     formatRupiahInput(initialServiceBillingPaymentForm.amount),
   )
   const [isLoadingStaff, setLoadingStaff] = useState(false)
+  const [isLoadingParentAccounts, setLoadingParentAccounts] = useState(false)
   const [isLoadingLogs, setLoadingLogs] = useState(false)
   const [isLoadingServices, setLoadingServices] = useState(false)
   const [isLoadingServiceBilling, setLoadingServiceBilling] = useState(false)
@@ -571,6 +576,20 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       setErrorMessage(message)
     } finally {
       setLoadingStaff(false)
+    }
+  }, [])
+
+  const loadParentAccounts = useCallback(async () => {
+    setLoadingParentAccounts(true)
+    try {
+      const data = await parentAccountApi.getParentAccounts()
+      setParentAccounts(data)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gagal memuat akun orang tua.'
+      setErrorMessage(message)
+      setParentAccounts([])
+    } finally {
+      setLoadingParentAccounts(false)
     }
   }, [])
 
@@ -1040,6 +1059,15 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         return
       }
 
+      if (settingsTab === 'orang-tua') {
+        void loadParentAccounts()
+        void ensureChildrenData().catch((error) => {
+          const message = error instanceof Error ? error.message : 'Gagal memuat data anak.'
+          setErrorMessage(message)
+        })
+        return
+      }
+
       if (settingsTab === 'logs') {
         void loadLogs()
       }
@@ -1085,6 +1113,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     ensureChildrenData,
     loadIncidentMonitoringData,
     loadMonitoringAttendanceData,
+    loadParentAccounts,
     loadObservationMonitoringData,
     loadServiceBillingSummary,
     loadServiceManagement,
@@ -2729,6 +2758,45 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const selectedServiceBillingPeriods = serviceBillingHistory?.periods ?? []
   const selectedServiceBillingTransactions = serviceBillingHistory?.transactions ?? []
 
+  const parentAccountMonitoringRows = useMemo(() => {
+    const childPackageById = new Map(
+      appData.children.map((child) => [
+        child.id,
+        servicePackageLabels[child.servicePackage] ?? '-',
+      ]),
+    )
+
+    const rows = parentAccounts.flatMap((account) => {
+      const parentNames = [
+        account.parentProfile.fatherName.trim(),
+        account.parentProfile.motherName.trim(),
+      ].filter(Boolean)
+      const parentName = parentNames.length > 0 ? parentNames.join(' / ') : account.username
+
+      if (account.children.length === 0) {
+        return [
+          {
+            id: `${account.id}-childless`,
+            parentName,
+            childName: '-',
+            registeredAt: account.createdAt,
+            packageLabel: '-',
+          },
+        ]
+      }
+
+      return account.children.map((child) => ({
+        id: `${account.id}-${child.id}`,
+        parentName,
+        childName: child.fullName || '-',
+        registeredAt: account.createdAt,
+        packageLabel: childPackageById.get(child.id) ?? '-',
+      }))
+    })
+
+    return rows.sort((left, right) => right.registeredAt.localeCompare(left.registeredAt))
+  }, [appData.children, parentAccounts])
+
   useEffect(() => {
     if (serviceBillingArrearsRows.length === 0) {
       return
@@ -3200,6 +3268,16 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           />
         )
 
+      case 'orang-tua':
+        return (
+          <ManajemenAkunOrangTuaPage
+            rows={parentAccountMonitoringRows}
+            totalAccounts={parentAccounts.length}
+            isLoading={isLoadingParentAccounts}
+            formatDateOnly={formatDateOnly}
+          />
+        )
+
       case 'logs':
         return (
           <LogAktivitasPage
@@ -3235,6 +3313,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         return null
     }
   }
+
   return (
     <div className="app-shell">
       <Sidebar
