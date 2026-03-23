@@ -119,6 +119,7 @@ const ManajemenPetugasPage = ({
                 id="staffTanggalMasuk"
                 value={staffForm.tanggalMasuk}
                 max={todayIso}
+                disabled={Boolean(editingStaffId)}
                 onChange={(value) =>
                   setStaffForm((previous) => ({
                     ...previous,
@@ -126,6 +127,9 @@ const ManajemenPetugasPage = ({
                   }))
                 }
               />
+              {editingStaffId ? (
+                <p className="field-hint">Tanggal masuk tidak dapat diubah saat edit data petugas.</p>
+              ) : null}
             </div>
 
             <div className="field-group field-group--small">

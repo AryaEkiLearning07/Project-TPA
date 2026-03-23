@@ -6,6 +6,10 @@ import {
   login,
   logout,
 } from '../services/auth-service.js'
+import {
+  ParentPortalServiceError,
+  registerParentWithCode,
+} from '../services/parent-portal-service.js'
 import type { LoginInput } from '../types/auth.js'
 import { sanitizeServerErrorMessage } from '../utils/error-sanitizer.js'
 
@@ -25,8 +29,24 @@ const parseLoginPayload = (value: unknown): LoginInput => {
   }
 }
 
+const parseParentRegistrationPayload = (value: unknown): {
+  email: string
+  password: string
+  registrationCode: string
+} => {
+  if (!isObject(value)) {
+    throw new ParentPortalServiceError(400, 'Payload pendaftaran orang tua tidak valid.')
+  }
+
+  return {
+    email: toText(value.email),
+    password: toText(value.password),
+    registrationCode: toText(value.registrationCode),
+  }
+}
+
 const handleError = (res: Response, error: unknown) => {
-  if (error instanceof AuthServiceError) {
+  if (error instanceof AuthServiceError || error instanceof ParentPortalServiceError) {
     res.status(error.status).json({
       success: false,
       message: error.message,
@@ -82,6 +102,32 @@ router.post('/auth/login', async (req, res) => {
         expiresAt: session.expiresAt,
       },
       message: 'Login berhasil',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.post('/auth/register-parent-with-code', async (req, res) => {
+  try {
+    const payload = parseParentRegistrationPayload(req.body)
+    const result = await registerParentWithCode(payload)
+
+    res.cookie(
+      env.authCookie.name,
+      result.session.token,
+      buildAuthCookieOptions(result.session.expiresAt),
+    )
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: result.session.user,
+        expiresAt: result.session.expiresAt,
+        dashboard: result.dashboard,
+      },
+      message: 'Akun orang tua berhasil dibuat.',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

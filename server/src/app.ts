@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import cors from 'cors'
 import express from 'express'
 import { checkDatabaseConnection } from './config/database.js'
@@ -11,19 +12,144 @@ import appDataRoutes from './routes/app-data-routes.js'
 import adminRoutes from './routes/admin-routes.js'
 import authRoutes from './routes/auth-routes.js'
 import parentAccountRoutes from './routes/parent-account-routes.js'
+import parentRoutes from './routes/parent-routes.js'
 import staffAttendanceRoutes from './routes/staff-attendance-routes.js'
 import { sanitizeServerErrorMessage } from './utils/error-sanitizer.js'
 
 const app = express()
 app.disable('x-powered-by')
 app.set('trust proxy', env.security.trustProxy)
-const frontendDistDir = path.resolve(process.cwd(), '../dist')
-const frontendIndexFile = path.join(frontendDistDir, 'index.html')
-const shouldServeFrontendFromBackend =
-  env.nodeEnv === 'production' || process.env.SERVE_FRONTEND_FROM_BACKEND === 'true'
-const canServeFrontend =
-  shouldServeFrontendFromBackend &&
-  fs.existsSync(frontendIndexFile)
+const moduleDir = path.dirname(fileURLToPath(import.meta.url))
+const adminFrontendDistDir = path.resolve(moduleDir, '../../dist')
+const adminFrontendIndexFile = path.join(adminFrontendDistDir, 'index.html')
+const landingFrontendDistDir = path.resolve(moduleDir, '../../dist-landing')
+const landingFrontendIndexFile = path.join(landingFrontendDistDir, 'index.html')
+const canServeAdminFrontend = fs.existsSync(adminFrontendIndexFile)
+const canServeLandingFrontend = fs.existsSync(landingFrontendIndexFile)
+const publicLandingHosts = new Set(['tparumahceria.my.id', 'www.tparumahceria.my.id'])
+const publicAdminHosts = new Set(['apps.tparumahceria.my.id'])
+const apexLandingHost = 'tparumahceria.my.id'
+const redirectOnlyHosts = new Set(['www.tparumahceria.my.id'])
+
+function setHtmlNoStore(res: express.Response): void {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
+}
+
+const adminStaticMiddleware = canServeAdminFrontend
+  ? express.static(adminFrontendDistDir, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (/\.(js|css|html)$/i.test(filePath)) {
+        setHtmlNoStore(res)
+      }
+    },
+  })
+  : null
+const landingStaticMiddleware = canServeLandingFrontend
+  ? express.static(landingFrontendDistDir, {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (/\.(js|css|html)$/i.test(filePath)) {
+        setHtmlNoStore(res)
+      }
+    },
+  })
+  : null
+const adminEntryScriptFile = path.join(adminFrontendDistDir, 'assets', 'app.js')
+const adminEntryStyleFile = path.join(adminFrontendDistDir, 'assets', 'app.css')
+const landingEntryScriptFile = path.join(landingFrontendDistDir, 'assets', 'landing.js')
+const landingEntryStyleFile = path.join(landingFrontendDistDir, 'assets', 'landing.css')
+
+const normalizeHost = (rawHost: string | undefined): string => {
+  if (!rawHost) {
+    return ''
+  }
+
+  return rawHost
+    .split(':')[0]
+    .trim()
+    .toLowerCase()
+}
+
+const resolveFrontendTarget = (
+  host: string,
+): 'landing' | 'admin' | null => {
+  if (publicLandingHosts.has(host) && canServeLandingFrontend) {
+    return 'landing'
+  }
+
+  if (publicAdminHosts.has(host) && canServeAdminFrontend) {
+    return 'admin'
+  }
+
+  if (canServeAdminFrontend) {
+    return 'admin'
+  }
+
+  if (canServeLandingFrontend) {
+    return 'landing'
+  }
+
+  return null
+}
+
+const resolveLegacyEntryAsset = (
+  requestPath: string,
+  frontendTarget: 'landing' | 'admin' | null,
+): string | null => {
+  if (!/^\/assets\/index-[^/]+\.(js|css)$/.test(requestPath)) {
+    return null
+  }
+
+  if (frontendTarget === 'landing') {
+    return requestPath.endsWith('.css')
+      ? '/assets/landing.css'
+      : '/assets/landing.js'
+  }
+
+  if (frontendTarget === 'admin') {
+    return requestPath.endsWith('.css')
+      ? '/assets/app.css'
+      : '/assets/app.js'
+  }
+
+  return null
+}
+
+const readVersionToken = (filePath: string): string => {
+  try {
+    return String(fs.statSync(filePath).mtimeMs)
+  } catch {
+    return String(Date.now())
+  }
+}
+
+const renderFrontendIndexHtml = (
+  target: 'landing' | 'admin',
+): string => {
+  const html = fs.readFileSync(
+    target === 'landing' ? landingFrontendIndexFile : adminFrontendIndexFile,
+    'utf8',
+  )
+
+  if (target === 'landing') {
+    const landingScriptVersion = readVersionToken(landingEntryScriptFile)
+    const landingStyleVersion = readVersionToken(landingEntryStyleFile)
+
+    return html
+      .replaceAll('/assets/landing.js', `/assets/landing.js?v=${landingScriptVersion}`)
+      .replaceAll('/assets/landing.css', `/assets/landing.css?v=${landingStyleVersion}`)
+  }
+
+  const adminScriptVersion = readVersionToken(adminEntryScriptFile)
+  const adminStyleVersion = readVersionToken(adminEntryStyleFile)
+
+  return html
+    .replaceAll('/assets/app.js', `/assets/app.js?v=${adminScriptVersion}`)
+    .replaceAll('/assets/app.css', `/assets/app.css?v=${adminStyleVersion}`)
+}
 
 const localOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/
 const globalApiRateLimiter = createRateLimitMiddleware({
@@ -50,10 +176,22 @@ const requestSizeGuard = createRequestSizeGuard({
   ],
 })
 
+const alwaysAllowedOrigins = new Set([
+  'http://tparumahceria.my.id',
+  'https://tparumahceria.my.id',
+  'http://apps.tparumahceria.my.id',
+  'https://apps.tparumahceria.my.id',
+])
+
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) {
+        callback(null, true)
+        return
+      }
+
+      if (alwaysAllowedOrigins.has(origin)) {
         callback(null, true)
         return
       }
@@ -105,7 +243,27 @@ app.use((req, res, next) => {
   next()
 })
 
-if (!canServeFrontend) {
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith('/api') ||
+    req.path.startsWith('/health') ||
+    req.path.startsWith('/uploads')
+  ) {
+    next()
+    return
+  }
+
+  const requestHost = normalizeHost(req.headers.host)
+  if (!redirectOnlyHosts.has(requestHost)) {
+    next()
+    return
+  }
+
+  setHtmlNoStore(res)
+  res.redirect(308, `https://${apexLandingHost}${req.originalUrl}`)
+})
+
+if (!canServeAdminFrontend && !canServeLandingFrontend) {
   app.get('/', (_req, res) => {
     res.json({
       success: true,
@@ -159,6 +317,7 @@ app.use('/api/v1', authRoutes)
 app.use('/api/v1', staffAttendanceRoutes)
 app.use('/api/v1', appDataRoutes)
 app.use('/api/v1', parentAccountRoutes)
+app.use('/api/v1', parentRoutes)
 app.use('/api/v1/attendance', attendanceRoutes)
 app.use('/api/v1/incidents', incidentRoutes)
 app.use('/api/v1/observations', observationRoutes)
@@ -172,15 +331,50 @@ import { UPLOADS_DIR } from './middlewares/upload-middleware.js'
 app.use(
   '/uploads',
   requireAuth,
-  requireRoles('ADMIN', 'PETUGAS'),
+  requireRoles('ADMIN', 'PETUGAS', 'ORANG_TUA'),
   express.static(UPLOADS_DIR, {
     fallthrough: false,
     index: false,
   }),
 )
 
-if (canServeFrontend) {
-  app.use(express.static(frontendDistDir, { index: false }))
+if (adminStaticMiddleware || landingStaticMiddleware) {
+  app.use((req, _res, next) => {
+    const frontendTarget = resolveFrontendTarget(normalizeHost(req.headers.host))
+    const legacyEntryAsset = resolveLegacyEntryAsset(req.path, frontendTarget)
+
+    if (legacyEntryAsset) {
+      req.url = legacyEntryAsset
+    }
+
+    next()
+  })
+
+  app.use((req, res, next) => {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/health') ||
+      req.path.startsWith('/uploads')
+    ) {
+      next()
+      return
+    }
+
+    const frontendTarget = resolveFrontendTarget(normalizeHost(req.headers.host))
+
+    if (frontendTarget === 'landing' && landingStaticMiddleware) {
+      landingStaticMiddleware(req, res, next)
+      return
+    }
+
+    if (frontendTarget === 'admin' && adminStaticMiddleware) {
+      adminStaticMiddleware(req, res, next)
+      return
+    }
+
+    next()
+  })
+
   app.get('*', (req, res, next) => {
     if (
       req.path.startsWith('/api') ||
@@ -190,7 +384,21 @@ if (canServeFrontend) {
       next()
       return
     }
-    res.sendFile(frontendIndexFile)
+
+    const frontendTarget = resolveFrontendTarget(normalizeHost(req.headers.host))
+    if (frontendTarget === 'landing' && canServeLandingFrontend) {
+      setHtmlNoStore(res)
+      res.type('html').send(renderFrontendIndexHtml('landing'))
+      return
+    }
+
+    if (frontendTarget === 'admin' && canServeAdminFrontend) {
+      setHtmlNoStore(res)
+      res.type('html').send(renderFrontendIndexHtml('admin'))
+      return
+    }
+
+    next()
   })
 }
 

@@ -78,18 +78,19 @@ const ObservasiAnakPage = ({
           </div>
           <div className="field-group">
             <label className="label">Filter Kelompok</label>
-            <select
-              className="input"
+            <SearchableSelect
               value={filterGroup}
-              onChange={(event) => onChangeFilterGroup(event.target.value)}
-            >
-              <option value="">Semua kelompok</option>
-              {groupOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              onChange={onChangeFilterGroup}
+              options={[
+                { value: '', label: 'Semua kelompok' },
+                ...groupOptions,
+              ]}
+              placeholder="Semua kelompok"
+              emptyMessage="Data kelompok tidak tersedia"
+              searchable={false}
+              clearable={false}
+              usePortal
+            />
           </div>
           <div className="field-group">
             <label className="label">Nama Anak</label>

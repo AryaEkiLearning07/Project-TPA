@@ -20,6 +20,9 @@ export const normalizeUserRole = (value: unknown): UserRole | null => {
   if (role === 'PETUGAS' || role === 'STAFF') {
     return 'PETUGAS'
   }
+  if (role === 'ORANG_TUA') {
+    return 'ORANG_TUA'
+  }
   return null
 }
 
@@ -173,9 +176,11 @@ export const requirePetugasCheckedIn = async (
     if (!checkedIn) {
       res.status(403).json({
         success: false,
-        message: 'Absensi datang wajib dilakukan sebelum mengakses fitur petugas.',
+        message:
+          'Absensi petugas dicatat oleh admin. Silakan datang ke admin untuk absen masuk sebelum mengakses fitur operasional.',
         data: {
           attendanceRequired: true,
+          adminAssistedAttendanceRequired: true,
         },
         timestamp: new Date().toISOString(),
       })

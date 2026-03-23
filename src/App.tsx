@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import './App.css'
 import LoginPage from './features/auth/LoginPage'
 import PetugasSection from './features/petugas/PetugasSection'
 import AdminSection from './features/admin/AdminSection'
+import ParentPortalSection from './features/parent/ParentPortalSection'
+import AppLoader from './components/common/AppLoader'
 import { authApi } from './services/api'
 import type { AuthSession } from './types'
 import {
@@ -14,8 +16,11 @@ import {
 const App = () => {
   const [session, setSession] = useState<AuthSession | null>(() => loadAuthSession())
   const [isBootstrapping, setBootstrapping] = useState(true)
-  const [isSubmittingLogin, setSubmittingLogin] = useState(false)
-  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isSubmittingAuth, setSubmittingAuth] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+
+  const lastActivityTimeRef = useRef(Date.now())
+  const INACTIVITY_TIMEOUT = 10 * 60 * 1000 // 10 minutes
 
   useEffect(() => {
     const bootstrapAuth = async () => {
@@ -42,17 +47,41 @@ const App = () => {
     email: string
     password: string
   }) => {
-    setSubmittingLogin(true)
-    setLoginError(null)
+    setSubmittingAuth(true)
+    setAuthError(null)
     try {
       const nextSession = await authApi.login(payload)
       saveAuthSession(nextSession)
       setSession(nextSession)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Login gagal.'
-      setLoginError(message)
+      setAuthError(message)
     } finally {
-      setSubmittingLogin(false)
+      setSubmittingAuth(false)
+    }
+  }
+
+  const handleRegisterParent = async (payload: {
+    email: string
+    password: string
+    registrationCode: string
+  }) => {
+    setSubmittingAuth(true)
+    setAuthError(null)
+    try {
+      const nextSession = await authApi.registerParentWithCode(payload)
+      const normalizedSession: AuthSession = {
+        user: nextSession.user,
+        expiresAt: nextSession.expiresAt,
+      }
+      saveAuthSession(normalizedSession)
+      setSession(normalizedSession)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Pendaftaran akun orang tua gagal.'
+      setAuthError(message)
+    } finally {
+      setSubmittingAuth(false)
     }
   }
 
@@ -64,27 +93,52 @@ const App = () => {
     } finally {
       clearAuthSession()
       setSession(null)
-      setLoginError(null)
+      setAuthError(null)
     }
   }
 
+  useEffect(() => {
+    if (!session) return undefined
+    
+    const resetTimer = () => {
+      lastActivityTimeRef.current = Date.now()
+    }
+
+    const events = ['mousemove', 'keydown', 'touchstart', 'scroll', 'click']
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }))
+
+    const interval = window.setInterval(() => {
+      if (Date.now() - lastActivityTimeRef.current > INACTIVITY_TIMEOUT) {
+        window.alert('Sesi Anda telah berakhir karena tidak ada aktivitas selama 10 menit. Sistem telah memproses logout otomatis demi keamanan akun Anda.')
+        void handleLogout()
+      }
+    }, 15000)
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetTimer))
+      window.clearInterval(interval)
+    }
+  }, [session])
+
   if (isBootstrapping) {
-    return (
-      <section className="auth-shell">
-        <div className="auth-card">
-          <h2>Memuat sesi...</h2>
-          <p className="card__description">Sedang memverifikasi login Anda.</p>
-        </div>
-      </section>
-    )
+    return <AppLoader />
   }
 
   if (!session) {
+    const searchParams = new URLSearchParams(window.location.search)
+    const normalizedPath = (window.location.pathname || '/').replace(/\/+$/, '') || '/'
+    const isParentPortalEntry =
+      normalizedPath === '/portal-orang-tua' || searchParams.get('portal') === 'parent'
+    const initialAuthMode = searchParams.get('mode') === 'register' ? 'register' : 'login'
+
     return (
       <LoginPage
-        isLoading={isSubmittingLogin}
-        errorMessage={loginError}
+        isLoading={isSubmittingAuth}
+        errorMessage={authError}
+        variant={isParentPortalEntry ? 'parent-portal' : 'default'}
+        initialMode={initialAuthMode}
         onSubmit={handleLogin}
+        onRegisterParent={isParentPortalEntry ? handleRegisterParent : undefined}
       />
     )
   }
@@ -95,6 +149,10 @@ const App = () => {
 
   if (session.user.role === 'ADMIN') {
     return <AdminSection user={session.user} onLogout={handleLogout} />
+  }
+
+  if (session.user.role === 'ORANG_TUA') {
+    return <ParentPortalSection user={session.user} onLogout={handleLogout} />
   }
 
   return (

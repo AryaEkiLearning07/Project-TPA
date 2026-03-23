@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 5173, // Changed: Use standard port (5173) for dev server to avoid conflict with backend on 4000
     strictPort: true,
-    allowedHosts: ['tparumahceria.my.id'],
+    allowedHosts: ['tparumahceria.my.id', 'apps.tparumahceria.my.id'],
     proxy: {
       '/api/v1': {
         target: 'http://127.0.0.1:4000', // Changed: Use port 4000
@@ -17,6 +17,21 @@ export default defineConfig({
       '/uploads': {
         target: 'http://127.0.0.1:4000', // Changed: Use port 4000
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/app.js',
+        chunkFileNames: 'assets/chunks/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith('.css')) {
+            return 'assets/app.css'
+          }
+          return 'assets/[name]-[hash][extname]'
+        },
       },
     },
   },

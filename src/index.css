@@ -4,21 +4,21 @@
 :root {
   --font-base: 'Nunito', 'Segoe UI', sans-serif;
   --font-display: 'Baloo 2', 'Nunito', sans-serif;
-  --color-bg: #f8ecff;
-  --color-bg-soft: #fff6fd;
+  --color-bg: #fff0f5;
+  --color-bg-soft: #fff5f8;
   --color-surface: #ffffff;
-  --color-border: #ead3f6;
-  --color-text: #2f2144;
-  --color-text-muted: #6f5b88;
-  --color-text-secondary: #5c4b63;
-  --color-primary: #ff5ba6;
-  --color-primary-strong: #eb2f8a;
-  --color-primary-light: #ff9ed6;
-  --color-accent: #7d5cff;
-  --color-accent-light: #ff9ed6;
-  --color-sunny: #ff9ed6;
-  --color-danger: #d84074;
-  --color-success: #4caf50;
+  --color-border: #f5c6d0;
+  --color-text: #3d2030;
+  --color-text-muted: #8c6070;
+  --color-text-secondary: #6b4050;
+  --color-primary: #e84b8a;
+  --color-primary-strong: #d63377;
+  --color-primary-light: #f9a8c8;
+  --color-accent: #c94080;
+  --color-accent-light: #f7b8cc;
+  --color-sunny: #f7a8c0;
+  --color-danger: #c0392b;
+  --color-success: #2e8b57;
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
@@ -39,22 +39,25 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  overscroll-behavior-y: auto;
 }
 
 body {
   font-family: var(--font-base);
   background:
-    radial-gradient(circle at 10% 14%, rgba(255, 108, 182, 0.35), transparent 46%),
-    radial-gradient(circle at 90% 10%, rgba(132, 100, 255, 0.3), transparent 40%),
-    radial-gradient(circle at 75% 85%, rgba(255, 165, 218, 0.3), transparent 46%),
+    radial-gradient(circle at 10% 14%, rgba(232, 75, 138, 0.18), transparent 46%),
+    radial-gradient(circle at 90% 10%, rgba(201, 64, 128, 0.14), transparent 40%),
+    radial-gradient(circle at 75% 85%, rgba(249, 168, 200, 0.2), transparent 46%),
     linear-gradient(
       180deg,
       var(--color-bg-soft) 0%,
-      #f9f1ff 34%,
+      #fff2f6 34%,
       var(--color-bg) 100%
     );
   background-attachment: fixed;
   color: var(--color-text);
+  overflow-x: clip;
+  overflow-y: auto;
 }
 
 body::before {
@@ -63,8 +66,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(135, 108, 178, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(135, 108, 178, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(201, 64, 128, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201, 64, 128, 0.04) 1px, transparent 1px);
   background-size: 22px 22px;
   mask-image: radial-gradient(circle at 30% 20%, black 20%, transparent 78%);
   z-index: -1;

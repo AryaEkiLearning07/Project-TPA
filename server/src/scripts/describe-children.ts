@@ -1,17 +1,10 @@
 import { dbPool } from '../config/database.js'
+import type { RowDataPacket } from 'mysql2/promise'
 
-const describeChildren = async () => {
-    try {
-        const [rows] = (await dbPool.query('DESCRIBE children')) as [any[], any]
-        console.log('Columns in children table:')
-        rows.forEach((row) => {
-            console.log(row.Field)
-        })
-        process.exit(0)
-    } catch (error) {
-        console.error('Error describing table:', error)
-        process.exit(1)
-    }
+async function run() {
+  const [rows] = await dbPool.execute<RowDataPacket[]>('DESCRIBE children')
+  console.log('--- COLUMNS IN CHILDREN ---')
+  rows.forEach(row => console.log(row.Field))
+  await dbPool.end()
 }
-
-describeChildren()
+run()

@@ -1,4 +1,5 @@
-import { LogIn, LogOut } from 'lucide-react'
+import { LogIn, LogOut, Search } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import {
   AppDatePickerField,
   AppMonthPickerField,
@@ -67,6 +68,28 @@ const KehadiranPetugasPage = ({
   formatDutyDuration,
   formatRupiah,
 }: KehadiranPetugasPageProps) => {
+  const [searchQuery, setSearchQuery] = useState('')
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+
+  const filterRowsBySearch = (rows: StaffRowItem[]) =>
+    rows.filter((row) =>
+      !normalizedSearchQuery ||
+      row.staff.fullName.toLowerCase().includes(normalizedSearchQuery),
+    )
+
+  const filteredBelumAbsenMasukRows = useMemo(
+    () => filterRowsBySearch(belumAbsenMasukRows),
+    [belumAbsenMasukRows, normalizedSearchQuery],
+  )
+  const filteredBertugasRows = useMemo(
+    () => filterRowsBySearch(bertugasRows),
+    [bertugasRows, normalizedSearchQuery],
+  )
+  const filteredSudahAbsenMasukRows = useMemo(
+    () => filterRowsBySearch(sudahAbsenMasukRows),
+    [sudahAbsenMasukRows, normalizedSearchQuery],
+  )
+
   return (
     <section className="page page--admin-staff-attendance">
       <div className="card">
@@ -110,13 +133,34 @@ const KehadiranPetugasPage = ({
           </button>
         </div>
 
+        <div className="admin-staff-attendance-toolbar" style={{ marginBottom: '1rem' }}>
+          <label className="admin-staff-attendance-search" htmlFor="staffAttendanceSearch">
+            <Search size={16} />
+            <input
+              id="staffAttendanceSearch"
+              type="search"
+              className="input"
+              placeholder="Cari nama petugas..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </label>
+          <p className="field-hint" style={{ margin: 0 }}>
+            List pada card tampil maksimal 4 data, lalu bisa di-scroll untuk sisanya.
+          </p>
+        </div>
+
         <div className="admin-staff-attendance-grid" style={{ marginBottom: '1rem' }}>
           <article className="admin-staff-attendance-card admin-staff-attendance-card--arrival">
             <div className="admin-staff-attendance-card__header">
               <h3>Absen Masuk</h3>
-              <p>Daftar petugas aktif yang belum absen masuk.</p>
+              <p>
+                Daftar petugas aktif yang belum absen masuk.
+                Petugas wajib hadir ke admin sebelum tombol Masuk diklik.
+                {searchQuery ? ` Hasil ditemukan: ${filteredBelumAbsenMasukRows.length}.` : null}
+              </p>
             </div>
-            <div className="table-wrap admin-staff-attendance-card__table-wrap">
+            <div className="table-wrap admin-staff-attendance-card__table-wrap admin-staff-attendance-card__table-wrap--scroll">
               <table className="table admin-staff-attendance-card__table">
                 <thead>
                   <tr>
@@ -125,14 +169,16 @@ const KehadiranPetugasPage = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {belumAbsenMasukRows.length === 0 ? (
+                  {filteredBelumAbsenMasukRows.length === 0 ? (
                     <tr>
                       <td colSpan={2} className="table__empty">
-                        Semua petugas aktif sudah absen masuk.
+                        {searchQuery
+                          ? 'Tidak ada petugas yang cocok dengan pencarian.'
+                          : 'Semua petugas aktif sudah absen masuk.'}
                       </td>
                     </tr>
                   ) : (
-                    belumAbsenMasukRows.map((row) => {
+                    filteredBelumAbsenMasukRows.map((row) => {
                       const isProcessing =
                         actionState?.staffUserId === row.staff.id &&
                         actionState.action === 'check-in'
@@ -165,9 +211,12 @@ const KehadiranPetugasPage = ({
           <article className="admin-staff-attendance-card admin-staff-attendance-card--departure">
             <div className="admin-staff-attendance-card__header">
               <h3>Bertugas / Sudah Pulang</h3>
-              <p>Petugas yang sudah absen masuk. Status pulang berada di bagian bawah.</p>
+              <p>
+                Petugas yang sudah absen masuk. Status pulang berada di bagian bawah.
+                {searchQuery ? ` Hasil ditemukan: ${filteredBertugasRows.length}.` : null}
+              </p>
             </div>
-            <div className="table-wrap admin-staff-attendance-card__table-wrap">
+            <div className="table-wrap admin-staff-attendance-card__table-wrap admin-staff-attendance-card__table-wrap--scroll">
               <table className="table admin-staff-attendance-card__table">
                 <thead>
                   <tr>
@@ -176,14 +225,16 @@ const KehadiranPetugasPage = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {bertugasRows.length === 0 ? (
+                  {filteredBertugasRows.length === 0 ? (
                     <tr>
                       <td colSpan={2} className="table__empty">
-                        Belum ada petugas yang bertugas hari ini.
+                        {searchQuery
+                          ? 'Tidak ada petugas yang cocok dengan pencarian.'
+                          : 'Belum ada petugas yang bertugas hari ini.'}
                       </td>
                     </tr>
                   ) : (
-                    bertugasRows.map((row) => {
+                    filteredBertugasRows.map((row) => {
                       const isDone = Boolean(row.checkOutAt)
                       const isProcessing =
                         actionState?.staffUserId === row.staff.id &&
@@ -220,7 +271,7 @@ const KehadiranPetugasPage = ({
         </div>
 
         <p className="field-hint" style={{ marginBottom: '1rem' }}>
-          Jam datang tercatat saat klik Masuk. Durasi, honor, dan transport muncul setelah klik Pulang.
+          Jam datang tercatat saat admin klik Masuk. Durasi, honor, dan transport muncul setelah admin klik Pulang.
         </p>
 
         <div className="table-wrap">
@@ -239,10 +290,16 @@ const KehadiranPetugasPage = ({
             <tbody>
               {isLoadingRecap ? (
                 <tr><td colSpan={7} className="table__empty">Memuat...</td></tr>
-              ) : sudahAbsenMasukRows.length === 0 ? (
-                <tr><td colSpan={7} className="table__empty">Belum ada petugas yang absen masuk.</td></tr>
+              ) : filteredSudahAbsenMasukRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="table__empty">
+                    {searchQuery
+                      ? 'Tidak ada petugas yang cocok dengan pencarian.'
+                      : 'Belum ada petugas yang absen masuk.'}
+                  </td>
+                </tr>
               ) : (
-                sudahAbsenMasukRows.map((row) => (
+                filteredSudahAbsenMasukRows.map((row) => (
                   <tr key={row.staff.id}>
                     <td>{row.staff.fullName}</td>
                     <td>{formatTimeOnly(row.checkInAt)}</td>

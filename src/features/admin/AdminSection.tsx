@@ -34,6 +34,7 @@ import type {
   ActivityLogEntry,
   AppData,
   AuthUser,
+  ChildRegistrationCode,
   ChildProfile,
   ChildProfileInput,
   ConfirmDialogOptions,
@@ -252,6 +253,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     StaffAttendanceRecapRow[]
   >([])
   const [appData, setAppData] = useState<AppData>(() => createEmptyAppData())
+  const [childRegistrationCodesById, setChildRegistrationCodesById] = useState<
+    Record<string, ChildRegistrationCode | null>
+  >({})
   const [serviceRates, setServiceRates] = useState<ServicePackageRates>(initialServiceRates)
   const [serviceBillingSummary, setServiceBillingSummary] = useState<ServiceBillingSummaryResponse | null>(null)
   const [serviceBillingHistory, setServiceBillingHistory] = useState<ServiceBillingHistoryResponse | null>(null)
@@ -306,6 +310,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   )
   const [isLoadingStaff, setLoadingStaff] = useState(false)
   const [isLoadingParentAccounts, setLoadingParentAccounts] = useState(false)
+  const [togglingParentAccountIds, setTogglingParentAccountIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [isLoadingLogs, setLoadingLogs] = useState(false)
   const [isLoadingServices, setLoadingServices] = useState(false)
   const [isLoadingServiceBilling, setLoadingServiceBilling] = useState(false)
@@ -593,6 +600,54 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
   }, [])
 
+  const handleToggleParentAccountStatus = async (
+    accountId: string,
+    nextStatus: boolean,
+  ) => {
+    const target = parentAccounts.find((account) => account.id === accountId)
+    if (!target) {
+      setErrorMessage('Akun orang tua tidak ditemukan.')
+      return
+    }
+
+    setErrorMessage(null)
+    setMessage(null)
+    setTogglingParentAccountIds((previous) => {
+      const next = new Set(previous)
+      next.add(accountId)
+      return next
+    })
+
+    try {
+      await parentAccountApi.updateParentAccount(accountId, {
+        username: target.username,
+        password: '',
+        isActive: nextStatus,
+        childIds: target.children.map((child) => child.id),
+        parentProfile: {
+          ...target.parentProfile,
+        },
+      })
+
+      setMessage(
+        nextStatus
+          ? 'Akun orang tua berhasil diaktifkan.'
+          : 'Akun orang tua berhasil dinonaktifkan.',
+      )
+      await loadParentAccounts()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Gagal memperbarui status akun orang tua.'
+      setErrorMessage(message)
+    } finally {
+      setTogglingParentAccountIds((previous) => {
+        const next = new Set(previous)
+        next.delete(accountId)
+        return next
+      })
+    }
+  }
+
   const loadLogs = useCallback(async (
     query = '',
     options?: {
@@ -729,6 +784,48 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       if (childrenRequestRef.current === requestPromise) {
         childrenRequestRef.current = null
       }
+    }
+  }, [])
+
+  const loadChildRegistrationCode = useCallback(async (childId: string) => {
+    try {
+      const code = await adminApi.getChildRegistrationCode(childId)
+      setChildRegistrationCodesById((previous) => ({
+        ...previous,
+        [childId]: code,
+      }))
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Gagal memuat kode registrasi anak.'
+      setErrorMessage(message)
+    }
+  }, [])
+
+  const generateChildRegistrationCodeForAdmin = useCallback(async (
+    childId: string,
+    options?: { silent?: boolean },
+  ): Promise<ChildRegistrationCode | null> => {
+    try {
+      const code = await adminApi.generateChildRegistrationCode(childId)
+      setChildRegistrationCodesById((previous) => ({
+        ...previous,
+        [childId]: code,
+      }))
+      if (!options?.silent) {
+        setMessage(`Kode registrasi berhasil dibuat: ${code.code}`)
+      }
+      return code
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Gagal membuat kode registrasi anak.'
+      if (!options?.silent) {
+        setErrorMessage(message)
+      }
+      return null
     }
   }, [])
 
@@ -1181,10 +1278,14 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     setMessage(null)
     try {
       let saved: ChildProfile
+      let generatedCode: ChildRegistrationCode | null = null
       if (editingId) {
         saved = await childApi.updateChild(editingId, input)
       } else {
         saved = await childApi.createChild(input)
+        generatedCode = await generateChildRegistrationCodeForAdmin(saved.id, {
+          silent: true,
+        })
       }
 
       setAppData((previous) => ({
@@ -1193,7 +1294,13 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           ? previous.children.map((record) => (record.id === editingId ? saved : record))
           : [saved, ...previous.children],
       }))
-      setMessage(editingId ? 'Data anak berhasil diperbarui.' : 'Data anak berhasil ditambahkan.')
+      setMessage(
+        editingId
+          ? 'Data anak berhasil diperbarui.'
+          : generatedCode
+            ? `Data anak berhasil ditambahkan. Kode registrasi: ${generatedCode.code}`
+            : 'Data anak berhasil ditambahkan, tetapi kode registrasi belum berhasil dibuat.',
+      )
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Gagal menyimpan data anak.'
@@ -1215,6 +1322,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         observationRecords: previous.observationRecords.filter((record) => record.childId !== id),
         communicationBooks: previous.communicationBooks.filter((record) => record.childId !== id),
       }))
+      setChildRegistrationCodesById((previous) => {
+        const next = { ...previous }
+        delete next[id]
+        return next
+      })
       setMessage('Data anak berhasil dihapus.')
       return true
     } catch (error) {
@@ -1338,7 +1450,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       email: staff.email,
       password: '',
       isActive: staff.isActive,
-      tanggalMasuk: staff.createdAt,
+      tanggalMasuk: staff.createdAt.slice(0, 10),
     })
     setShowStaffPassword(false)
     setActiveSidebar('settings')
@@ -2777,20 +2889,24 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         return [
           {
             id: `${account.id}-childless`,
+            accountId: account.id,
             parentName,
             childName: '-',
             registeredAt: account.createdAt,
             packageLabel: '-',
+            isActive: account.isActive,
           },
         ]
       }
 
       return account.children.map((child) => ({
         id: `${account.id}-${child.id}`,
+        accountId: account.id,
         parentName,
         childName: child.fullName || '-',
         registeredAt: account.createdAt,
         packageLabel: childPackageById.get(child.id) ?? '-',
+        isActive: account.isActive,
       }))
     })
 
@@ -3239,8 +3355,14 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           childrenData={appData.children}
           viewerRole="ADMIN"
           canManageData
+          registrationCodesByChildId={childRegistrationCodesById}
           onSave={upsertChildProfileAdmin}
           onDelete={removeChildProfileAdmin}
+          onLoadRegistrationCode={loadChildRegistrationCode}
+          onGenerateRegistrationCode={async (childId) => {
+            const code = await generateChildRegistrationCodeForAdmin(childId)
+            return Boolean(code)
+          }}
           onRequestConfirm={requestConfirm}
         />
       )
@@ -3274,6 +3396,8 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             rows={parentAccountMonitoringRows}
             totalAccounts={parentAccounts.length}
             isLoading={isLoadingParentAccounts}
+            togglingAccountIds={togglingParentAccountIds}
+            onToggleAccountStatus={handleToggleParentAccountStatus}
             formatDateOnly={formatDateOnly}
           />
         )

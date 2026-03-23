@@ -40,6 +40,11 @@ import {
   listStaffAttendanceRecap,
   StaffAttendanceServiceError,
 } from '../services/staff-attendance-service.js'
+import {
+  ChildRegistrationCodeServiceError,
+  generateChildRegistrationCode,
+  getChildRegistrationCode,
+} from '../services/child-registration-code-service.js'
 import { sanitizeServerErrorMessage } from '../utils/error-sanitizer.js'
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -319,7 +324,8 @@ const handleError = (res: Response, error: unknown) => {
   if (
     error instanceof AuthServiceError ||
     error instanceof ServiceBillingError ||
-    error instanceof StaffAttendanceServiceError
+    error instanceof StaffAttendanceServiceError ||
+    error instanceof ChildRegistrationCodeServiceError
   ) {
     res.status(error.status).json({
       success: false,
@@ -361,6 +367,53 @@ router.get('/admin/server-date-context', async (_req, res) => {
       success: true,
       data: context,
       timestamp: context.timestamp,
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.get('/admin/children/:childId/registration-code', async (req, res) => {
+  try {
+    const data = await getChildRegistrationCode(req.params.childId)
+    res.json({
+      success: true,
+      data,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.post('/admin/children/:childId/registration-code', async (req, res) => {
+  try {
+    const existingCode = await getChildRegistrationCode(req.params.childId)
+    if (existingCode) {
+      res.json({
+        success: true,
+        data: existingCode,
+        message: 'Kode registrasi sudah tersedia untuk anak ini.',
+        timestamp: new Date().toISOString(),
+      })
+      return
+    }
+
+    const data = await generateChildRegistrationCode({
+      childId: req.params.childId,
+      generatedByAdminId: req.auth?.user.id ?? null,
+    })
+    await writeAdminLog(
+      req,
+      'GENERATE_CHILD_REGISTRATION_CODE',
+      `child:${data.childId}`,
+      `Kode registrasi baru dibuat (${data.code}).`,
+    )
+    res.status(201).json({
+      success: true,
+      data,
+      message: 'Kode registrasi berhasil dibuat.',
+      timestamp: new Date().toISOString(),
     })
   } catch (error) {
     handleError(res, error)

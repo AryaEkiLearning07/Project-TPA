@@ -153,7 +153,11 @@ export interface CommunicationBookEntry extends MetadataFields {
   notes: string
 }
 
-import { type ObservationCategory, type ObservationItem, type ObservationRecord } from './features/petugas/observasi/types/observation'
+import type {
+  ObservationCategory,
+  ObservationItem,
+  ObservationRecord,
+} from './features/petugas/observasi/types/observation'
 export type { ObservationCategory, ObservationItem, ObservationRecord }
 
 export interface SupplyInventoryItem extends MetadataFields {
@@ -197,7 +201,21 @@ export interface ParentAccountInput {
   parentProfile: ParentProfile
 }
 
-export type UserRole = 'ADMIN' | 'PETUGAS'
+export type ChildRegistrationCodeStatus = 'ACTIVE' | 'CLAIMED' | 'REVOKED' | 'EXPIRED'
+
+export interface ChildRegistrationCode {
+  id: string
+  childId: string
+  code: string
+  status: ChildRegistrationCodeStatus
+  expiresAt: string | null
+  claimedAt: string | null
+  claimedByParentAccountId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type UserRole = 'ADMIN' | 'PETUGAS' | 'ORANG_TUA'
 
 export interface AuthUser {
   id: string
@@ -433,6 +451,56 @@ export interface ServiceBillingConfirmUpgradeInput {
   childId: string
   periodId: string
   notes?: string
+}
+
+export interface ParentDashboardData {
+  children: ChildProfile[]
+  attendanceRecords: AttendanceRecord[]
+  incidentReports: IncidentReport[]
+  observationRecords: ObservationRecord[]
+  communicationEntries: CommunicationBookEntry[]
+}
+
+export interface GalleryItem {
+  id: string
+  childId: string
+  title: string
+  imageUrl: string
+  createdAt: string
+}
+
+export interface ServiceBillingMonthCard {
+  month: string
+  status: ServiceBillingPaymentStatus
+  totalDue: number
+  totalPaid: number
+  paidAmount: number
+  outstandingTotal: number
+}
+
+export interface InvoiceItem {
+  id: string
+  date: string
+  amount: number
+  status: ServiceBillingPaymentStatus
+}
+
+export interface BillingSummaryItem {
+  period: ServiceBillingPeriod
+  transactions: ServiceBillingTransaction[]
+}
+
+export type BillingSummary = {
+  currentMonth: ServiceBillingMonthCard | null
+  history: BillingSummaryItem[]
+  totalOutstanding: number
+  bankInfo: {
+    bankName: string
+    accountNumber: string
+    accountName: string
+    bankBranch: string
+    notes: string
+  }
 }
 
 export interface AppData {

@@ -32,6 +32,9 @@ powershell -ExecutionPolicy Bypass -File .\ops\start-tpa-prod.ps1
 
 Catatan:
 - Runtime production sekarang melayani frontend + API lewat port `4000` (single service backend).
+- Host `tparumahceria.my.id` akan menampilkan landing page jika `dist-landing` tersedia.
+- Host `apps.tparumahceria.my.id` akan menampilkan app admin/petugas.
+- Panduan laptop + Cloudflare Tunnel ada di `docs/DEPLOY-LAPTOP-CLOUDFLARE-TUNNEL.md`.
 
 ## Cek status runtime production
 

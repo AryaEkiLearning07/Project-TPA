@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'PETUGAS'
+export type UserRole = 'ADMIN' | 'PETUGAS' | 'ORANG_TUA'
 
 export interface AuthUser {
   id: string

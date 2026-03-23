@@ -10,10 +10,14 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-landing
 dist-ssr
 *.local
 .env
 server/.env
+.chrome-headless/
+.edge-headless/
+.codex_write_test.tmp
 
 # Sensitive data files
 *.sql

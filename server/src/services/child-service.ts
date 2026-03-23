@@ -13,9 +13,6 @@ import {
     toDbGender,
     toDbReligion,
     toDbServicePackage,
-    toDbPhysicalCondition,
-    toDbEmotionalCondition,
-    toNullable
 } from '../utils/data-mappers.js'
 import { toText } from '../utils/string-utils.js'
 import { saveBase64ToDisk } from '../utils/base64-storage.js'
@@ -161,6 +158,22 @@ export const getChildById = async (id: string, executor: SqlExecutor = dbPool): 
     )
     if (rows.length === 0) return null
     return mapChildRow(rows[0])
+}
+
+export const getChildrenByParentProfileId = async (
+    parentProfileId: number,
+    executor: SqlExecutor = dbPool,
+): Promise<ChildProfile[]> => {
+    await ensureChildrenTable(executor)
+    await ensureParentRelationshipSchema(executor)
+    const [rows] = await executor.query<RowDataPacket[]>(
+        `${childWithParentProfileQuery}
+        WHERE c.parent_profile_id = ?
+          AND c.is_active = 1
+        ORDER BY c.full_name ASC`,
+        [parentProfileId],
+    )
+    return rows.map(mapChildRow)
 }
 
 export const createChild = async (input: ChildProfileInput): Promise<ChildProfile> => {

@@ -120,6 +120,9 @@ const normalizeRole = (value: unknown): UserRole | null => {
   if (normalized === 'PETUGAS' || normalized === 'STAFF') {
     return 'PETUGAS'
   }
+  if (normalized === 'ORANG_TUA') {
+    return 'ORANG_TUA'
+  }
   return null
 }
 
@@ -428,11 +431,6 @@ const migrateLegacyRoles = async (executor: SqlExecutor): Promise<void> => {
     `UPDATE auth_sessions
     SET subject_role = 'ADMIN'
     WHERE subject_role = 'SUPER_ADMIN'`,
-  )
-
-  await executor.execute(
-    `DELETE FROM auth_sessions
-    WHERE subject_role = 'ORANG_TUA'`,
   )
 
   hasMigratedLegacyRoles = true
@@ -824,6 +822,98 @@ const clearFailedLoginAttempts = async (email: string): Promise<void> => {
   await dbPool.execute('DELETE FROM auth_login_attempts WHERE email = ?', [email])
 }
 
+const loadParentAccountByEmail = async (email: string): Promise<RowDataPacket | null> => {
+  const [rows] = await dbPool.execute<RowDataPacket[]>(
+    `SELECT
+      pa.id AS account_id,
+      pa.username,
+      pa.password_hash,
+      pa.is_active,
+      pp.id AS profile_id,
+      pp.father_name,
+      pp.mother_name,
+      pp.email AS parent_email,
+      c.id AS child_id,
+      c.full_name AS child_full_name
+    FROM parent_accounts pa
+    JOIN parent_profiles pp ON pp.id = pa.parent_profile_id
+    LEFT JOIN children c
+      ON c.parent_profile_id = pp.id
+      AND c.is_active = 1
+    WHERE LOWER(pp.email) = ?
+    LIMIT 1`,
+    [email],
+  )
+
+  return rows[0] ?? null
+}
+
+const loadActiveParentAccountById = async (
+  subjectId: number,
+): Promise<RowDataPacket | null> => {
+  const [rows] = await dbPool.execute<RowDataPacket[]>(
+    `SELECT
+      pa.id AS account_id,
+      pa.username,
+      pa.is_active,
+      pp.id AS profile_id,
+      pp.email AS parent_email,
+      pp.father_name,
+      pp.mother_name,
+      c.id AS child_id,
+      c.full_name AS child_full_name
+    FROM parent_accounts pa
+    JOIN parent_profiles pp ON pp.id = pa.parent_profile_id
+    LEFT JOIN children c
+      ON c.parent_profile_id = pp.id
+      AND c.is_active = 1
+    WHERE pa.id = ?
+    ORDER BY c.full_name ASC
+    LIMIT 1`,
+    [subjectId],
+  )
+
+  const row = rows[0]
+  if (!row || !parseBoolean(row.is_active)) {
+    return null
+  }
+
+  return row
+}
+
+const mapParentAuthUser = (row: RowDataPacket): AuthUser => ({
+  id: String(row.account_id),
+  email: normalizeEmail(toText(row.parent_email) || toText(row.username)),
+  role: 'ORANG_TUA',
+  displayName: toText(row.child_full_name) || 'Orang Tua',
+})
+
+export const createAuthSessionPayload = async (params: {
+  id: number
+  email: string
+  role: UserRole
+  displayName: string
+}): Promise<AuthSessionPayload> => {
+  const user = mapAuthUser({
+    id: params.id,
+    email: params.email,
+    role: params.role,
+    displayName: params.displayName,
+  })
+  const session = await createSession({
+    role: params.role,
+    subjectId: params.id,
+    email: user.email,
+    displayName: user.displayName,
+  })
+
+  return {
+    token: session.token,
+    expiresAt: session.expiresAt,
+    user,
+  }
+}
+
 export const login = async (
   input: LoginInput,
   meta?: RequestMeta,
@@ -837,6 +927,57 @@ export const login = async (
   try {
     await assertLoginRateLimit(email)
 
+    // Coba login sebagai orang tua terlebih dahulu
+    const parentAccountRow = await loadParentAccountByEmail(email)
+    if (parentAccountRow) {
+      loginRoleForLog = 'ORANG_TUA'
+      const accountId = Number(parentAccountRow.account_id)
+      const parentEmail = toText(parentAccountRow.parent_email)
+
+      const matched = parentAccountRow.password_hash
+        ? await verifyPassword(password, toText(parentAccountRow.password_hash))
+        : false
+
+      if (!matched) {
+        throw new AuthServiceError(401, 'Email atau password salah.')
+      }
+
+      if (!parseBoolean(parentAccountRow.is_active)) {
+        throw new AuthServiceError(
+          403,
+          'Akun Anda telah dinonaktifkan. Silahkan hubungi admin untuk mengaktifkan kembali.',
+        )
+      }
+
+      // Get child data untuk display name
+      const childFullName = toText(parentAccountRow.child_full_name) || 'Anak'
+
+      const session = await createAuthSessionPayload({
+        id: accountId,
+        email: parentEmail,
+        role: 'ORANG_TUA',
+        displayName: childFullName,
+      })
+
+      await clearFailedLoginAttempts(email)
+      await writeActivityLog(dbPool, {
+        gmail: parentEmail,
+        role: 'ORANG_TUA',
+        action: 'LOGIN',
+        target: 'auth',
+        detail: 'Login berhasil',
+        status: 'SUCCESS',
+        meta: normalizedMeta,
+      })
+
+      return {
+        token: session.token,
+        expiresAt: session.expiresAt,
+        user: session.user,
+      }
+    }
+
+    // Fallback ke login staff user jika tidak ada parent account
     const staffUsers = await loadStaffUsersByEmail(email)
     const sortedStaffUsers = [...staffUsers].sort((left, right) => {
       const leftRole = mapDbRoleToAppRole(left.role)
@@ -1071,6 +1212,41 @@ export const resolveAuthContext = async (
       await syncSessionSnapshot({
         token: normalizedToken,
         role: nextRole,
+        email: nextUser.email,
+        displayName: nextUser.displayName,
+      })
+    }
+
+    return {
+      token: normalizedToken,
+      expiresAt: expiresAtIso,
+      user: nextUser,
+    }
+  }
+
+  if (sessionRole === 'ORANG_TUA') {
+    const subjectId = Number(session.subject_id)
+    if (!Number.isFinite(subjectId) || subjectId <= 0) {
+      await deleteSessionByToken(normalizedToken)
+      return null
+    }
+
+    const parentRow = await loadActiveParentAccountById(subjectId)
+    if (!parentRow) {
+      await deleteSessionByToken(normalizedToken)
+      return null
+    }
+
+    const nextUser = mapParentAuthUser(parentRow)
+    const sessionEmail = normalizeEmail(toText(session.email))
+    const sessionDisplayName = toText(session.display_name)
+    if (
+      nextUser.email !== sessionEmail ||
+      nextUser.displayName !== sessionDisplayName
+    ) {
+      await syncSessionSnapshot({
+        token: normalizedToken,
+        role: 'ORANG_TUA',
         email: nextUser.email,
         displayName: nextUser.displayName,
       })

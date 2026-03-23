@@ -25,7 +25,9 @@ export const checkDatabaseConnection = async (): Promise<void> => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[Database] Connection check failed: ${message}`)
+    console.error(
+      `[Database] Connection check failed (${env.db.host}:${env.db.port} as ${env.db.user}): ${message}`,
+    )
     throw error
   }
 }

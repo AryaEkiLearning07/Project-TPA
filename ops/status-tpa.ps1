@@ -27,8 +27,15 @@ try {
 }
 
 try {
-  $publicRoot = Invoke-WebRequest -Uri 'https://tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
-  Write-Output "Public root: $($publicRoot.StatusCode)"
+  $publicRootHttps = Invoke-WebRequest -Uri 'https://tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
+  Write-Output "Public root HTTPS: $($publicRootHttps.StatusCode)"
 } catch {
-  Write-Output 'Public root: DOWN'
+  Write-Output "Public root HTTPS: DOWN ($($_.Exception.Message))"
+}
+
+try {
+  $publicRootHttp = Invoke-WebRequest -Uri 'http://tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
+  Write-Output "Public root HTTP : $($publicRootHttp.StatusCode)"
+} catch {
+  Write-Output "Public root HTTP : DOWN ($($_.Exception.Message))"
 }

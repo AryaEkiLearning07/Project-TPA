@@ -73,9 +73,7 @@ const toText = (value: unknown): string => (typeof value === 'string' ? value : 
 
 const router = Router()
 
-router.use(requireAuth)
-router.use(requireRoles('PETUGAS', 'ADMIN'))
-router.use(requirePetugasCheckedIn)
+router.use('/app-data', requireAuth, requireRoles('PETUGAS', 'ADMIN'), requirePetugasCheckedIn)
 
 router.get('/app-data', async (req, res) => {
   try {

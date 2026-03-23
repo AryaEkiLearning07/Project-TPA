@@ -2,8 +2,11 @@ import type {
   ActivityLogListResponse,
   AppData,
   AuthSession,
+  BillingSummary,
+  ChildRegistrationCode,
   ParentAccount,
   ParentAccountInput,
+  ParentDashboardData,
   ServiceBillingConfirmUpgradeInput,
   ServiceBillingHistoryResponse,
   ServiceBillingPaymentInput,
@@ -29,6 +32,7 @@ import type {
   SupplyInventoryItemInput,
   ChildProfile,
   ChildProfileInput,
+  GalleryItem,
 } from '../types'
 
 interface ApiResponse<T> {
@@ -259,6 +263,19 @@ export const authApi = {
     request('/auth/logout', {
       method: 'POST',
     }),
+  registerParentWithCode: (payload: {
+    email: string
+    password: string
+    registrationCode: string
+  }): Promise<{
+    user: AuthSession['user']
+    expiresAt: string
+    dashboard: ParentDashboardData
+  }> =>
+    request('/auth/register-parent-with-code', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   me: (): Promise<{ user: AuthSession['user']; expiresAt: string }> =>
     request('/auth/me'),
 }
@@ -387,6 +404,13 @@ export const adminApi = {
         Accept: 'application/json',
       },
     }),
+  getChildRegistrationCode: (childId: string): Promise<ChildRegistrationCode | null> =>
+    request(`/admin/children/${encodeURIComponent(childId)}/registration-code`),
+  generateChildRegistrationCode: (childId: string): Promise<ChildRegistrationCode> =>
+    request(`/admin/children/${encodeURIComponent(childId)}/registration-code`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 }
 export const attendanceApi = {
   getAttendanceRecords: (month?: string): Promise<AttendanceRecord[]> =>
@@ -483,9 +507,29 @@ export const supplyInventoryApi = {
     }),
 }
 
+export const parentApi = {
+  getDashboardData: (): Promise<ParentDashboardData> =>
+    request('/parent/dashboard'),
+  getChildDetails: (childId: string): Promise<ChildProfile> =>
+    request(`/parent/child/${childId}`),
+  getDailyLogs: (childId: string, date?: string): Promise<AttendanceRecord[]> =>
+    request(`/parent/child/${childId}/logs${date ? `?date=${date}` : ''}`),
+  getGallery: (childId: string, month?: string): Promise<GalleryItem[]> =>
+    request(`/parent/child/${childId}/gallery${month ? `?month=${month}` : ''}`),
+  getBilling: (childId: string): Promise<BillingSummary> =>
+    request(`/parent/child/${childId}/billing`),
+  linkChildByCode: (payload: { registrationCode: string }): Promise<ParentDashboardData> =>
+    request('/parent/link-child', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+}
+
 export const childApi = {
-  getChildren: (): Promise<ChildProfile[]> => request('/children'),
-  getChildById: (id: string): Promise<ChildProfile> => request(`/children/${id}`),
+  getChildren: (): Promise<ChildProfile[]> =>
+    request('/children'),
+  getChildById: (id: string): Promise<ChildProfile> =>
+    request(`/children/${id}`),
   createChild: (payload: ChildProfileInput): Promise<ChildProfile> =>
     request('/children', {
       method: 'POST',

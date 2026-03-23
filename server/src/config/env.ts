@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 const envPath = path.resolve(moduleDir, '../../.env')
-dotenv.config({ path: envPath })
+dotenv.config({ path: envPath, override: true })
 
 const asNumber = (name: string, fallback: number): number => {
   const raw = process.env[name]

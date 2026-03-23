@@ -2,6 +2,7 @@
 import { religionOptions, servicePackageOptions } from '../../../constants/options'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 import type {
+  ChildRegistrationCode,
   ChildProfile,
   ChildProfileInput,
   ConfirmDialogOptions,
@@ -17,8 +18,11 @@ interface DataAnakPageProps {
   childrenData: ChildProfile[]
   viewerRole: UserRole
   canManageData?: boolean
+  registrationCodesByChildId?: Record<string, ChildRegistrationCode | null | undefined>
   onSave?: (input: ChildProfileInput, editingId?: string) => Promise<boolean>
   onDelete?: (id: string) => Promise<boolean>
+  onLoadRegistrationCode?: (childId: string) => Promise<void>
+  onGenerateRegistrationCode?: (childId: string) => Promise<boolean>
   onRequestConfirm: (options: ConfirmDialogOptions) => Promise<boolean>
 }
 
@@ -71,6 +75,43 @@ const removeErrorKey = (errors: FieldErrors, key: string): FieldErrors => {
   return next
 }
 
+const validateAdminMandatoryFields = (input: ChildProfileInput): FieldErrors => {
+  const errors: FieldErrors = {}
+  const optionalKeys = new Set<keyof ChildProfileInput>([
+    'allergy',
+    'toiletTrainingBab',
+    'toiletTrainingBak',
+    'toiletTrainingBath',
+    'brushingTeeth',
+    'eating',
+    'drinkingMilk',
+    'whenCrying',
+    'whenPlaying',
+    'sleeping',
+    'otherHabits',
+  ])
+
+  ;(Object.keys(input) as (keyof ChildProfileInput)[]).forEach((key) => {
+    if (optionalKeys.has(key)) {
+      return
+    }
+
+    const value = input[key]
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        errors[String(key)] = 'Wajib diisi'
+      }
+      return
+    }
+
+    if (typeof value === 'string' && !value.trim()) {
+      errors[String(key)] = 'Wajib diisi'
+    }
+  })
+
+  return errors
+}
+
 const formatWhatsAppLink = (phone: string): string => {
   const cleaned = phone.replace(/\D/g, '')
   const number = cleaned.startsWith('0') ? `62${cleaned.slice(1)}` : cleaned
@@ -117,8 +158,11 @@ const DataAnakPage = ({
   childrenData,
   viewerRole,
   canManageData = viewerRole === 'ADMIN',
+  registrationCodesByChildId = {},
   onSave,
   onDelete,
+  onLoadRegistrationCode,
+  onGenerateRegistrationCode,
   onRequestConfirm,
 }: DataAnakPageProps) => {
   const [form, setForm] = useState<ChildProfileInput>(() => createInitialForm())
@@ -129,7 +173,13 @@ const DataAnakPage = ({
   const [isModalOpen, setModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedChild, setSelectedChild] = useState<ChildProfile | null>(null)
+  const [isLoadingRegistrationCode, setLoadingRegistrationCode] = useState(false)
+  const [isGeneratingRegistrationCode, setGeneratingRegistrationCode] = useState(false)
+  const [registrationCodeNotice, setRegistrationCodeNotice] = useState<string | null>(null)
   const isPetugasView = viewerRole === 'PETUGAS'
+  const selectedChildRegistrationCode = selectedChild
+    ? registrationCodesByChildId[selectedChild.id] ?? null
+    : null
 
   const orderedChildren = useMemo(
     () =>
@@ -237,6 +287,15 @@ const DataAnakPage = ({
       pickupPersons: form.pickupPersons.map((p) => p.trim()).filter(Boolean),
       email: form.email.trim(),
     }
+    const strictErrors = viewerRole === 'ADMIN' ? validateAdminMandatoryFields(normalized) : {}
+    if (Object.keys(strictErrors).length > 0) {
+      setErrors(strictErrors)
+      setSaveError(
+        'Semua field wajib diisi kecuali Alergi dan field pada bagian Kebiasaan Sehari-hari.',
+      )
+      return
+    }
+
     const nextErrors = validateChildProfileInput(normalized)
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
@@ -285,6 +344,55 @@ const DataAnakPage = ({
     }
     if (selectedChild?.id === record.id) {
       setSelectedChild(null)
+    }
+  }
+
+  const loadRegistrationCodeForChild = async (childId: string) => {
+    if (viewerRole !== 'ADMIN' || !onLoadRegistrationCode) {
+      return
+    }
+
+    setLoadingRegistrationCode(true)
+    try {
+      await onLoadRegistrationCode(childId)
+    } finally {
+      setLoadingRegistrationCode(false)
+    }
+  }
+
+  const handleSelectChild = (child: ChildProfile) => {
+    setSelectedChild(child)
+    setRegistrationCodeNotice(null)
+    void loadRegistrationCodeForChild(child.id)
+  }
+
+  const handleGenerateRegistrationCode = async () => {
+    if (!selectedChild || !onGenerateRegistrationCode || selectedChildRegistrationCode) {
+      return
+    }
+
+    setGeneratingRegistrationCode(true)
+    setRegistrationCodeNotice(null)
+    const success = await onGenerateRegistrationCode(selectedChild.id)
+    setGeneratingRegistrationCode(false)
+    if (success) {
+      setRegistrationCodeNotice('Kode registrasi berhasil dibuat untuk anak ini.')
+      return
+    }
+    setRegistrationCodeNotice('Gagal membuat kode registrasi.')
+  }
+
+  const handleCopyRegistrationCode = async () => {
+    const code = selectedChildRegistrationCode?.code
+    if (!code) {
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(code)
+      setRegistrationCodeNotice('Kode registrasi berhasil disalin.')
+    } catch {
+      setRegistrationCodeNotice('Gagal menyalin kode registrasi.')
     }
   }
 
@@ -365,7 +473,7 @@ const DataAnakPage = ({
               <div className="section-title">Data Pengantar dan Penjemput</div>
               <div className="detail-grid">
                 <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
-                  <span className="detail-label">Daftar Penjemput</span>
+                  <span className="detail-label">Daftar Pengantar & Penjemput</span>
                   <div className="detail-value" style={{ marginTop: '0.4rem' }}>
                     {child.pickupPersons && child.pickupPersons.length > 0 ? (
                       <div className="chips">
@@ -412,9 +520,72 @@ const DataAnakPage = ({
             <div className="detail-item"><span className="detail-label">Jam Datang</span><span className="detail-value">{displayText(child.arrivalTime)}</span></div>
             <div className="detail-item"><span className="detail-label">Jam Pulang</span><span className="detail-value">{displayText(child.departureTime)}</span></div>
             <div className="detail-item"><span className="detail-label">Tujuan Menitipkan</span><span className="detail-value">{displayText(child.depositPurpose)}</span></div>
-            <div className="detail-item"><span className="detail-label">Penjemput</span><span className="detail-value">{child.pickupPersons.length > 0 ? child.pickupPersons.join(', ') : '-'}</span></div>
+            <div className="detail-item"><span className="detail-label">Pengantar & Penjemput</span><span className="detail-value">{child.pickupPersons.length > 0 ? child.pickupPersons.join(', ') : '-'}</span></div>
           </div>
         </div>
+
+        {viewerRole === 'ADMIN' ? (
+          <div className="card">
+            <div className="section-title">Kode Registrasi Orang Tua</div>
+            {isLoadingRegistrationCode ? (
+              <p className="card__description">Memuat kode registrasi...</p>
+            ) : selectedChildRegistrationCode ? (
+              <>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="detail-label">Kode Aktif</span>
+                    <span className="detail-value" style={{ fontSize: '1.15rem', fontWeight: 700, letterSpacing: '0.08em' }}>
+                      {selectedChildRegistrationCode.code}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Status</span>
+                    <span className="detail-value">{selectedChildRegistrationCode.status}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="detail-label">Diklaim Pada</span>
+                    <span className="detail-value">{selectedChildRegistrationCode.claimedAt ? formatDate(selectedChildRegistrationCode.claimedAt) : '-'}</span>
+                  </div>
+                </div>
+                <p className="card__description" style={{ marginTop: '0.8rem' }}>
+                  Kode ini diberikan ke orang tua untuk membuat akun atau menambahkan anak ke akun yang sudah ada.
+                </p>
+              </>
+            ) : (
+              <p className="card__description">
+                Belum ada kode registrasi untuk anak ini.
+              </p>
+            )}
+
+            {registrationCodeNotice ? (
+              <p className="card__description" style={{ marginTop: '0.8rem', color: '#0f766e' }}>
+                {registrationCodeNotice}
+              </p>
+            ) : null}
+
+            <div className="form-actions" style={{ marginTop: '1rem' }}>
+              {!selectedChildRegistrationCode ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void handleGenerateRegistrationCode()}
+                  disabled={isGeneratingRegistrationCode}
+                >
+                  {isGeneratingRegistrationCode ? 'Memproses...' : 'Generate Kode'}
+                </button>
+              ) : null}
+              {selectedChildRegistrationCode ? (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => void handleCopyRegistrationCode()}
+                >
+                  Salin Kode
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         <div className="card">
           <div className="section-title">Perkembangan Kondisi Anak</div>
@@ -498,7 +669,7 @@ const DataAnakPage = ({
           {filteredChildren.map((child) => {
             const waNumber = getWhatsAppNumber(child)
             return (
-              <div key={child.id} className="ktp-card" onClick={() => setSelectedChild(child)}>
+              <div key={child.id} className="ktp-card" onClick={() => handleSelectChild(child)}>
                 {/* Top section: Photo + Info */}
                 <div className="ktp-card__top">
                   <div className="ktp-card__photo-wrap">
@@ -667,11 +838,11 @@ const DataAnakPage = ({
                 <>
                   <div className="section-title">Data Pengantar dan Penjemput</div>
                   <div className="field-group">
-                    <label className="label">Nama penjemput (bisa lebih dari satu)</label>
+                    <label className="label">Nama pengantar & penjemput (bisa lebih dari satu)</label>
                     <div className="inline-row">
                       <input className="input" value={pickupInput}
                         onChange={(e) => setPickupInput(e.target.value)}
-                        placeholder="Masukkan nama penjemput"
+                        placeholder="Masukkan nama pengantar / penjemput"
                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPickupPerson() } }} />
                       <button type="button" className="button button--ghost" onClick={addPickupPerson}>Tambah</button>
                     </div>
@@ -765,11 +936,11 @@ const DataAnakPage = ({
 
               {!isPetugasView ? (
                 <div className="field-group">
-                  <label className="label">Nama penjemput (bisa lebih dari satu)</label>
+                  <label className="label">Nama pengantar & penjemput (bisa lebih dari satu)</label>
                   <div className="inline-row">
                     <input className="input" value={pickupInput}
                       onChange={(e) => setPickupInput(e.target.value)}
-                      placeholder="Masukkan nama penjemput"
+                      placeholder="Masukkan nama pengantar / penjemput"
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addPickupPerson() } }} />
                     <button type="button" className="button button--ghost" onClick={addPickupPerson}>Tambah</button>
                   </div>

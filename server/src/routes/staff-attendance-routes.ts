@@ -3,8 +3,6 @@ import { dbPool } from '../config/database.js'
 import { getRequestMeta, requireAuth, requireRoles } from '../middlewares/auth-middleware.js'
 import { writeActivityLog } from '../services/auth-service.js'
 import {
-  checkInStaffForDate,
-  checkOutStaffForDate,
   getStaffAttendanceStatus,
   StaffAttendanceServiceError,
 } from '../services/staff-attendance-service.js'
@@ -84,30 +82,22 @@ router.post('/staff-attendance/check-in', async (req, res) => {
     }
 
     const requestMeta = getRequestMeta(req)
-    const result = await checkInStaffForDate({
-      ...staffUser,
-      ipAddress: requestMeta.ipAddress,
-      userAgent: requestMeta.userAgent,
-    })
-
     await writeActivityLog(dbPool, {
       gmail: staffUser.email,
       role: 'PETUGAS',
-      action: 'STAFF_CHECKIN',
+      action: 'STAFF_CHECKIN_BLOCKED',
       target: 'staff-attendance',
-      detail: result.alreadyCheckedIn
-        ? 'Absensi datang sudah tercatat sebelumnya.'
-        : 'Absensi datang berhasil.',
-      status: 'SUCCESS',
+      detail: 'Aksi ditolak. Absensi datang petugas wajib dicatat admin.',
+      status: 'FAILED',
       meta: requestMeta,
     })
 
-    res.json({
-      success: true,
-      data: result,
-      message: result.alreadyCheckedIn
-        ? 'Absensi datang sudah tercatat hari ini.'
-        : 'Absensi datang berhasil.',
+    res.status(403).json({
+      success: false,
+      message: 'Absensi petugas hanya dapat dicatat oleh admin. Silakan datang ke admin untuk absen masuk.',
+      data: {
+        adminAssistedAttendanceRequired: true,
+      },
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
@@ -128,30 +118,22 @@ router.post('/staff-attendance/check-out', async (req, res) => {
     }
 
     const requestMeta = getRequestMeta(req)
-    const result = await checkOutStaffForDate({
-      ...staffUser,
-      ipAddress: requestMeta.ipAddress,
-      userAgent: requestMeta.userAgent,
-    })
-
     await writeActivityLog(dbPool, {
       gmail: staffUser.email,
       role: 'PETUGAS',
-      action: 'STAFF_CHECKOUT',
+      action: 'STAFF_CHECKOUT_BLOCKED',
       target: 'staff-attendance',
-      detail: result.alreadyCheckedOut
-        ? 'Absensi pulang sudah tercatat sebelumnya.'
-        : 'Absensi pulang berhasil.',
-      status: 'SUCCESS',
+      detail: 'Aksi ditolak. Absensi pulang petugas wajib dicatat admin.',
+      status: 'FAILED',
       meta: requestMeta,
     })
 
-    res.json({
-      success: true,
-      data: result,
-      message: result.alreadyCheckedOut
-        ? 'Absensi pulang sudah tercatat hari ini.'
-        : 'Absensi pulang berhasil.',
+    res.status(403).json({
+      success: false,
+      message: 'Absensi petugas hanya dapat dicatat oleh admin. Silakan datang ke admin untuk absen pulang.',
+      data: {
+        adminAssistedAttendanceRequired: true,
+      },
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

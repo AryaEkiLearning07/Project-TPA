@@ -7,6 +7,7 @@ import { dbPool } from './config/database.js'
 import { ensureServiceRateSchema } from './services/service-rate-service.js'
 import { ensureStaffAttendanceSchema } from './services/staff-attendance-service.js'
 import { ensureServiceBillingSchema } from './services/service-billing-service.js'
+import { ensureChildRegistrationCodeSchema } from './services/child-registration-code-service.js'
 
 let server: Server | null = null
 let isShuttingDown = false
@@ -52,6 +53,7 @@ const start = async (): Promise<void> => {
   await ensureServiceRateSchema(dbPool)
   await ensureStaffAttendanceSchema(dbPool)
   await ensureServiceBillingSchema(dbPool)
+  await ensureChildRegistrationCodeSchema(dbPool)
   server = app.listen(env.port, () => {
     console.log(`Server running on http://localhost:${env.port}`)
   })

@@ -6,20 +6,23 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/id'
 import './index.css'
 import App from './App.tsx'
+import AppErrorBoundary from './components/common/AppErrorBoundary'
 
 dayjs.locale('id')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <LocalizationProvider
-      dateAdapter={AdapterDayjs}
-      adapterLocale="id"
-      localeText={{
-        cancelButtonLabel: 'Batal',
-        okButtonLabel: 'Oke',
-      }}
-    >
-      <App />
-    </LocalizationProvider>
+    <AppErrorBoundary>
+      <LocalizationProvider
+        dateAdapter={AdapterDayjs}
+        adapterLocale="id"
+        localeText={{
+          cancelButtonLabel: 'Batal',
+          okButtonLabel: 'Oke',
+        }}
+      >
+        <App />
+      </LocalizationProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 )

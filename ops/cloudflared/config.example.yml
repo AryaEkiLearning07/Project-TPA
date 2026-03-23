@@ -1,0 +1,11 @@
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: C:\Users\USER\.cloudflared\REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+  - hostname: tparumahceria.my.id
+    service: http://localhost:4000
+  - hostname: www.tparumahceria.my.id
+    service: http://localhost:4000
+  - hostname: apps.tparumahceria.my.id
+    service: http://localhost:4000
+  - service: http_status:404

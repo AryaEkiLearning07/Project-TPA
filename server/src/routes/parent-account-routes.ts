@@ -120,9 +120,7 @@ const handleError = (error: unknown): { status: number; message: string } => {
 
 const router = Router()
 
-router.use(requireAuth)
-router.use(requireRoles('PETUGAS', 'ADMIN'))
-router.use(requirePetugasCheckedIn)
+router.use('/parent-accounts', requireAuth, requireRoles('PETUGAS', 'ADMIN'), requirePetugasCheckedIn)
 
 router.get('/parent-accounts', async (_req, res) => {
   try {

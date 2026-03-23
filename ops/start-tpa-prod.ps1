@@ -34,6 +34,26 @@ function Test-FrontendReady {
   }
 }
 
+function Test-FrontendHostReady {
+  param(
+    [int]$Port,
+    [string]$HostHeader
+  )
+  try {
+    $response = Invoke-WebRequest `
+      -Uri "http://127.0.0.1:$Port/" `
+      -Headers @{ Host = $HostHeader } `
+      -UseBasicParsing `
+      -TimeoutSec 5
+    if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 400) {
+      return $false
+    }
+    return $response.Content -match '<!doctype html>'
+  } catch {
+    return $false
+  }
+}
+
 function Get-ListeningProcessIds {
   param([int]$Port)
 
@@ -52,10 +72,11 @@ function Get-ListeningProcessIds {
 }
 
 $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
-$frontendReady = Test-FrontendReady -Port $backendPortNumber
+$adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
+$landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
 
-if ($backendReady -and -not $frontendReady) {
-  Write-Output 'Backend aktif, tetapi frontend belum terlayani. Menyalakan ulang backend production...'
+if ($backendReady -and (-not $adminFrontendReady -or -not $landingFrontendReady)) {
+  Write-Output 'Backend aktif, tetapi salah satu frontend belum terlayani. Menyalakan ulang backend production...'
   foreach ($pidValue in (Get-ListeningProcessIds -Port $backendPortNumber)) {
     try {
       Stop-Process -Id $pidValue -Force -ErrorAction Stop
@@ -64,19 +85,28 @@ if ($backendReady -and -not $frontendReady) {
   }
   Start-Sleep -Seconds 2
   $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
-  $frontendReady = Test-FrontendReady -Port $backendPortNumber
+  $adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
+  $landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
 }
 
-if ($frontendReady -and $backendReady) {
+if ($adminFrontendReady -and $landingFrontendReady -and $backendReady) {
   Write-Output "TPA runtime production sudah berjalan (port $backendPortNumber aktif)."
   exit 0
 }
 
 if (-not $SkipBuild) {
-  Write-Output 'Menjalankan build frontend...'
+  Write-Output 'Menjalankan build frontend admin/petugas...'
   Push-Location $projectRoot
   try {
     npm run build
+  } finally {
+    Pop-Location
+  }
+
+  Write-Output 'Menjalankan build landing page...'
+  Push-Location $projectRoot
+  try {
+    npm run build:landing
   } finally {
     Pop-Location
   }
@@ -99,10 +129,11 @@ if (-not $backendReady) {
 Start-Sleep -Seconds 8
 
 $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
-$frontendReady = Test-FrontendReady -Port $backendPortNumber
+$adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
+$landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
 
-if (-not ($frontendReady -and $backendReady)) {
+if (-not ($adminFrontendReady -and $landingFrontendReady -and $backendReady)) {
   Write-Error "Gagal menyalakan runtime production TPA. Cek $logFile."
 }
 
-Write-Output "TPA runtime production berhasil dinyalakan (app+api:$backendPortNumber)."
+Write-Output "TPA runtime production berhasil dinyalakan (landing + app + api:$backendPortNumber)."

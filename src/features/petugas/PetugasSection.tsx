@@ -1,6 +1,11 @@
 import {
   CheckCircle2,
+  Clock3,
+  LogOut,
   Menu,
+  RefreshCw,
+  ShieldAlert,
+  UserCheck,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
@@ -13,6 +18,7 @@ import {
   attendanceApi,
   incidentApi,
   observationApi,
+  staffAttendanceApi,
   supplyInventoryApi,
   childApi,
 } from '../../services/api'
@@ -27,6 +33,7 @@ import type {
   IncidentReportInput,
   ObservationRecord,
   ObservationRecordInput,
+  StaffAttendanceStatus,
   SupplyInventoryItem,
   SupplyInventoryItemInput,
 } from '../../types'
@@ -60,6 +67,17 @@ interface PetugasSectionProps {
 
 function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   const [appData, setAppData] = useState<AppData>(() => createEmptyAppData())
+  const [staffAttendanceStatus, setStaffAttendanceStatus] = useState<StaffAttendanceStatus | null>(null)
+  const [isAttendanceStatusLoading, setAttendanceStatusLoading] = useState(true)
+  const [isAttendanceStatusRefreshing, setAttendanceStatusRefreshing] = useState(false)
+  const [attendanceStatusError, setAttendanceStatusError] = useState<string | null>(null)
+  const [attendanceClockLabel, setAttendanceClockLabel] = useState<string>(() =>
+    new Date().toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
+  )
   const appDataRef = useRef<AppData>(createEmptyAppData())
   const [activeMenu, setActiveMenu] = useState<PetugasMenuKey>('kehadiran')
   const [isSidebarOpen, setSidebarOpen] = useState(false)
@@ -77,6 +95,30 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   const isTopbarHidden = useHideOnScroll()
   const loadRequestIdRef = useRef(0)
   const loadedSegmentsRef = useRef<Set<PetugasDataSegment>>(new Set())
+
+  const refreshAttendanceStatus = useCallback(
+    async (options?: { manual?: boolean; quiet?: boolean }): Promise<void> => {
+      if (options?.manual) {
+        setAttendanceStatusRefreshing(true)
+      } else {
+        setAttendanceStatusLoading(true)
+      }
+
+      try {
+        const status = await staffAttendanceApi.getStatus()
+        setStaffAttendanceStatus(status)
+        setAttendanceStatusError(null)
+      } catch (error) {
+        if (!options?.quiet) {
+          setAttendanceStatusError(getErrorMessage(error))
+        }
+      } finally {
+        setAttendanceStatusLoading(false)
+        setAttendanceStatusRefreshing(false)
+      }
+    },
+    [],
+  )
 
   const closeConfirmDialog = (result: boolean) => {
     const resolve = confirmResolveRef.current
@@ -105,6 +147,40 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   useEffect(() => {
     appDataRef.current = appData
   }, [appData])
+
+  useEffect(() => {
+    void refreshAttendanceStatus()
+  }, [refreshAttendanceStatus])
+
+  useEffect(() => {
+    if (staffAttendanceStatus?.hasCheckedIn) {
+      return undefined
+    }
+
+    const pollerId = window.setInterval(() => {
+      void refreshAttendanceStatus({ quiet: true })
+    }, 15000)
+
+    return () => {
+      window.clearInterval(pollerId)
+    }
+  }, [refreshAttendanceStatus, staffAttendanceStatus?.hasCheckedIn])
+
+  useEffect(() => {
+    const clockId = window.setInterval(() => {
+      setAttendanceClockLabel(
+        new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }),
+      )
+    }, 1000)
+
+    return () => {
+      window.clearInterval(clockId)
+    }
+  }, [])
 
   useEffect(() => {
     const restoredState = readNavigationState(isPetugasNavigationState)
@@ -244,8 +320,12 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   )
 
   useEffect(() => {
+    if (!staffAttendanceStatus?.hasCheckedIn) {
+      return
+    }
+
     void loadMenuData(activeMenu)
-  }, [activeMenu, loadMenuData])
+  }, [activeMenu, loadMenuData, staffAttendanceStatus?.hasCheckedIn])
 
   useEffect(() => {
     if (!toastMessage) {
@@ -472,6 +552,179 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
 
   const activeHeader = useMemo(() => menuTitles[activeMenu], [activeMenu])
   const showLoadingOverlay = isSyncing
+  const attendanceDateLabel = useMemo(() => {
+    const dateKey = staffAttendanceStatus?.attendanceDate ?? new Date().toISOString().slice(0, 10)
+    const parsed = new Date(`${dateKey}T00:00:00`)
+    if (Number.isNaN(parsed.getTime())) {
+      return dateKey
+    }
+    return parsed.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    })
+  }, [staffAttendanceStatus?.attendanceDate])
+
+  const checkInTimeLabel = useMemo(() => {
+    const raw = staffAttendanceStatus?.checkInAt ?? ''
+    if (!raw) {
+      return 'Belum tercatat'
+    }
+    const parsed = new Date(raw)
+    if (Number.isNaN(parsed.getTime())) {
+      return 'Sudah tercatat'
+    }
+    return `Sudah tercatat (${parsed.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })})`
+  }, [staffAttendanceStatus?.checkInAt])
+
+  const checkOutTimeLabel = useMemo(() => {
+    const raw = staffAttendanceStatus?.checkOutAt ?? ''
+    if (!raw) {
+      return 'Belum tercatat'
+    }
+    const parsed = new Date(raw)
+    if (Number.isNaN(parsed.getTime())) {
+      return 'Sudah tercatat'
+    }
+    return `Sudah tercatat (${parsed.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })})`
+  }, [staffAttendanceStatus?.checkOutAt])
+
+  const hasCheckedOutToday = Boolean(staffAttendanceStatus?.hasCheckedOut)
+
+  if (isAttendanceStatusLoading && !staffAttendanceStatus) {
+    return (
+      <div className="app-shell app-shell--attendance-gate">
+        <div className="app-main">
+          <main className="app-content app-content--attendance-gate">
+            <section className="page page--attendance-gate">
+              <article className="card staff-attendance-gate">
+                <div className="staff-attendance-gate__header">
+                  <h3>Memeriksa status absensi petugas...</h3>
+                  <span className="staff-attendance-clock">
+                    <Clock3 size={14} />
+                    {attendanceClockLabel}
+                  </span>
+                </div>
+              </article>
+            </section>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  if (!staffAttendanceStatus?.hasCheckedIn || hasCheckedOutToday) {
+    const isLockedAfterCheckout = hasCheckedOutToday
+
+    return (
+      <div className="app-shell app-shell--attendance-gate">
+        <div className="app-main">
+          <main className="app-content app-content--attendance-gate">
+            <section className="page page--attendance-gate">
+              <article className="card staff-attendance-hero">
+                <div className="staff-attendance-hero__badge-block">
+                  <div className="staff-attendance-hero__badge">
+                    <img
+                      src="/logo_TPA.jpg"
+                      alt="Logo TPA Rumah Ceria"
+                      className="staff-attendance-hero__logo"
+                    />
+                  </div>
+                  <p>DASHBOARD OPERASIONAL</p>
+                </div>
+                <div className="staff-attendance-hero__content">
+                  <h2>{isLockedAfterCheckout ? 'Akses petugas telah terkunci' : 'Akses petugas masih terkunci'}</h2>
+                  {isLockedAfterCheckout ? (
+                    <p>
+                      Anda sudah tercatat absensi pulang. Silahkan tunggu esok hari untuk dapat masuk Dashboard Operasional.
+                    </p>
+                  ) : (
+                    <p>
+                      Anda belum tercatat absen masuk hari ini. Silakan datang langsung ke admin untuk verifikasi kehadiran.
+                    </p>
+                  )}
+                </div>
+              </article>
+
+              <article className="card staff-attendance-gate">
+                <div className="staff-attendance-gate__header">
+                  <h3>Status Absensi Hari Ini</h3>
+                  <span className="staff-attendance-clock">
+                    <Clock3 size={14} />
+                    {attendanceClockLabel}
+                  </span>
+                </div>
+
+                <div className="staff-attendance-meta">
+                  <div className="staff-attendance-module staff-attendance-module--date">
+                    <span className="staff-attendance-module__label">
+                      <Clock3 size={14} />
+                      Tanggal Kerja
+                    </span>
+                    <strong>{attendanceDateLabel}</strong>
+                  </div>
+                  <div className="staff-attendance-module">
+                    <span className="staff-attendance-module__label">
+                      <UserCheck size={14} />
+                      Absen Masuk
+                    </span>
+                    <strong>{checkInTimeLabel}</strong>
+                  </div>
+                  <div className="staff-attendance-module">
+                    <span className="staff-attendance-module__label">
+                      <LogOut size={14} />
+                      Absen Pulang
+                    </span>
+                    <strong>{checkOutTimeLabel}</strong>
+                    <span className="staff-attendance-module__security">
+                      <ShieldAlert size={13} />
+                    </span>
+                  </div>
+                </div>
+
+                {attendanceStatusError ? (
+                  <p className="field-hint" style={{ marginTop: '0.9rem' }}>
+                    {attendanceStatusError}
+                  </p>
+                ) : null}
+
+                <div className="form-actions staff-attendance-gate__actions">
+                  <button
+                    type="button"
+                    className="button button--success"
+                    onClick={() => void refreshAttendanceStatus({ manual: true })}
+                    disabled={isAttendanceStatusRefreshing}
+                  >
+                    <RefreshCw
+                      size={14}
+                      className={isAttendanceStatusRefreshing ? 'staff-attendance-action__icon is-spinning' : ''}
+                    />
+                    {isAttendanceStatusRefreshing ? 'Memeriksa...' : 'Refresh'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    onClick={() => void onLogout()}
+                  >
+                    Logout
+                  </button>
+                </div>
+              </article>
+            </section>
+          </main>
+        </div>
+      </div>
+    )
+  }
 
   const renderPage = () => {
     switch (activeMenu) {
@@ -534,9 +787,6 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
     }
   }
 
-
-  // Disabled: Attendance feature for petugas role
-
   return (
     <div className="app-shell">
       <Sidebar
@@ -566,6 +816,10 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
           <div id="tour-topbar-title" className="topbar__title-wrap">
             <h1>{activeHeader.title}</h1>
             <p>{activeHeader.subtitle}</p>
+          </div>
+
+          <div className="topbar__actions">
+            <span className="topbar__user">{user.displayName}</span>
           </div>
         </header>
 
