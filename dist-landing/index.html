@@ -5,14 +5,142 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="TPA Rumah Ceria - Tempat penitipan anak dengan pemantauan harian yang transparan dan aman." />
+    content="TPA Rumah Ceria - Tempat pengasuhan anak dengan pemantauan harian yang transparan dan aman." />
+  <meta name="theme-color" content="#e85d7a" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="id_ID" />
+  <meta property="og:title" content="TPA Rumah Ceria" />
+  <meta property="og:description"
+    content="Tempat pengasuhan anak dengan pemantauan harian yang transparan, aman, dan terstruktur." />
+  <meta property="og:url" content="https://tparumahceria.my.id/" />
+  <meta property="og:image" content="/logo_TPA.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TPA Rumah Ceria" />
+  <meta name="twitter:description"
+    content="Tempat pengasuhan anak dengan pemantauan harian yang transparan, aman, dan terstruktur." />
+  <meta name="twitter:image" content="/logo_TPA.jpg" />
+  <link rel="icon" type="image/jpeg" href="/logo_TPA.jpg" />
+  <link rel="shortcut icon" type="image/jpeg" href="/logo_TPA.jpg" />
+  <link rel="apple-touch-icon" href="/logo_TPA.jpg" />
+  <link rel="canonical" href="https://tparumahceria.my.id/" />
   <title>TPA Rumah Ceria</title>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "ChildCare",
+      "name": "TPA Rumah Ceria UBAYA",
+      "url": "https://tparumahceria.my.id/",
+      "telephone": "+62-31-2981277",
+      "image": "https://tparumahceria.my.id/logo_TPA.jpg",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Jl. Raya Kali Rungkut",
+        "addressLocality": "Surabaya",
+        "addressCountry": "ID"
+      },
+      "openingHours": "Mo-Fr 08:00-16:30"
+    }
+  </script>
+
+  <script>
+    (() => {
+      try {
+        const savedTheme = window.localStorage.getItem('tpa-landing-theme')
+        const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+        const initialTheme = savedTheme === 'dark' || savedTheme === 'light'
+          ? savedTheme
+          : (systemPrefersDark ? 'dark' : 'light')
+        document.documentElement.dataset.theme = initialTheme
+      } catch {
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+          document.documentElement.dataset.theme = 'dark'
+        }
+      }
+    })()
+  </script>
+  <style>
+    #root {
+      min-height: 100vh;
+    }
+
+    .landing-boot {
+      min-height: 100vh;
+      display: grid;
+      place-content: center;
+      gap: 14px;
+      padding: 24px;
+      text-align: center;
+      font-family: 'Segoe UI', 'Noto Sans', 'Helvetica Neue', Arial, sans-serif;
+      color: #3f2332;
+      background: radial-gradient(circle at 0 0, #ffe4ec 0%, rgba(255, 228, 236, 0) 45%), #fff8f4;
+    }
+
+    .landing-boot__spinner {
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      border: 3px solid #f8d4e8;
+      border-top-color: #e85d7a;
+      margin-inline: auto;
+      animation: landing-spin 0.85s linear infinite;
+    }
+
+    .landing-boot p {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .landing-noscript {
+      padding: 14px 16px;
+      text-align: center;
+      font-family: 'Segoe UI', 'Noto Sans', 'Helvetica Neue', Arial, sans-serif;
+      color: #5f2c46;
+      background: #ffe8f3;
+      border-top: 1px solid #f0bbd4;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .landing-boot {
+        color: #f7eaf2;
+        background: radial-gradient(circle at 0 0, rgba(232, 93, 122, 0.20) 0%, rgba(232, 93, 122, 0) 45%), #120b10;
+      }
+
+      .landing-boot__spinner {
+        border-color: #4a3038;
+        border-top-color: #e85d7a;
+      }
+
+      .landing-noscript {
+        color: #f4dce9;
+        background: #1f121a;
+        border-top-color: #4a3038;
+      }
+    }
+
+    @keyframes landing-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
   <script type="module" crossorigin src="/assets/landing.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/chunks/vendor-react-Ah1pgjPn.js">
   <link rel="stylesheet" crossorigin href="/assets/landing.css">
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <div class="landing-boot" role="status" aria-live="polite">
+      <div class="landing-boot__spinner" aria-hidden="true"></div>
+      <p>Memuat landing page TPA Rumah Ceria...</p>
+    </div>
+  </div>
+  <noscript>
+    <div class="landing-noscript">
+      Landing page membutuhkan JavaScript untuk menampilkan konten interaktif.
+    </div>
+  </noscript>
 </body>
 
 </html>

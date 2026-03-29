@@ -252,6 +252,16 @@ const BIWEEKLY_AUTO_MIGRATION_ATTENDANCE = 16
 const BIWEEKLY_MIGRATION_SETTLEMENT_AMOUNT = 650_000
 const AUTO_MIGRATION_NOTE_MARKER = '[AUTO_MIGRASI_2M_BULANAN]'
 
+const getBillingPeriodDurationDays = (packageKey: ServicePackageKey): number => {
+  if (packageKey === '2-mingguan') {
+    return 10
+  }
+  if (packageKey === 'bulanan') {
+    return 30
+  }
+  return 1
+}
+
 const formatRupiahLabel = (amount: number): string =>
   `Rp${new Intl.NumberFormat('id-ID', {
     maximumFractionDigits: 0,
@@ -1430,7 +1440,8 @@ export const createServiceBillingPeriod = async (
   }
 
   const startDate = normalizeOptionalDateKey(input.startDate) ?? toDateKey(new Date())
-  const endDate = addDays(startDate, 29)
+  const durationDays = getBillingPeriodDurationDays(packageKey)
+  const endDate = addDays(startDate, Math.max(0, durationDays - 1))
   const amount = toSafeAmount(input.amount)
   const notes = toText(input.notes).trim()
 

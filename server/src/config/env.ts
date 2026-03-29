@@ -165,9 +165,27 @@ const parsedEnv = {
     name: asString('DB_NAME', 'db_TPA'),
     connectionLimit: asNumber('DB_CONNECTION_LIMIT', 10),
   },
+  email: {
+    enabled: asBoolean('EMAIL_NOTIFICATIONS_ENABLED', false),
+    host: asString('EMAIL_HOST', 'smtp-relay.brevo.com'),
+    port: asNumber('EMAIL_PORT', 587),
+    secure: asBoolean('EMAIL_SECURE', false),
+    from: asString('EMAIL_FROM', 'noreply@tpa-rumahceria.com'),
+    fromName: asString('EMAIL_FROM_NAME', 'TPA Rumah Ceria'),
+    user: asString('EMAIL_USER', ''),
+    password: process.env.EMAIL_PASSWORD ?? '',
+    onChildCheckIn: asBoolean('EMAIL_ON_CHILD_CHECK_IN', true),
+    onChildCheckOut: asBoolean('EMAIL_ON_CHILD_CHECK_OUT', true),
+    onBillingDue: asBoolean('EMAIL_ON_BILLING_DUE', true),
+    onLoginAlert: asBoolean('EMAIL_ON_LOGIN_ALERT', true),
+  },
 } as const
 
 if (parsedEnv.nodeEnv === 'production') {
+  if (!parsedEnv.authCookie.secure) {
+    throw new Error('AUTH_COOKIE_SECURE harus bernilai true di production.')
+  }
+
   const dbUser = parsedEnv.db.user.trim().toLowerCase()
   if (!dbUser) {
     throw new Error('DB_USER wajib diisi di production.')

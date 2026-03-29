@@ -16,6 +16,7 @@ export interface AuthSessionPayload {
 export interface LoginInput {
   email: string
   password: string
+  loginPreference?: 'STAFF_FIRST' | 'PARENT_FIRST'
 }
 
 export interface RequestMeta {

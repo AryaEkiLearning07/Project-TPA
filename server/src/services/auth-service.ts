@@ -922,36 +922,39 @@ export const login = async (
 
   const normalizedMeta = toRequestMeta(meta)
   const { email, password } = assertEmailPassword(input)
+  const loginPreference =
+    input.loginPreference === 'STAFF_FIRST' ? 'STAFF_FIRST' : 'PARENT_FIRST'
   let loginRoleForLog = 'UNKNOWN'
+  let deferredAuthError: AuthServiceError | null = null
 
   try {
     await assertLoginRateLimit(email)
 
-    // Coba login sebagai orang tua terlebih dahulu
-    const parentAccountRow = await loadParentAccountByEmail(email)
-    if (parentAccountRow) {
-      loginRoleForLog = 'ORANG_TUA'
-      const accountId = Number(parentAccountRow.account_id)
-      const parentEmail = toText(parentAccountRow.parent_email)
+    const tryParentLogin = async (): Promise<AuthSessionPayload | null> => {
+      const parentAccountRow = await loadParentAccountByEmail(email)
+      if (!parentAccountRow) {
+        return null
+      }
 
+      loginRoleForLog = 'ORANG_TUA'
       const matched = parentAccountRow.password_hash
         ? await verifyPassword(password, toText(parentAccountRow.password_hash))
         : false
-
       if (!matched) {
-        throw new AuthServiceError(401, 'Email atau password salah.')
+        return null
       }
 
       if (!parseBoolean(parentAccountRow.is_active)) {
-        throw new AuthServiceError(
+        deferredAuthError = new AuthServiceError(
           403,
           'Akun Anda telah dinonaktifkan. Silahkan hubungi admin untuk mengaktifkan kembali.',
         )
+        return null
       }
 
-      // Get child data untuk display name
+      const accountId = Number(parentAccountRow.account_id)
+      const parentEmail = toText(parentAccountRow.parent_email)
       const childFullName = toText(parentAccountRow.child_full_name) || 'Anak'
-
       const session = await createAuthSessionPayload({
         id: accountId,
         email: parentEmail,
@@ -977,62 +980,82 @@ export const login = async (
       }
     }
 
-    // Fallback ke login staff user jika tidak ada parent account
-    const staffUsers = await loadStaffUsersByEmail(email)
-    const sortedStaffUsers = [...staffUsers].sort((left, right) => {
-      const leftRole = mapDbRoleToAppRole(left.role)
-      const rightRole = mapDbRoleToAppRole(right.role)
-      const leftPriority = leftRole === 'ADMIN' ? 0 : 1
-      const rightPriority = rightRole === 'ADMIN' ? 0 : 1
-      return leftPriority - rightPriority
-    })
-
-    for (const staffUser of sortedStaffUsers) {
-      const role = mapDbRoleToAppRole(staffUser.role)
-      if (role !== 'ADMIN' && role !== 'PETUGAS') {
-        continue
-      }
-
-      const matched = await verifyPassword(password, toText(staffUser.password_hash))
-      if (!matched) {
-        continue
-      }
-
-      loginRoleForLog = role
-      if (!parseBoolean(staffUser.is_active)) {
-        throw new AuthServiceError(403, 'Akun non-aktif, silakan hubungi admin.')
-      }
-
-      const user = mapAuthUser({
-        id: Number(staffUser.id),
-        email: toText(staffUser.email),
-        role,
-        displayName: toText(staffUser.full_name) || 'Pengguna',
+    const tryStaffLogin = async (): Promise<AuthSessionPayload | null> => {
+      const staffUsers = await loadStaffUsersByEmail(email)
+      const sortedStaffUsers = [...staffUsers].sort((left, right) => {
+        const leftRole = mapDbRoleToAppRole(left.role)
+        const rightRole = mapDbRoleToAppRole(right.role)
+        const leftPriority = leftRole === 'ADMIN' ? 0 : 1
+        const rightPriority = rightRole === 'ADMIN' ? 0 : 1
+        return leftPriority - rightPriority
       })
 
-      const session = await createSession({
-        role,
-        subjectId: Number(staffUser.id),
-        email: user.email,
-        displayName: user.displayName,
-      })
-      await clearFailedLoginAttempts(email)
+      for (const staffUser of sortedStaffUsers) {
+        const role = mapDbRoleToAppRole(staffUser.role)
+        if (role !== 'ADMIN' && role !== 'PETUGAS') {
+          continue
+        }
 
-      await writeActivityLog(dbPool, {
-        gmail: user.email,
-        role,
-        action: 'LOGIN',
-        target: 'auth',
-        detail: 'Login berhasil',
-        status: 'SUCCESS',
-        meta: normalizedMeta,
-      })
+        const matched = await verifyPassword(password, toText(staffUser.password_hash))
+        if (!matched) {
+          continue
+        }
 
-      return {
-        token: session.token,
-        expiresAt: session.expiresAt,
-        user,
+        loginRoleForLog = role
+        if (!parseBoolean(staffUser.is_active)) {
+          deferredAuthError = new AuthServiceError(403, 'Akun non-aktif, silakan hubungi admin.')
+          continue
+        }
+
+        const user = mapAuthUser({
+          id: Number(staffUser.id),
+          email: toText(staffUser.email),
+          role,
+          displayName: toText(staffUser.full_name) || 'Pengguna',
+        })
+
+        const session = await createSession({
+          role,
+          subjectId: Number(staffUser.id),
+          email: user.email,
+          displayName: user.displayName,
+        })
+        await clearFailedLoginAttempts(email)
+
+        await writeActivityLog(dbPool, {
+          gmail: user.email,
+          role,
+          action: 'LOGIN',
+          target: 'auth',
+          detail: 'Login berhasil',
+          status: 'SUCCESS',
+          meta: normalizedMeta,
+        })
+
+        return {
+          token: session.token,
+          expiresAt: session.expiresAt,
+          user,
+        }
       }
+
+      return null
+    }
+
+    const attempts =
+      loginPreference === 'STAFF_FIRST'
+        ? [tryStaffLogin, tryParentLogin]
+        : [tryParentLogin, tryStaffLogin]
+
+    for (const attempt of attempts) {
+      const session = await attempt()
+      if (session) {
+        return session
+      }
+    }
+
+    if (deferredAuthError) {
+      throw deferredAuthError
     }
 
     throw new AuthServiceError(401, 'Email atau password salah.')

@@ -12,6 +12,7 @@
 .app-shell {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   color: var(--color-text);
   overflow-x: clip;
 }
@@ -386,42 +387,33 @@
   gap: 0.88rem;
 }
 
-.auth-mode-switch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-  margin: 0 0 1rem;
-  padding: 0.35rem;
-  border-radius: 1rem;
-  background: rgba(255, 240, 245, 0.92);
-  border: 1px solid rgba(245, 198, 208, 0.96);
+.auth-form__switch-text {
+  margin: 0.1rem 0 0;
+  text-align: center;
+  color: #6a557f;
+  font-size: 0.84rem;
 }
 
-.auth-mode-switch button {
-  border: 1px solid transparent;
-  border-radius: 0.82rem;
+.auth-form__switch-link {
+  border: none;
   background: transparent;
-  color: #8c4560;
-  font-size: 0.9rem;
+  color: var(--color-primary);
+  font-size: inherit;
   font-weight: 800;
-  padding: 0.75rem 0.9rem;
+  line-height: 1.4;
+  padding: 0;
   cursor: pointer;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
 }
 
-.auth-mode-switch button.is-active {
-  background: #ffffff;
-  border-color: rgba(201, 64, 128, 0.24);
-  color: #4d2035;
-  box-shadow: 0 10px 22px -18px rgba(150, 50, 80, 0.6);
+.auth-form__switch-link:hover {
+  color: #a62859;
 }
 
-.auth-mode-switch button:hover {
-  transform: translateY(-1px);
+.auth-form__switch-link:disabled {
+  opacity: 0.66;
+  cursor: not-allowed;
 }
 
 .button--auth-primary {
@@ -760,7 +752,11 @@
   position: fixed;
   inset: 0 auto 0 0;
   width: min(88vw, 330px);
-  padding: 0.9rem 0.75rem;
+  max-width: 100%;
+  padding:
+    max(0.9rem, calc(env(safe-area-inset-top) + 0.4rem))
+    0.75rem
+    max(0.9rem, calc(env(safe-area-inset-bottom) + 0.4rem));
   color: var(--color-text);
   transform: translateX(-110%);
   transition: transform 0.28s ease;
@@ -1179,6 +1175,7 @@
 
 .app-main {
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 1rem;
 }
 
@@ -1637,11 +1634,13 @@
 .app-toast {
   position: fixed;
   right: 1rem;
+  left: auto;
   top: 1rem;
   z-index: 120;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  max-width: min(92vw, 440px);
   border-radius: 0.8rem;
   padding: 0.62rem 0.78rem;
   font-size: 0.84rem;
@@ -1666,6 +1665,50 @@
   margin: 0.5rem 0 1.1rem;
   color: var(--color-text-muted);
   font-size: 0.93rem;
+}
+
+.app-error-boundary__meta {
+  margin: 0.45rem 0 0;
+  font-size: 0.85rem;
+  color: #6f3d57;
+}
+
+.app-error-boundary__meta strong {
+  color: #4d2035;
+}
+
+.app-error-boundary__meta--reference code {
+  display: inline-block;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.35rem;
+  border: 1px solid #f1b8cb;
+  background: #fff4f9;
+  font-size: 0.79rem;
+  color: #7d2e4f;
+}
+
+.app-error-boundary__details {
+  margin-top: 0.5rem;
+  border: 1px dashed #f1b8cb;
+  border-radius: 0.6rem;
+  padding: 0.48rem 0.56rem;
+  background: rgba(255, 246, 250, 0.92);
+}
+
+.app-error-boundary__details summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #7d2e4f;
+}
+
+.app-error-boundary__details code {
+  margin-top: 0.45rem;
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.76rem;
+  color: #6f3d57;
 }
 
 .page--observasi .card {
@@ -1859,6 +1902,13 @@ select.input.input--locked {
   font-weight: 700;
 }
 
+.field-success {
+  margin: 0;
+  color: #1f8a4d;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
 .field-hint {
   margin: 0;
   color: var(--color-text-muted);
@@ -1937,6 +1987,25 @@ select.input.input--locked {
   border-color: #ebabc0;
   background: #fff3f6;
   color: #b73358;
+}
+
+.button--download-pdf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border-color: #cc0000;
+  background: #ff0000;
+  color: #ffffff;
+}
+
+.button--download-pdf:hover {
+  background: #e10000;
+  filter: none;
+}
+
+.button--download-pdf svg {
+  flex-shrink: 0;
 }
 
 .button--attendance-checkin,
@@ -2509,6 +2578,10 @@ select.input.input--locked {
   margin-top: 0.8rem;
 }
 
+.service-billing-overdue-list-card {
+  margin-top: 1rem;
+}
+
 .service-billing-controls {
   display: grid;
   grid-template-columns: minmax(220px, 360px) auto;
@@ -2960,6 +3033,20 @@ select.input.input--locked {
 
 .admin-log-pagination__meta {
   margin: 0;
+}
+
+.announcement-cover-preview {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.announcement-cover-preview img {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 0.75rem;
+  border: 1px solid #f0b0be;
+  object-fit: cover;
 }
 
 .admin-log-time-cell {
@@ -4885,8 +4972,8 @@ select.input.input--locked {
     padding: 1rem;
   }
 
-  .auth-mode-switch {
-    margin-bottom: 0.88rem;
+  .auth-form__switch-text {
+    font-size: 0.8rem;
   }
 
   .auth-visual__highlight-card,
@@ -5113,7 +5200,8 @@ select.input.input--locked {
   .app-toast {
     right: 0.75rem;
     left: 0.75rem;
-    top: 0.75rem;
+    top: max(0.75rem, calc(env(safe-area-inset-top) + 0.35rem));
+    max-width: none;
   }
 
   .app-greeting-dialog {
@@ -5204,6 +5292,24 @@ select.input.input--locked {
 
   .observation-item-actions .button {
     width: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar {
+    padding: 0.78rem 0.74rem;
+    gap: 0.55rem;
+  }
+
+  .topbar__actions {
+    gap: 0.35rem;
+  }
+
+  .topbar__user {
+    max-width: 132px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 

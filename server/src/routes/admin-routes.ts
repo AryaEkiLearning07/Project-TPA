@@ -45,6 +45,15 @@ import {
   generateChildRegistrationCode,
   getChildRegistrationCode,
 } from '../services/child-registration-code-service.js'
+import {
+  createLandingAnnouncement,
+  deleteLandingAnnouncement,
+  LandingAnnouncementError,
+  type LandingAnnouncementInput,
+  listLandingAnnouncementsForAdmin,
+  parseLandingAnnouncementId,
+  updateLandingAnnouncement,
+} from '../services/landing-announcement-service.js'
 import { sanitizeServerErrorMessage } from '../utils/error-sanitizer.js'
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -272,6 +281,31 @@ const parseServiceBillingUpgradePayload = (
   }
 }
 
+const parseLandingAnnouncementPayload = (value: unknown): LandingAnnouncementInput => {
+  if (!isObject(value)) {
+    throw new AuthServiceError(400, 'Payload pengumuman landing tidak valid.')
+  }
+
+  return {
+    title: toText(value.title),
+    slug: toText(value.slug),
+    category: toText(value.category).trim().toLowerCase() as LandingAnnouncementInput['category'],
+    displayMode: toText(value.displayMode).trim().toLowerCase() as LandingAnnouncementInput['displayMode'],
+    excerpt: toText(value.excerpt),
+    content: toText(value.content),
+    coverImageDataUrl: toText(value.coverImageDataUrl),
+    coverImageName: toText(value.coverImageName),
+    ctaLabel: toText(value.ctaLabel),
+    ctaUrl: toText(value.ctaUrl),
+    publishStartDate: toText(value.publishStartDate),
+    publishEndDate: toText(value.publishEndDate),
+    status: toText(value.status).trim().toLowerCase() as LandingAnnouncementInput['status'],
+    isPinned: asBoolean(value.isPinned, false),
+    authorName: toText(value.authorName),
+    authorEmail: toText(value.authorEmail),
+  }
+}
+
 const resolveActor = (req: Request) => {
   const auth = req.auth
   if (!auth) {
@@ -325,7 +359,8 @@ const handleError = (res: Response, error: unknown) => {
     error instanceof AuthServiceError ||
     error instanceof ServiceBillingError ||
     error instanceof StaffAttendanceServiceError ||
-    error instanceof ChildRegistrationCodeServiceError
+    error instanceof ChildRegistrationCodeServiceError ||
+    error instanceof LandingAnnouncementError
   ) {
     res.status(error.status).json({
       success: false,
@@ -367,6 +402,83 @@ router.get('/admin/server-date-context', async (_req, res) => {
       success: true,
       data: context,
       timestamp: context.timestamp,
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.get('/admin/landing-announcements', async (_req, res) => {
+  try {
+    const data = await listLandingAnnouncementsForAdmin()
+    res.json({
+      success: true,
+      data,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.post('/admin/landing-announcements', async (req, res) => {
+  try {
+    const payload = parseLandingAnnouncementPayload(req.body)
+    const data = await createLandingAnnouncement(payload)
+    await writeAdminLog(
+      req,
+      'CREATE_LANDING_ANNOUNCEMENT',
+      `landing-announcement:${data.id}`,
+      `Pengumuman landing dibuat (${data.title}) dengan status ${data.status}.`,
+    )
+    res.status(201).json({
+      success: true,
+      data,
+      message: 'Pengumuman landing berhasil dibuat.',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.put('/admin/landing-announcements/:id', async (req, res) => {
+  try {
+    parseLandingAnnouncementId(req.params.id)
+    const payload = parseLandingAnnouncementPayload(req.body)
+    const data = await updateLandingAnnouncement(req.params.id, payload)
+    await writeAdminLog(
+      req,
+      'UPDATE_LANDING_ANNOUNCEMENT',
+      `landing-announcement:${data.id}`,
+      `Pengumuman landing diperbarui (${data.title}) dengan status ${data.status}.`,
+    )
+    res.json({
+      success: true,
+      data,
+      message: 'Pengumuman landing berhasil diperbarui.',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.delete('/admin/landing-announcements/:id', async (req, res) => {
+  try {
+    const announcementId = parseLandingAnnouncementId(req.params.id)
+    await deleteLandingAnnouncement(String(announcementId))
+    await writeAdminLog(
+      req,
+      'DELETE_LANDING_ANNOUNCEMENT',
+      `landing-announcement:${announcementId}`,
+      'Pengumuman landing dihapus.',
+    )
+    res.json({
+      success: true,
+      data: { id: String(announcementId) },
+      message: 'Pengumuman landing berhasil dihapus.',
+      timestamp: new Date().toISOString(),
     })
   } catch (error) {
     handleError(res, error)

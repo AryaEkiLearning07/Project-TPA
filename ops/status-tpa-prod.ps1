@@ -51,9 +51,11 @@ function Test-FrontendHostReady {
 $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
 $adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
 $landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
+$parentFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'parent.tparumahceria.my.id'
 
 Write-Output "Frontend admin   ($backendPortNumber): $adminFrontendReady"
 Write-Output "Frontend landing ($backendPortNumber): $landingFrontendReady"
+Write-Output "Frontend parent  ($backendPortNumber): $parentFrontendReady"
 Write-Output "Backend health   ($backendPortNumber): $backendReady"
 
 try {
@@ -82,6 +84,17 @@ try {
 }
 
 try {
+  $localParent = Invoke-WebRequest `
+    -Uri "http://127.0.0.1:$backendPortNumber" `
+    -Headers @{ Host = 'parent.tparumahceria.my.id' } `
+    -UseBasicParsing `
+    -TimeoutSec 5
+  Write-Output "Local frontend parent: $($localParent.StatusCode)"
+} catch {
+  Write-Output 'Local frontend parent: DOWN'
+}
+
+try {
   $publicRootHttps = Invoke-WebRequest -Uri 'https://tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
   Write-Output "Public root HTTPS: $($publicRootHttps.StatusCode)"
 } catch {
@@ -100,4 +113,11 @@ try {
   Write-Output "Public apps HTTPS: $($publicAppsHttps.StatusCode)"
 } catch {
   Write-Output "Public apps HTTPS: DOWN ($($_.Exception.Message))"
+}
+
+try {
+  $publicParentHttps = Invoke-WebRequest -Uri 'https://parent.tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
+  Write-Output "Public parent HTTPS: $($publicParentHttps.StatusCode)"
+} catch {
+  Write-Output "Public parent HTTPS: DOWN ($($_.Exception.Message))"
 }

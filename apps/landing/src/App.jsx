@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const logoTpaSrc = `${import.meta.env.BASE_URL}logo_TPA.jpg`
-const headPhotoSrc = logoTpaSrc
+const heroPhotoSrc = `${import.meta.env.BASE_URL}hero2.png`
+const headPhotoSrc = `${import.meta.env.BASE_URL}hero1.png`
 const activityPhotoSrc = logoTpaSrc
+const cookingEventPhotoSrc = `${import.meta.env.BASE_URL}event.jpg`
 
-const whatsappUrl = 'https://wa.me/628155042120?text=Halo%20TPA%20Rumah%20Ceria%20UBAYA,%20saya%20ingin%20bertanya.'
+const defaultWhatsAppNumber = '628155042120'
+const configuredWhatsAppNumber = import.meta.env.VITE_LANDING_WHATSAPP_NUMBER?.trim() || defaultWhatsAppNumber
+const normalizedWhatsAppNumber = configuredWhatsAppNumber.replace(/\D+/g, '')
+const whatsappUrl = normalizedWhatsAppNumber
+  ? `https://wa.me/${normalizedWhatsAppNumber}?text=Halo%20TPA%20Rumah%20Ceria%20UBAYA,%20saya%20ingin%20bertanya.`
+  : '#cta'
+const instagramUrl = 'https://www.instagram.com/tparumahceria_ubaya?igsh=ZHNodnhzdXQzMnpi'
 const API_BASE_URL = '/api/v1'
 const PARENT_PORTAL_PATH = '/portal-orang-tua'
-const PARENT_PORTAL_PRODUCTION_HOST = 'apps.tparumahceria.my.id'
+const ENFORCE_PARENT_SUBDOMAIN = import.meta.env.PROD
+  ? import.meta.env.VITE_ENFORCE_PARENT_SUBDOMAIN !== 'false'
+  : import.meta.env.VITE_ENFORCE_PARENT_SUBDOMAIN === 'true'
+const LEGACY_PARENT_PORTAL_PRODUCTION_HOST = 'apps.tparumahceria.my.id'
+const PARENT_PORTAL_CANONICAL_HOST = 'parent.tparumahceria.my.id'
+const PARENT_PORTAL_HOST_ALIASES = new Set([
+  PARENT_PORTAL_CANONICAL_HOST,
+  'ortu.tparumahceria.my.id',
+])
 const PARENT_CHILD_SESSION_KEY_PREFIX = 'tpa-parent-selected-child:'
 const LOW_STOCK_THRESHOLD = 2
 
@@ -23,7 +39,19 @@ const resolveParentPortalBaseUrl = () => {
     return `${protocol}//${hostname}:4173${PARENT_PORTAL_PATH}`
   }
   if (hostname === 'tparumahceria.my.id' || hostname === 'www.tparumahceria.my.id') {
-    return `https://${PARENT_PORTAL_PRODUCTION_HOST}${PARENT_PORTAL_PATH}`
+    if (!ENFORCE_PARENT_SUBDOMAIN) {
+      return `https://${LEGACY_PARENT_PORTAL_PRODUCTION_HOST}${PARENT_PORTAL_PATH}`
+    }
+    return `https://${PARENT_PORTAL_CANONICAL_HOST}/`
+  }
+  if (hostname === 'apps.tparumahceria.my.id') {
+    if (!ENFORCE_PARENT_SUBDOMAIN) {
+      return `${origin}${PARENT_PORTAL_PATH}`
+    }
+    return `https://${PARENT_PORTAL_CANONICAL_HOST}/`
+  }
+  if (PARENT_PORTAL_HOST_ALIASES.has(hostname)) {
+    return `${origin}/`
   }
 
   return `${origin}${PARENT_PORTAL_PATH}`
@@ -107,7 +135,7 @@ const buildActivityTimeline = (report) => {
     .filter(Boolean)
 
   lines.forEach((line, index) => {
-    const matched = line.match(/^(\d{1,2}[:.]\d{2})\s*[-â€“]\s*(\d{1,2}[:.]\d{2})\s*[:\-]\s*(.+)$/)
+    const matched = line.match(/^(\d{1,2}[:.]\d{2})\s*[-\u2013]\s*(\d{1,2}[:.]\d{2})\s*[:\-]\s*(.+)$/)
     if (matched) {
       timeline.push({
         id: `notes-${index}`,
@@ -198,7 +226,7 @@ const navSections = [
   { id: 'home', label: 'Home' },
   { id: 'tentang-kami', label: 'Tentang Kami' },
   { id: 'fasilitas', label: 'Fasilitas' },
-  { id: 'galery', label: 'Galery' },
+  { id: 'kegiatan', label: 'Kegiatan' },
   { id: 'biaya-layanan', label: 'Biaya Layanan' },
 ]
 
@@ -268,28 +296,79 @@ const facilityItems = [
   },
 ]
 
-const galleryItems = [
-  { title: 'Belajar Sambil Bermain', image: activityPhotoSrc },
-  { title: 'Stimulasi Motorik', image: activityPhotoSrc },
-  { title: 'Aktivitas Kelompok', image: activityPhotoSrc },
-  { title: 'Waktu Makan Bersama', image: activityPhotoSrc },
-  { title: 'Istirahat Siang', image: activityPhotoSrc },
-  { title: 'Gerak dan Lagu', image: activityPhotoSrc },
+const announcementCategoryLabelMap = {
+  event: 'Event',
+  dokumentasi: 'Dokumentasi',
+  galeri: 'Galeri',
+  promosi: 'Promosi',
+  ucapan: 'Ucapan',
+}
+const eventCategorySet = new Set(['event'])
+const galleryCategorySet = new Set(['dokumentasi', 'galeri'])
+const kegiatanCategorySet = new Set([...eventCategorySet, ...galleryCategorySet])
+const promoHeroCategorySet = new Set(['promosi', 'ucapan'])
+
+const formatAnnouncementDateLabel = (value) => {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return ''
+  }
+
+  const parsed = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(parsed)
+}
+
+const buildAnnouncementPeriodLabel = (item) => {
+  const startLabel = formatAnnouncementDateLabel(item.publishStartDate)
+  const endLabel = formatAnnouncementDateLabel(item.publishEndDate)
+
+  if (startLabel && endLabel) {
+    return `${startLabel} - ${endLabel}`
+  }
+  if (startLabel) {
+    return startLabel
+  }
+  if (endLabel) {
+    return `Sampai ${endLabel}`
+  }
+  return item.publishedAtLabel || ''
+}
+
+const fallbackLandingAnnouncements = [
+  {
+    title: 'Cooking Class',
+    category: 'event',
+    publishStartDate: '2026-02-16',
+    publishEndDate: '',
+    excerpt:
+      'Kelas memasak seru untuk melatih kemandirian, motorik halus, dan keberanian anak mencoba menu sehat bersama teman-teman.',
+    image: cookingEventPhotoSrc,
+    ctaLabel: '',
+    ctaUrl: '',
+  },
 ]
 
-const loopCopies = 4
-const facilityLoopItems = Array.from({ length: loopCopies }, (_, copy) =>
+const facilityLoopCopies = 4
+const galleryLoopCopies = 4
+const galleryLoopMinimumItems = 2
+const createGalleryDragState = () => ({
+  pointerId: null,
+  isDragging: false,
+  startClientX: 0,
+  startScrollLeft: 0,
+})
+const facilityLoopItems = Array.from({ length: facilityLoopCopies }, (_, copy) =>
   facilityItems.map((item, index) => ({
     ...item,
     originalIndex: index,
     loopKey: `facility-${copy}-${index}-${item.name}`,
-  })),
-).flat()
-const galleryLoopItems = Array.from({ length: loopCopies }, (_, copy) =>
-  galleryItems.map((item, index) => ({
-    ...item,
-    originalIndex: index,
-    loopKey: `gallery-${copy}-${index}-${item.title}`,
   })),
 ).flat()
 const defaultFacilityIndex = Math.floor(facilityItems.length / 2)
@@ -297,8 +376,7 @@ const defaultFacilityIndex = Math.floor(facilityItems.length / 2)
 const pricingPlans = [
   {
     title: 'Paket Harian',
-    tag: 'Fleksibel',
-    summary: 'Pilihan harian untuk kebutuhan penitipan yang insidental.',
+    summary: 'Pilihan harian untuk kebutuhan pengasuhan yang insidental.',
     price: 150000,
     unit: '/hari',
     isPopular: false,
@@ -306,7 +384,6 @@ const pricingPlans = [
   },
   {
     title: 'Paket 2 Minggu (10 hari)',
-    tag: 'Hemat',
     summary: 'Durasi menengah untuk rutinitas yang mulai terjadwal.',
     price: 1100000,
     unit: '/paket',
@@ -315,7 +392,6 @@ const pricingPlans = [
   },
   {
     title: 'Paket Bulanan',
-    tag: 'Rekomendasi',
     summary: 'Pilihan terbaik untuk pendampingan konsisten setiap bulan.',
     price: 1750000,
     unit: '/bulan',
@@ -331,26 +407,42 @@ const registrationCosts = [
   'Piyama Anak: Rp 125.000 / 1 stel',
 ]
 
-const allAnimatedSections = ['home', 'tentang-kami', 'fasilitas', 'galery', 'biaya-layanan', 'cta']
+const testimonialItems = [
+  {
+    quote:
+      'Anak kami jadi lebih mandiri dan komunikatif. Update harian dari tim TPA juga membantu kami memantau perkembangan dengan tenang.',
+    author: 'Orang Tua A',
+    context: 'Wali anak usia 4 tahun',
+  },
+  {
+    quote:
+      'Lingkungannya hangat, terstruktur, dan aman. Kami merasa terbantu karena jadwal kegiatan anak jelas dan konsisten.',
+    author: 'Orang Tua B',
+    context: 'Wali anak usia 3 tahun',
+  },
+  {
+    quote:
+      'Program pembiasaan di TPA sangat terasa dampaknya di rumah, terutama rutinitas makan dan interaksi sosial anak.',
+    author: 'Orang Tua C',
+    context: 'Wali anak usia 5 tahun',
+  },
+]
+
+const allAnimatedSections = ['home', 'tentang-kami', 'fasilitas', 'kegiatan', 'biaya-layanan', 'testimoni', 'cta']
 
 const WhatsAppIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <circle cx="12" cy="12" r="10" fill="#25d366" />
     <path
-      d="M12 5.1a6.9 6.9 0 0 0-5.9 10.6l-.4 2 2-.5a6.9 6.9 0 1 0 4.3-12.1zm0 12.6a5.7 5.7 0 0 1-2.9-.8l-.2-.1-1.2.3.3-1.2-.1-.2A5.7 5.7 0 1 1 12 17.7z"
-      fill="#ffffff"
-    />
-    <path
-      d="M16.9 14.1c-.2-.1-1.3-.6-1.5-.7-.2-.1-.4-.1-.5.1-.2.2-.6.7-.7.8-.1.1-.3.2-.5.1-.3-.1-1-.4-1.9-1.2-.7-.6-1.2-1.3-1.3-1.6-.1-.2 0-.3.1-.4.1-.1.2-.2.3-.4.1-.1.2-.2.2-.4.1-.1 0-.3 0-.4 0-.1-.5-1.2-.7-1.7-.2-.4-.4-.4-.5-.4h-.4c-.1 0-.4.1-.6.3-.2.2-.8.8-.8 1.9s.8 2.2.9 2.3c.1.2 1.7 2.6 4.1 3.6.6.2 1 .4 1.4.5.6.2 1.1.1 1.5.1.5-.1 1.3-.5 1.5-1 .2-.6.2-1 .2-1.1-.1-.1-.2-.1-.4-.2z"
-      fill="#25d366"
+      d="M13.601 2.326a7.854 7.854 0 0 0-6.883 12.417L6 18l3.339-.702a7.862 7.862 0 0 0 4.267 1.233h.003a7.854 7.854 0 0 0-.008-15.705zm4.124 11.105c-.227-.113-1.343-.664-1.551-.739-.208-.076-.36-.113-.511.113-.151.227-.587.738-.719.889-.133.151-.265.17-.492.057-.227-.114-.958-.353-1.824-1.124-.674-.601-1.13-1.344-1.263-1.571-.132-.227-.014-.35.1-.463.102-.102.226-.265.34-.397.113-.133.151-.227.227-.378.076-.151.038-.284-.019-.397-.057-.114-.511-1.23-.7-1.684-.184-.442-.372-.382-.511-.389l-.435-.008c-.151 0-.397.057-.606.284-.208.227-.795.776-.795 1.892s.814 2.195.928 2.346c.113.151 1.603 2.45 3.885 3.436.543.235.967.375 1.297.48.545.173 1.041.149 1.433.09.437-.065 1.343-.549 1.533-1.079.189-.53.189-.984.132-1.078-.057-.095-.208-.151-.435-.265z"
+      fill="currentColor"
     />
   </svg>
 )
 
-const MessageOutlineIcon = () => (
+const InstagramIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path
-      d="M4 6.5a2.5 2.5 0 0 1 2.5-2.5h11A2.5 2.5 0 0 1 20 6.5v8A2.5 2.5 0 0 1 17.5 17H8l-4 3v-13.5z"
+      d="M7 3.5h10a3.5 3.5 0 0 1 3.5 3.5v10A3.5 3.5 0 0 1 17 20.5H7A3.5 3.5 0 0 1 3.5 17V7A3.5 3.5 0 0 1 7 3.5z"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
@@ -358,13 +450,14 @@ const MessageOutlineIcon = () => (
       strokeLinejoin="round"
     />
     <path
-      d="M6.8 8.2L12 11.8l5.2-3.6"
+      d="M15.6 12a3.6 3.6 0 1 1-7.2 0 3.6 3.6 0 0 1 7.2 0z"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+    <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" />
   </svg>
 )
 
@@ -393,15 +486,48 @@ const MoonIcon = () => (
   </svg>
 )
 
+const ChevronLeftIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M14.5 6.5L9 12l5.5 5.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+const ChevronRightIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M9.5 6.5L15 12l-5.5 5.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
 export default function App() {
   const [activeSection, setActiveSection] = useState('home')
   const [currentPath, setCurrentPath] = useState(() => window.location.pathname || '/')
   const [colorMode, setColorMode] = useState(() => {
     try {
-      return window.localStorage.getItem('tpa-landing-theme') === 'dark' ? 'dark' : 'light'
+      const storedTheme = window.localStorage.getItem('tpa-landing-theme')
+      if (storedTheme === 'dark' || storedTheme === 'light') {
+        return storedTheme
+      }
     } catch {
-      return 'light'
+      // Ignore storage access issue and fallback to system preference.
     }
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark'
+    }
+    return 'light'
   })
   const [isCompactViewport, setCompactViewport] = useState(() => window.innerWidth <= 760)
   const [activeFacilityIndex, setActiveFacilityIndex] = useState(defaultFacilityIndex)
@@ -409,10 +535,6 @@ export default function App() {
     allAnimatedSections.reduce((result, id) => ({ ...result, [id]: id === 'home' }), {}),
   )
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 })
-  const [galleryScrollPaused, setGalleryScrollPaused] = useState(false)
-  const [galleryScrollTimer, setGalleryScrollTimer] = useState(null)
-  const galleryScrollPausedRef = useRef(false)
-  const galleryScrollTimerRef = useRef(null)
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [authModal, setAuthModal] = useState('none')
@@ -443,18 +565,27 @@ export default function App() {
     password: '',
     registrationCode: '',
   })
-
+  const [landingAnnouncements, setLandingAnnouncements] = useState([])
+  const [isLoadingLandingAnnouncements, setLoadingLandingAnnouncements] = useState(false)
+  const [dismissedPopupAnnouncementId, setDismissedPopupAnnouncementId] = useState('')
   const menuRef = useRef(null)
   const navItemRefs = useRef({})
-  const galleryRef = useRef(null)
   const linkChildPanelRef = useRef(null)
   const linkChildInputRef = useRef(null)
   const financePanelRef = useRef(null)
   const facilityTrackRef = useRef(null)
+  const galleryTrackRef = useRef(null)
   const facilityCardRefs = useRef([])
   const lastScrollTimeRef = useRef(Date.now())
   const isFacilityScrollingRef = useRef(false)
+  const facilityInteractionTimeoutRef = useRef(null)
+  const facilityScrollFrameRef = useRef(null)
+  const galleryInteractionTimeoutRef = useRef(null)
+  const galleryAutoScrollFrameRef = useRef(null)
+  const galleryDragStateRef = useRef(createGalleryDragState())
+  const isGalleryInteractingRef = useRef(false)
   const SCROLL_DEBOUNCE_TIMEOUT = 120
+  const GALLERY_INTERACTION_DEBOUNCE_TIMEOUT = 520
   const SCROLL_THROTTLE_DELAY = 50
   const isFacilityInteractingRef = useRef(false)
 
@@ -472,7 +603,107 @@ export default function App() {
   const isDarkMode = colorMode === 'dark'
   const platformLogoSrc = logoTpaSrc
   const renderedFacilityItems = facilityLoopItems
-  const renderedGalleryItems = galleryLoopItems
+  const kegiatanItems = useMemo(() => {
+    const dynamicItems = landingAnnouncements
+      .filter((item) => kegiatanCategorySet.has(item.category || ''))
+      .map((item) => ({
+        id: item.id || '',
+        title: item.title,
+        category: item.category || 'event',
+        publishStartDate: item.publishStartDate || '',
+        publishEndDate: item.publishEndDate || '',
+        excerpt: item.excerpt || item.content || '',
+        image: item.coverImageDataUrl || activityPhotoSrc,
+        ctaLabel: item.ctaLabel || '',
+        ctaUrl: item.ctaUrl || '',
+        publishedAtLabel: item.publishedAt
+          ? new Intl.DateTimeFormat('id-ID', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric',
+          }).format(new Date(item.publishedAt))
+          : '',
+      }))
+
+    const seenKeys = new Set(
+      dynamicItems.map((item) =>
+        `${item.title.trim().toLowerCase()}|${item.category}|${item.publishStartDate}`),
+    )
+    const fallbackItems = fallbackLandingAnnouncements.filter((item) => {
+      const key = `${item.title.trim().toLowerCase()}|${item.category}|${item.publishStartDate}`
+      return !seenKeys.has(key)
+    })
+    const source = [...dynamicItems, ...fallbackItems]
+
+    return source.map((item) => ({
+      ...item,
+      period: buildAnnouncementPeriodLabel(item) || 'Tanpa jadwal',
+    }))
+  }, [landingAnnouncements])
+  const eventItems = useMemo(
+    () => kegiatanItems.filter((item) => eventCategorySet.has(item.category || '')),
+    [kegiatanItems],
+  )
+  const directGalleryItems = useMemo(
+    () => kegiatanItems.filter((item) => galleryCategorySet.has(item.category || '')),
+    [kegiatanItems],
+  )
+  const galleryItems = useMemo(() => {
+    if (directGalleryItems.length) {
+      return directGalleryItems
+    }
+    return kegiatanItems.filter((item) => Boolean(item.image))
+  }, [directGalleryItems, kegiatanItems])
+  const isGalleryUsingEventFallback = directGalleryItems.length === 0 && galleryItems.length > 0
+  const isGalleryLoopEnabled = galleryItems.length >= galleryLoopMinimumItems
+  const galleryLoopItems = useMemo(() => {
+    if (!galleryItems.length) {
+      return []
+    }
+
+    if (!isGalleryLoopEnabled) {
+      return galleryItems.map((item, index) => ({
+        ...item,
+        loopKey: `gallery-single-${item.id || item.title}-${index}`,
+      }))
+    }
+
+    return Array.from({ length: galleryLoopCopies }, (_, copy) =>
+      galleryItems.map((item, index) => ({
+        ...item,
+        loopKey: `gallery-${copy}-${item.id || item.title}-${index}`,
+      })),
+    ).flat()
+  }, [galleryItems, isGalleryLoopEnabled])
+  const heroAnnouncement = useMemo(
+    () =>
+      landingAnnouncements.find(
+        (item) =>
+          promoHeroCategorySet.has(item.category || '') &&
+          (item.displayMode || 'section') === 'hero',
+      ) || null,
+    [landingAnnouncements],
+  )
+  const popupAnnouncement = useMemo(
+    () =>
+      landingAnnouncements.find(
+        (item) =>
+          promoHeroCategorySet.has(item.category || '') &&
+          (item.displayMode || 'section') === 'popup',
+      ) || null,
+    [landingAnnouncements],
+  )
+  const isPopupAnnouncementVisible = Boolean(
+    popupAnnouncement &&
+    dismissedPopupAnnouncementId !== popupAnnouncement.id &&
+    authModal === 'none',
+  )
+  const heroAnnouncementLabel = heroAnnouncement
+    ? announcementCategoryLabelMap[heroAnnouncement.category] || 'Info'
+    : ''
+  const popupAnnouncementLabel = popupAnnouncement
+    ? announcementCategoryLabelMap[popupAnnouncement.category] || 'Info'
+    : ''
 
   const navigateToPath = (path) => {
     if (window.location.pathname !== path) {
@@ -535,18 +766,118 @@ export default function App() {
     navigateToParentPortal('login', true)
   }, [isParentPortalPage])
 
-  const recenterInfiniteTrack = (track, threshold = 0.45) => {
-    const segmentWidth = track.scrollWidth / loopCopies
-    if (!Number.isFinite(segmentWidth) || segmentWidth <= 0) return
+  useEffect(() => {
+    if (isParentPortalPage) {
+      return undefined
+    }
 
-    if (track.scrollLeft < segmentWidth * threshold) {
-      track.scrollLeft += segmentWidth
+    let isMounted = true
+
+    const loadLandingAnnouncements = async () => {
+      setLoadingLandingAnnouncements(true)
+      try {
+        const data = await apiRequest('/landing-announcements?limit=12')
+        if (!isMounted) {
+          return
+        }
+        setLandingAnnouncements(Array.isArray(data) ? data : [])
+      } catch {
+        if (!isMounted) {
+          return
+        }
+        setLandingAnnouncements([])
+      } finally {
+        if (isMounted) {
+          setLoadingLandingAnnouncements(false)
+        }
+      }
+    }
+
+    void loadLandingAnnouncements()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isParentPortalPage])
+
+  useEffect(() => {
+    if (!popupAnnouncement?.id) {
+      setDismissedPopupAnnouncementId('')
       return
     }
 
-    if (track.scrollLeft > segmentWidth * (loopCopies - threshold)) {
-      track.scrollLeft -= segmentWidth
+    setDismissedPopupAnnouncementId((previous) =>
+      previous === popupAnnouncement.id ? previous : '',
+    )
+  }, [popupAnnouncement?.id])
+
+  const closePopupAnnouncement = () => {
+    if (!popupAnnouncement?.id) {
+      return
     }
+    setDismissedPopupAnnouncementId(popupAnnouncement.id)
+  }
+
+  const recenterInfiniteTrack = (track, copies, threshold = 0.45) => {
+    const segmentWidth = track.scrollWidth / copies
+    if (!Number.isFinite(segmentWidth) || segmentWidth <= 0) return
+
+    const maxScrollable = track.scrollWidth - track.clientWidth
+    if (!Number.isFinite(maxScrollable) || maxScrollable <= 0) return
+
+    const minScroll = Math.min(segmentWidth * threshold, maxScrollable)
+    const maxScroll = Math.max(Math.min(segmentWidth * (copies - threshold), maxScrollable), minScroll)
+    if (maxScroll <= minScroll) return
+
+    let guard = 0
+    while (track.scrollLeft < minScroll && guard <= copies + 1) {
+      track.scrollLeft += segmentWidth
+      guard += 1
+    }
+
+    guard = 0
+    while (track.scrollLeft > maxScroll && guard <= copies + 1) {
+      track.scrollLeft -= segmentWidth
+      guard += 1
+    }
+  }
+
+  const clearFacilityInteractionTimeout = () => {
+    if (!facilityInteractionTimeoutRef.current) return
+    window.clearTimeout(facilityInteractionTimeoutRef.current)
+    facilityInteractionTimeoutRef.current = null
+  }
+
+  const queueFacilityInteractionEnd = () => {
+    clearFacilityInteractionTimeout()
+    facilityInteractionTimeoutRef.current = window.setTimeout(() => {
+      isFacilityInteractingRef.current = false
+      const track = facilityTrackRef.current
+      if (!track) return
+      recenterInfiniteTrack(track, facilityLoopCopies, 0.2)
+    }, SCROLL_DEBOUNCE_TIMEOUT)
+  }
+
+  const clearGalleryInteractionTimeout = () => {
+    if (!galleryInteractionTimeoutRef.current) return
+    window.clearTimeout(galleryInteractionTimeoutRef.current)
+    galleryInteractionTimeoutRef.current = null
+  }
+
+  const resetGalleryDragState = () => {
+    galleryDragStateRef.current = createGalleryDragState()
+  }
+
+  const queueGalleryInteractionEnd = () => {
+    clearGalleryInteractionTimeout()
+    galleryInteractionTimeoutRef.current = window.setTimeout(() => {
+      isGalleryInteractingRef.current = false
+      const track = galleryTrackRef.current
+      if (!track) return
+      if (isGalleryLoopEnabled) {
+        recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+      }
+    }, GALLERY_INTERACTION_DEBOUNCE_TIMEOUT)
   }
 
   useEffect(() => {
@@ -803,126 +1134,12 @@ export default function App() {
     return () => window.removeEventListener('resize', updateIndicator)
   }, [activeSection])
 
-  // Gallery pause/resume logic
-  useEffect(() => {
-    const container = galleryRef.current
-    if (!container) return undefined
-
-    let intervalId = null
-    let scrollTimeout = null
-
-    const startScroll = () => {
-      if (intervalId) return
-
-      intervalId = window.setInterval(() => {
-        recenterInfiniteTrack(container)
-        container.scrollLeft += 1
-        recenterInfiniteTrack(container)
-      }, 40)
-      setGalleryScrollTimer(intervalId)
-      galleryScrollTimerRef.current = intervalId
-    }
-
-    const stopScroll = () => {
-      if (intervalId) {
-        window.clearInterval(intervalId)
-        setGalleryScrollTimer(null)
-        galleryScrollTimerRef.current = null
-        intervalId = null
-      }
-    }
-
-    const handleInteractionStart = () => {
-      galleryScrollPausedRef.current = true
-      setGalleryScrollPaused(true)
-      stopScroll()
-      if (scrollTimeout) window.clearTimeout(scrollTimeout)
-    }
-
-    const handleInteractionEnd = () => {
-      galleryScrollPausedRef.current = false
-      setGalleryScrollPaused(false)
-      stopScroll()
-
-      // Start 3 second countdown before resuming
-      galleryScrollTimerRef.current = window.setTimeout(() => {
-        startScroll()
-      }, 3000)
-      setGalleryScrollTimer(galleryScrollTimerRef.current)
-    }
-
-    const handleScrollEnd = () => {
-      handleInteractionEnd()
-    }
-
-    const handleScrollEvent = () => {
-      galleryScrollPausedRef.current = true
-      setGalleryScrollPaused(true)
-      stopScroll()
-
-      // Debounce scroll end detection
-      if (scrollTimeout) window.clearTimeout(scrollTimeout)
-      scrollTimeout = window.setTimeout(() => {
-        handleScrollEnd()
-      }, 200)
-    }
-
-    // Add scroll listeners
-    container.addEventListener('scroll', handleScrollEvent, { passive: true })
-
-    container.addEventListener('mouseenter', handleInteractionStart)
-    container.addEventListener('mouseleave', handleScrollEnd)
-    container.addEventListener('touchstart', handleInteractionStart, { passive: true })
-    container.addEventListener('touchend', handleScrollEnd, { passive: true })
-
-    // Auto-start scroll
-    startScroll()
-
-    return () => {
-      stopScroll()
-      if (scrollTimeout) window.clearTimeout(scrollTimeout)
-      const timer = galleryScrollTimerRef.current
-      if (timer) {
-        window.clearTimeout(timer)
-      }
-      container.removeEventListener('scroll', handleScrollEvent)
-      container.removeEventListener('mouseenter', handleInteractionStart)
-      container.removeEventListener('mouseleave', handleScrollEnd)
-      container.removeEventListener('touchstart', handleInteractionStart)
-      container.removeEventListener('touchend', handleInteractionEnd)
-    }
-  }, [])
-
-  useEffect(() => {
-    // Cleanup timer on unmount
-    return () => {
-      const timer = galleryScrollTimerRef.current
-      if (timer) {
-        window.clearTimeout(timer)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const container = galleryRef.current
-      if (!container) return
-
-      const segmentWidth = container.scrollWidth / loopCopies
-      if (segmentWidth > 0) {
-        container.scrollLeft = segmentWidth
-      }
-    }, 120)
-
-    return () => window.clearTimeout(timer)
-  }, [])
-
   useEffect(() => {
     const initialIndex = isCompactViewport ? 0 : defaultFacilityIndex
     const timer = window.setTimeout(() => {
       const track = facilityTrackRef.current
       if (track) {
-        const segmentWidth = track.scrollWidth / loopCopies
+        const segmentWidth = track.scrollWidth / facilityLoopCopies
         if (!isCompactViewport && segmentWidth > 0) {
           track.scrollLeft = segmentWidth
         }
@@ -937,6 +1154,59 @@ export default function App() {
 
     return () => window.clearTimeout(timer)
   }, [isCompactViewport])
+
+  useEffect(() => {
+    const track = galleryTrackRef.current
+    if (!track || !galleryItems.length || !isGalleryLoopEnabled) {
+      return undefined
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const segmentWidth = track.scrollWidth / galleryLoopCopies
+      if (!Number.isFinite(segmentWidth) || segmentWidth <= 0) {
+        return
+      }
+      track.scrollLeft = segmentWidth
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [galleryItems.length, isGalleryLoopEnabled])
+
+  useEffect(() => {
+    const track = galleryTrackRef.current
+    if (!track || !galleryItems.length || !isGalleryLoopEnabled) {
+      return undefined
+    }
+
+    let lastFrameTime = performance.now()
+
+    const animate = (now) => {
+      const activeTrack = galleryTrackRef.current
+      if (!activeTrack) {
+        galleryAutoScrollFrameRef.current = null
+        return
+      }
+
+      if (!isGalleryInteractingRef.current) {
+        const delta = now - lastFrameTime
+        const speed = isCompactViewport ? 0.028 : 0.042
+        activeTrack.scrollLeft += delta * speed
+        recenterInfiniteTrack(activeTrack, galleryLoopCopies, 0.18)
+      }
+
+      lastFrameTime = now
+      galleryAutoScrollFrameRef.current = window.requestAnimationFrame(animate)
+    }
+
+    galleryAutoScrollFrameRef.current = window.requestAnimationFrame(animate)
+
+    return () => {
+      if (galleryAutoScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(galleryAutoScrollFrameRef.current)
+        galleryAutoScrollFrameRef.current = null
+      }
+    }
+  }, [galleryItems.length, isCompactViewport, isGalleryLoopEnabled])
 
   const scrollToSection = (id) => {
     const target = document.getElementById(id)
@@ -958,13 +1228,13 @@ export default function App() {
     const track = facilityTrackRef.current
     if (!track) return
 
-    recenterInfiniteTrack(track, 0.2)
+    recenterInfiniteTrack(track, facilityLoopCopies, 0.2)
 
     const trackCenter = track.scrollLeft + track.clientWidth / 2
-    const candidateLoopIndices = Array.from({ length: loopCopies }, (_, copy) => nextIndex + copy * total)
+    const candidateLoopIndices = Array.from({ length: facilityLoopCopies }, (_, copy) => nextIndex + copy * total)
 
     let nearestLoopIndex =
-      candidateLoopIndices[Math.min(Math.floor(loopCopies / 2), candidateLoopIndices.length - 1)]
+      candidateLoopIndices[Math.min(Math.floor(facilityLoopCopies / 2), candidateLoopIndices.length - 1)]
     let nearestDistance = Number.POSITIVE_INFINITY
 
     candidateLoopIndices.forEach((loopIndex) => {
@@ -994,49 +1264,173 @@ export default function App() {
     const track = facilityTrackRef.current
     if (!track) return
 
-    if (!isFacilityInteractingRef.current) {
-      recenterInfiniteTrack(track, 0.2)
+    const now = Date.now()
+    if (now - lastScrollTimeRef.current < SCROLL_THROTTLE_DELAY && isFacilityScrollingRef.current) {
+      return
+    }
+    lastScrollTimeRef.current = now
+
+    if (isFacilityInteractingRef.current) {
+      queueFacilityInteractionEnd()
+    } else {
+      recenterInfiniteTrack(track, facilityLoopCopies, 0.2)
     }
 
-    const center = track.scrollLeft + track.clientWidth / 2
-    let nearestLoopIndex = -1
-    let nearestDistance = Number.POSITIVE_INFINITY
+    if (isFacilityScrollingRef.current) {
+      return
+    }
 
-    facilityCardRefs.current.forEach((card, loopIndex) => {
-      if (!card) return
-      const cardCenter = card.offsetLeft + card.clientWidth / 2
-      const distance = Math.abs(center - cardCenter)
-
-      if (distance < nearestDistance) {
-        nearestDistance = distance
-        nearestLoopIndex = loopIndex
+    isFacilityScrollingRef.current = true
+    facilityScrollFrameRef.current = window.requestAnimationFrame(() => {
+      const activeTrack = facilityTrackRef.current
+      if (!activeTrack) {
+        isFacilityScrollingRef.current = false
+        facilityScrollFrameRef.current = null
+        return
       }
+
+      const center = activeTrack.scrollLeft + activeTrack.clientWidth / 2
+      let nearestLoopIndex = -1
+      let nearestDistance = Number.POSITIVE_INFINITY
+
+      facilityCardRefs.current.forEach((card, loopIndex) => {
+        if (!card) return
+        const cardCenter = card.offsetLeft + card.clientWidth / 2
+        const distance = Math.abs(center - cardCenter)
+
+        if (distance < nearestDistance) {
+          nearestDistance = distance
+          nearestLoopIndex = loopIndex
+        }
+      })
+
+      if (nearestLoopIndex >= 0) {
+        const nearestBaseIndex = nearestLoopIndex % facilityItems.length
+        if (nearestBaseIndex !== activeFacilityIndex) {
+          setActiveFacilityIndex(nearestBaseIndex)
+        }
+      }
+
+      isFacilityScrollingRef.current = false
+      facilityScrollFrameRef.current = null
     })
-
-    if (nearestLoopIndex < 0) return
-
-    const nearestBaseIndex = nearestLoopIndex % facilityItems.length
-    if (nearestBaseIndex !== activeFacilityIndex) {
-      setActiveFacilityIndex(nearestBaseIndex)
-    }
   }
 
   const handleFacilityInteractionStart = () => {
     isFacilityInteractingRef.current = true
+    clearFacilityInteractionTimeout()
   }
 
   const handleFacilityInteractionEnd = () => {
-    isFacilityInteractingRef.current = false
-    const track = facilityTrackRef.current
-    if (!track) return
-    recenterInfiniteTrack(track, 0.2)
+    queueFacilityInteractionEnd()
   }
 
   const handleGalleryTrackScroll = () => {
-    const container = galleryRef.current
-    if (!container) return
+    const track = galleryTrackRef.current
+    if (!track || !galleryItems.length) return
 
-    recenterInfiniteTrack(container)
+    if (isGalleryInteractingRef.current) {
+      queueGalleryInteractionEnd()
+    }
+
+    if (isGalleryLoopEnabled) {
+      recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+    }
+  }
+
+  const handleGalleryInteractionStart = () => {
+    if (!galleryItems.length) return
+    isGalleryInteractingRef.current = true
+    clearGalleryInteractionTimeout()
+  }
+
+  const handleGalleryInteractionEnd = () => {
+    if (galleryDragStateRef.current.isDragging) return
+    queueGalleryInteractionEnd()
+  }
+
+  const finishGalleryPointerInteraction = (pointerId = null) => {
+    const track = galleryTrackRef.current
+    const dragState = galleryDragStateRef.current
+    if (!dragState.isDragging) return
+    if (pointerId !== null && dragState.pointerId !== pointerId) return
+
+    if (track) {
+      if (
+        dragState.pointerId !== null &&
+        typeof track.hasPointerCapture === 'function' &&
+        track.hasPointerCapture(dragState.pointerId)
+      ) {
+        track.releasePointerCapture(dragState.pointerId)
+      }
+      track.classList.remove('is-dragging')
+    }
+
+    resetGalleryDragState()
+    queueGalleryInteractionEnd()
+  }
+
+  const handleGalleryPointerDown = (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const track = galleryTrackRef.current
+    if (!track || !galleryItems.length) return
+
+    isGalleryInteractingRef.current = true
+    clearGalleryInteractionTimeout()
+    galleryDragStateRef.current = {
+      pointerId: event.pointerId,
+      isDragging: true,
+      startClientX: event.clientX,
+      startScrollLeft: track.scrollLeft,
+    }
+    track.classList.add('is-dragging')
+    if (typeof track.setPointerCapture === 'function') {
+      track.setPointerCapture(event.pointerId)
+    }
+  }
+
+  const handleGalleryPointerMove = (event) => {
+    const track = galleryTrackRef.current
+    const dragState = galleryDragStateRef.current
+    if (!track || !dragState.isDragging || dragState.pointerId !== event.pointerId) return
+
+    const deltaX = event.clientX - dragState.startClientX
+    track.scrollLeft = dragState.startScrollLeft - deltaX
+    if (isGalleryLoopEnabled) {
+      recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+    }
+  }
+
+  const handleGalleryPointerUp = (event) => {
+    finishGalleryPointerInteraction(event.pointerId)
+  }
+
+  const handleGalleryPointerCancel = (event) => {
+    finishGalleryPointerInteraction(event.pointerId)
+  }
+
+  const handleGalleryPointerCaptureLost = (event) => {
+    finishGalleryPointerInteraction(event.pointerId)
+  }
+
+  const handleGalleryWheel = (event) => {
+    const track = galleryTrackRef.current
+    if (!track || !galleryItems.length) return
+
+    const horizontalDelta =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+    if (!Number.isFinite(horizontalDelta) || horizontalDelta === 0) {
+      return
+    }
+
+    isGalleryInteractingRef.current = true
+    clearGalleryInteractionTimeout()
+    track.scrollLeft += horizontalDelta
+    if (isGalleryLoopEnabled) {
+      recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+    }
+    event.preventDefault()
+    queueGalleryInteractionEnd()
   }
 
   useEffect(() => {
@@ -1048,6 +1442,22 @@ export default function App() {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [activeFacilityIndex, isCompactViewport])
+
+  useEffect(
+    () => () => {
+      clearFacilityInteractionTimeout()
+      clearGalleryInteractionTimeout()
+      galleryTrackRef.current?.classList.remove('is-dragging')
+      resetGalleryDragState()
+      if (facilityScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(facilityScrollFrameRef.current)
+      }
+      if (galleryAutoScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(galleryAutoScrollFrameRef.current)
+      }
+    },
+    [],
+  )
 
   const toggleColorMode = () => {
     setColorMode((previous) => (previous === 'dark' ? 'light' : 'dark'))
@@ -1412,13 +1822,11 @@ export default function App() {
             }}
           >
             <span className="brand__logo-wrap">
-              <span className="brand__logo-shell">
-                <img src={platformLogoSrc} alt="Logo TPA UBAYA" className="brand__logo" />
-              </span>
+              <img src={platformLogoSrc} alt="Logo TPA UBAYA" className="brand__logo" />
             </span>
             <span className="brand__text">
               <strong>TPA Rumah Ceria UBAYA</strong>
-              <small>Taman Penitipan Anak</small>
+              <small>Taman Pengasuhan Anak</small>
             </span>
           </a>
 
@@ -1526,7 +1934,14 @@ export default function App() {
       ) : null}
 
       <main>
-        <section id="home" className={`page-section ${visibleSections.home ? 'is-visible' : ''}`}>
+        <section
+          id="home"
+          className={`page-section home-hero ${visibleSections.home ? 'is-visible' : ''}`}
+          style={{
+            '--home-bg-image': `url(${heroPhotoSrc})`,
+            backgroundImage: `url(${heroPhotoSrc})`,
+          }}
+        >
           <div className="section-shell home-section">
             <div className="home-section__content">
               <h1>
@@ -1539,18 +1954,40 @@ export default function App() {
                 mendampingi perkembangan anak sejak dini melalui kegiatan terstruktur.
               </p>
 
+              {heroAnnouncement ? (
+                <article className="hero-announcement-banner">
+                  {heroAnnouncement.coverImageDataUrl ? (
+                    <img
+                      src={heroAnnouncement.coverImageDataUrl}
+                      alt={heroAnnouncement.title}
+                      className="hero-announcement-banner__image"
+                    />
+                  ) : null}
+                  <div className="hero-announcement-banner__content">
+                    <p className="hero-announcement-banner__badge">{heroAnnouncementLabel}</p>
+                    <h3>{heroAnnouncement.title}</h3>
+                    <p>{heroAnnouncement.excerpt || heroAnnouncement.content}</p>
+                    {heroAnnouncement.ctaLabel && heroAnnouncement.ctaUrl ? (
+                      <a
+                        href={heroAnnouncement.ctaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="button button--ghost hero-announcement-banner__cta"
+                      >
+                        {heroAnnouncement.ctaLabel}
+                      </a>
+                    ) : null}
+                  </div>
+                </article>
+              ) : null}
+
               <div className="home-actions">
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="button button--primary"
-                >
-                  Hubungi Kami
-                </a>
                 <button type="button" className="button button--secondary" onClick={() => openAuthModal('register')}>
                   Daftar Sekarang
                 </button>
+                <a href={whatsappUrl} target="_blank" rel="noreferrer" className="button button--primary">
+                  Hubungi Kami
+                </a>
               </div>
             </div>
 
@@ -1625,7 +2062,9 @@ export default function App() {
                 onClick={handleFacilityPrev}
                 aria-label="Fasilitas sebelumnya"
               >
-                â€¹
+                <span className="facility-slider__nav-icon" aria-hidden="true">
+                  <ChevronLeftIcon />
+                </span>
               </button>
 
               <div className="facility-slider__viewport">
@@ -1661,7 +2100,9 @@ export default function App() {
                 onClick={handleFacilityNext}
                 aria-label="Fasilitas berikutnya"
               >
-                â€º
+                <span className="facility-slider__nav-icon" aria-hidden="true">
+                  <ChevronRightIcon />
+                </span>
               </button>
             </div>
 
@@ -1675,24 +2116,149 @@ export default function App() {
           </div>
         </section>
 
-        <section id="galery" className={`page-section ${visibleSections.galery ? 'is-visible' : ''}`}>
+        <section id="kegiatan" className={`page-section ${visibleSections.kegiatan ? 'is-visible' : ''}`}>
           <div className="section-shell gallery-section">
             <div className="section-head">
-              <h2>Galery Aktivitas Anak</h2>
+              <h2>Kegiatan</h2>
             </div>
 
-            <div
-              ref={galleryRef}
-              className="gallery-track"
-              onScroll={handleGalleryTrackScroll}
-            >
-              {renderedGalleryItems.map((item) => (
-                <article key={item.loopKey} className="gallery-card">
-                  <img src={item.image} alt={item.title} className="gallery-card__image" />
-                  <p>{item.title}</p>
+            {isLoadingLandingAnnouncements ? (
+              <p className="kegiatan-event__loading">Memuat update terbaru...</p>
+            ) : null}
+
+            <div className="kegiatan-layout">
+              <article className="operational-card kegiatan-block">
+                <div className="kegiatan-block__head">
+                  <h3>Event</h3>
+                  <p>Agenda kegiatan terjadwal yang bisa diikuti anak.</p>
+                </div>
+                <div className="kegiatan-event-scroll" role="region" aria-label="Daftar event yang bisa digeser">
+                  <div className="kegiatan-event-track">
+                    {eventItems.length === 0 ? (
+                      <article className="operational-grid__item kegiatan-event-card">
+                        <h4>Belum ada event aktif</h4>
+                        <p className="kegiatan-event__description">
+                          Tambahkan data event melalui panel admin agar tampil di halaman ini.
+                        </p>
+                      </article>
+                    ) : (
+                      eventItems.map((item) => (
+                        <article
+                          key={`${item.id || item.title}-${item.category}-${item.publishStartDate || item.period}`}
+                          className="operational-grid__item kegiatan-event-card"
+                        >
+                          <img src={item.image} alt={item.title} className="kegiatan-event__image" />
+                          <h4>{item.title}</h4>
+                          <p className="kegiatan-event__period">{item.period}</p>
+                          {item.excerpt ? (
+                            <p className="kegiatan-event__description">{item.excerpt}</p>
+                          ) : null}
+                          {item.ctaLabel && item.ctaUrl ? (
+                            <a
+                              href={item.ctaUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="button button--ghost kegiatan-event__cta"
+                            >
+                              {item.ctaLabel}
+                            </a>
+                          ) : null}
+                        </article>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              {galleryItems.length > 0 ? (
+                <article className="operational-card kegiatan-block">
+                  <div className="kegiatan-block__head">
+                    <h3>Galeri</h3>
+                    <p>
+                      {isGalleryUsingEventFallback
+                        ? 'Dokumentasi diambil dari kegiatan yang sudah tersedia.'
+                        : 'Dokumentasi momen harian anak yang bergulir otomatis tanpa henti.'}
+                    </p>
+                  </div>
+                  <div
+                    ref={galleryTrackRef}
+                    className="kegiatan-gallery-scroll"
+                    role="region"
+                    aria-label="Galeri kegiatan yang bergulir otomatis dan bisa digeser manual"
+                    onScroll={handleGalleryTrackScroll}
+                    onWheel={handleGalleryWheel}
+                    onMouseEnter={handleGalleryInteractionStart}
+                    onMouseLeave={handleGalleryInteractionEnd}
+                    onPointerDown={handleGalleryPointerDown}
+                    onPointerMove={handleGalleryPointerMove}
+                    onPointerUp={handleGalleryPointerUp}
+                    onPointerCancel={handleGalleryPointerCancel}
+                    onLostPointerCapture={handleGalleryPointerCaptureLost}
+                  >
+                    <div className="kegiatan-gallery-track">
+                      {galleryLoopItems.map((item) => (
+                        <article key={item.loopKey} className="gallery-card kegiatan-gallery-card">
+                          <img
+                            src={item.image}
+                            alt={item.title}
+                            className="gallery-card__image kegiatan-gallery__image"
+                            draggable={false}
+                          />
+                          <p>{item.title}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
+        <section id="biaya-layanan" className={`page-section ${visibleSections['biaya-layanan'] ? 'is-visible' : ''}`}>
+          <div className="section-shell pricing-section">
+            <div className="section-head">
+              <h2>Paket Layanan TPA</h2>
+            </div>
+
+            <div className="pricing-grid">
+              {pricingPlans.map((plan) => (
+                <article
+                  key={plan.title}
+                  className={`pricing-card ${plan.isPopular ? 'pricing-card--popular' : ''}`}
+                >
+                  {plan.isPopular ? <p className="pricing-card__ribbon">Populer</p> : null}
+
+                  <div className="pricing-card__head">
+                    <h3>{plan.title}</h3>
+                  </div>
+
+                  <p className="pricing-price">
+                    {priceFormatter.format(plan.price)} <span>{plan.unit}</span>
+                  </p>
+                  <p className="pricing-card__summary">{plan.summary}</p>
+
+                  <ul className="bullet-list pricing-benefits">
+                    {plan.benefits.map((benefit) => (
+                      <li key={benefit}>{benefit}</li>
+                    ))}
+                  </ul>
+
+                  <a href={whatsappUrl} target="_blank" rel="noreferrer" className="button pricing-card__action">
+                    Pilih Paket
+                  </a>
                 </article>
               ))}
             </div>
+
+            <article className="registration-card">
+              <h3>Biaya Pendaftaran</h3>
+              <ul className="bullet-list">
+                {registrationCosts.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
 
             <article className="operational-card">
               <h3>Jam Operasional</h3>
@@ -1721,46 +2287,20 @@ export default function App() {
           </div>
         </section>
 
-        <section id="biaya-layanan" className={`page-section ${visibleSections['biaya-layanan'] ? 'is-visible' : ''}`}>
-          <div className="section-shell pricing-section">
+        <section id="testimoni" className={`page-section ${visibleSections.testimoni ? 'is-visible' : ''}`}>
+          <div className="section-shell testimonial-section">
             <div className="section-head">
-              <h2>Paket Layanan TPA</h2>
+              <h2>Testimoni Orang Tua</h2>
             </div>
-
-            <div className="pricing-grid">
-              {pricingPlans.map((plan) => (
-                <article
-                  key={plan.title}
-                  className={`pricing-card ${plan.isPopular ? 'pricing-card--popular' : ''}`}
-                >
-                  {plan.isPopular ? <p className="pricing-card__ribbon">Recomended</p> : null}
-
-                  <div className="pricing-card__head">
-                    <h3>{plan.title}</h3>
-                  </div>
-
-                  <p className="pricing-price">
-                    {priceFormatter.format(plan.price)} <span>{plan.unit}</span>
-                  </p>
-                  <p className="pricing-card__summary">{plan.summary}</p>
-
-                  <ul className="bullet-list pricing-benefits">
-                    {plan.benefits.map((benefit) => (
-                      <li key={benefit}>{benefit}</li>
-                    ))}
-                  </ul>
+            <div className="testimonial-grid">
+              {testimonialItems.map((item) => (
+                <article key={item.author} className="testimonial-card">
+                  <p className="testimonial-card__quote">"{item.quote}"</p>
+                  <p className="testimonial-card__author">{item.author}</p>
+                  <p className="testimonial-card__context">{item.context}</p>
                 </article>
               ))}
             </div>
-
-            <article className="registration-card">
-              <h3>Biaya Pendaftaran</h3>
-              <ul className="bullet-list">
-                {registrationCosts.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
           </div>
         </section>
 
@@ -1786,17 +2326,22 @@ export default function App() {
                 <span className="cta-action__icon" aria-hidden="true">
                   <WhatsAppIcon />
                 </span>
-                WhatsApp Kami
+                Whatsapp
               </a>
-              <a href="mailto:info@ubaya.ac.id" className="button button--cta-email">
+              <a
+                href={instagramUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="button button--cta-instagram"
+              >
                 <span className="cta-action__icon" aria-hidden="true">
-                  <MessageOutlineIcon />
+                  <InstagramIcon />
                 </span>
-                Email Kami
+                Instagram
               </a>
             </div>
             <p className="cta-section__location">
-              Fakultas Psikologi, Universitas Surabaya Â· Jl. Raya Kali Rungkut, Surabaya
+              Fakultas Psikologi, Universitas Surabaya · Jl. Raya Kali Rungkut, Surabaya
             </p>
           </div>
         </section>
@@ -1811,11 +2356,11 @@ export default function App() {
               </span>
               <div>
                 <h3>TPA Rumah Ceria UBAYA</h3>
-                <p>Taman Penitipan Anak</p>
+                <p>Taman Pengasuhan Anak</p>
               </div>
             </div>
             <p className="footer__brand-text">
-              Layanan penitipan anak berbasis pendampingan tumbuh kembang, di bawah naungan
+              Layanan pengasuhan anak berbasis pendampingan tumbuh kembang, di bawah naungan
               Universitas Surabaya.
             </p>
           </section>
@@ -1825,7 +2370,7 @@ export default function App() {
             <ul>
               <li><a href="#tentang-kami">Program Pendampingan</a></li>
               <li><a href="#fasilitas">Fasilitas TPA</a></li>
-              <li><a href="#galery">Galery Aktivitas</a></li>
+              <li><a href="#kegiatan">Kegiatan</a></li>
               <li><a href="#biaya-layanan">Paket Biaya Layanan</a></li>
             </ul>
           </section>
@@ -1835,8 +2380,10 @@ export default function App() {
             <ul>
               <li><a href="#tentang-kami">Tentang Kami</a></li>
               <li><a href="#tentang-kami">Visi dan Program</a></li>
-              <li><a href="#cta">Pendaftaran Akun Orang Tua</a></li>
-              <li><a href="#biaya-layanan">Biaya Pendaftaran</a></li>
+              <li><a href="/privacy-policy">Kebijakan Privasi</a></li>
+              <li><a href="/terms-of-service">Syarat Layanan</a></li>
+              <li><a href="/cookie-policy">Kebijakan Cookie</a></li>
+              <li><a href="/data-consent-form">Form Persetujuan Data</a></li>
             </ul>
           </section>
 
@@ -1851,12 +2398,62 @@ export default function App() {
         </div>
 
         <div className="section-shell footer__bottom">
-          <p><span style={{ marginRight: '4px', opacity: 0.7 }}>Â©</span> {new Date().getFullYear()} TPA Rumah Ceria UBAYA. Hak cipta dilindungi.</p>
-          <button type="button" className="footer__privacy-btn" onClick={() => scrollToSection('home')}>
+          <p>&copy; {new Date().getFullYear()} TPA Rumah Ceria UBAYA. Hak cipta dilindungi.</p>
+          <a href="/privacy-policy" className="footer__privacy-btn">
             Kebijakan Privasi
-          </button>
+          </a>
         </div>
       </footer>
+
+      {isPopupAnnouncementVisible && popupAnnouncement ? (
+        <section
+          className="landing-announcement-popup"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${popupAnnouncementLabel} terbaru`}
+        >
+          <button
+            type="button"
+            className="landing-announcement-popup__backdrop"
+            aria-label="Tutup popup pengumuman"
+            onClick={closePopupAnnouncement}
+          />
+          <article className="landing-announcement-popup__card">
+            <button
+              type="button"
+              className="landing-announcement-popup__close"
+              onClick={closePopupAnnouncement}
+              aria-label="Tutup"
+            >
+              &times;
+            </button>
+            {popupAnnouncement.coverImageDataUrl ? (
+              <img
+                src={popupAnnouncement.coverImageDataUrl}
+                alt={popupAnnouncement.title}
+                className="landing-announcement-popup__image"
+              />
+            ) : null}
+            <div className="landing-announcement-popup__content">
+              <p className="landing-announcement-popup__badge">{popupAnnouncementLabel}</p>
+              <h3>{popupAnnouncement.title}</h3>
+              {popupAnnouncement.excerpt || popupAnnouncement.content ? (
+                <p>{popupAnnouncement.excerpt || popupAnnouncement.content}</p>
+              ) : null}
+              {popupAnnouncement.ctaLabel && popupAnnouncement.ctaUrl ? (
+                <a
+                  href={popupAnnouncement.ctaUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button button--ghost landing-announcement-popup__cta"
+                >
+                  {popupAnnouncement.ctaLabel}
+                </a>
+              ) : null}
+            </div>
+          </article>
+        </section>
+      ) : null}
 
       {authModal !== 'none' ? (
         <section className="auth-page" role="dialog" aria-modal="true" aria-label="Akses orang tua TPA">
@@ -1881,9 +2478,9 @@ export default function App() {
             </p>
 
             <div className="auth-page__hero">
-              <span>ðŸ” Akses aman dan terverifikasi</span>
-              <span>ðŸ‘¶ Terhubung langsung ke data anak</span>
-              <span>âš¡ Login dan daftar lebih cepat</span>
+              <span>Akses aman dan terverifikasi</span>
+              <span>Terhubung langsung ke data anak</span>
+              <span>Login dan daftar lebih cepat</span>
             </div>
 
             <div className="auth-switch" role="tablist" aria-label="Pilih akses akun orang tua">
@@ -2016,3 +2613,6 @@ export default function App() {
     </div>
   )
 }
+
+
+

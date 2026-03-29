@@ -16,6 +16,7 @@ interface BillingPaidRow {
   childName: string
   packageLabel: string
   paidAmount: number
+  attendanceCount: number
   isMigrated: boolean
 }
 
@@ -45,6 +46,7 @@ interface BillingPageProps {
   paidLimitValue: number
   onChangePaidLimit: (value: number) => void
   paidRows: BillingPaidRow[]
+  arrearsRows: ServiceBillingArrearsRow[]
 }
 
 const BillingPage = ({
@@ -73,6 +75,7 @@ const BillingPage = ({
   paidLimitValue,
   onChangePaidLimit,
   paidRows,
+  arrearsRows,
 }: BillingPageProps) => {
   return (
     <section className="page">
@@ -81,6 +84,42 @@ const BillingPage = ({
           <div>
             <h2>Penagihan & Pelunasan Layanan</h2>
             <p className="card__description">Kelola tunggakan dan proses pembayaran anak</p>
+          </div>
+        </div>
+
+        <div className="card service-billing-overdue-list-card">
+          <h3>List Anak Menunggak</h3>
+          <p className="card__description">
+            Nama anak [lama hari], paket layanan, dan total pembayaran yang masih harus dilunasi.
+          </p>
+          <div className="table-wrap">
+            <table className="table service-billing-arrears-table">
+              <thead>
+                <tr>
+                  <th>Nama Anak [Lama Hari]</th>
+                  <th>Paket Layanan</th>
+                  <th style={{ textAlign: 'center' }}>Total Pembayaran</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arrearsRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="table__empty">Tidak ada anak yang menunggak.</td>
+                  </tr>
+                ) : (
+                  arrearsRows.map((row) => (
+                    <tr key={row.childId}>
+                      <td>
+                        <strong>{row.childName}</strong>{' '}
+                        <span className="field-hint">[{row.unpaidAttendanceDays} hari]</span>
+                      </td>
+                      <td>{row.packageLabel}</td>
+                      <td style={{ textAlign: 'center' }}>{formatCurrency(row.totalOutstanding)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -240,9 +279,8 @@ const BillingPage = ({
               Nominal pas akan membuat tagihan otomatis lunas; jika kurang, sisa tagihan otomatis berkurang.
             </p>
             <p className="field-hint">
-              Aturan paket: harian dihitung per 24 jam. Paket 2 mingguan dihitung 10 hari,
-              hari ke-11 s.d. 15 dihitung harian, dan pada hari ke-16 otomatis migrasi ke
-              bulanan bila belum lunas.
+              Aturan paket: harian berlaku 1 hari, paket 2 mingguan berlaku 10 hari ke depan,
+              dan paket bulanan berlaku 30 hari ke depan (hari berjalan tetap dihitung).
             </p>
           </div>
         </details>
@@ -297,15 +335,16 @@ const BillingPage = ({
               <tr>
                 <th>Nama Anak</th>
                 <th>Paket</th>
+                <th style={{ textAlign: 'center' }}>Jumlah Kehadiran</th>
                 <th style={{ textAlign: 'center' }}>Status</th>
                 <th style={{ textAlign: 'center' }}>Total Dibayarkan</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingPaidRows && paidRows.length === 0 ? (
-                <tr><td colSpan={4} className="table__empty">Memuat daftar lunas...</td></tr>
+                <tr><td colSpan={5} className="table__empty">Memuat daftar lunas...</td></tr>
               ) : paidRows.length === 0 ? (
-                <tr><td colSpan={4} className="table__empty">Tidak ada anak yang sudah lunas.</td></tr>
+                <tr><td colSpan={5} className="table__empty">Tidak ada anak yang sudah lunas.</td></tr>
               ) : (
                 paidRows.map((row) => (
                   <tr key={row.childId}>
@@ -316,6 +355,7 @@ const BillingPage = ({
                       </div>
                     </td>
                     <td>{row.packageLabel}</td>
+                    <td style={{ textAlign: 'center' }}>{row.attendanceCount}</td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{
                         display: 'inline-flex',

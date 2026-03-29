@@ -6,7 +6,8 @@ Panduan ini untuk kondisi saat server masih berjalan di laptop pribadi.
 
 - `tparumahceria.my.id` dilayani backend pada host root sebagai landing page.
 - `apps.tparumahceria.my.id` dilayani backend pada host `apps` sebagai app admin/petugas.
-- Cloudflare Tunnel meneruskan kedua hostname ke `http://localhost:4000`.
+- `parent.tparumahceria.my.id` dilayani backend pada host `parent` sebagai portal orang tua.
+- Cloudflare Tunnel meneruskan seluruh hostname ke `http://localhost:4000`.
 - Port publik tidak perlu dibuka dari laptop.
 
 ## 1. Persiapan Laptop
@@ -28,7 +29,7 @@ Lalu isi minimal:
 
 - `NODE_ENV=production`
 - `TRUST_PROXY=1`
-- `CORS_ORIGIN=https://tparumahceria.my.id,https://apps.tparumahceria.my.id`
+- `CORS_ORIGIN=https://tparumahceria.my.id,https://apps.tparumahceria.my.id,https://parent.tparumahceria.my.id,https://ortu.tparumahceria.my.id`
 - `AUTH_COOKIE_SECURE=true`
 - `AUTH_COOKIE_DOMAIN=` dibiarkan kosong
 - `DB_*`
@@ -95,11 +96,13 @@ cloudflared service install <TOKEN_DARI_CLOUDFLARE>
 
 ## 8. Tambah Public Hostname
 
-Tambahkan tiga hostname:
+Tambahkan empat hostname:
 
 1. `tparumahceria.my.id` -> `http://localhost:4000`
 2. `www.tparumahceria.my.id` -> `http://localhost:4000`
 3. `apps.tparumahceria.my.id` -> `http://localhost:4000`
+4. `parent.tparumahceria.my.id` -> `http://localhost:4000`
+5. (opsional alias) `ortu.tparumahceria.my.id` -> `http://localhost:4000`
 
 Root domain dan `apps` sama-sama menuju backend, tetapi backend akan memilih frontend berdasarkan `Host`.
 

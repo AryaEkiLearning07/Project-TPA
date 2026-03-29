@@ -7,6 +7,7 @@ import { ensureParentRelationshipSchema } from './parent-relations-service.js'
 import { ensureServiceRateSchema } from './service-rate-service.js'
 import { ensureServiceBillingSchema } from './service-billing-service.js'
 import { ensureStaffAttendanceSchema } from './staff-attendance-service.js'
+import { ensureLandingAnnouncementSchema } from './landing-announcement-service.js'
 
 const BACKUP_TABLES = [
   'children',
@@ -24,6 +25,7 @@ const BACKUP_TABLES = [
   'service_billing_settings',
   'service_billing_periods',
   'service_billing_transactions',
+  'landing_announcements',
 ] as const
 
 const REDACTED_COLUMNS: Record<string, string[]> = {
@@ -141,6 +143,7 @@ export const createDatabaseBackup = async (): Promise<DatabaseBackupPayload> => 
   await ensureStaffAttendanceSchema(dbPool)
   await ensureServiceRateSchema(dbPool)
   await ensureServiceBillingSchema(dbPool)
+  await ensureLandingAnnouncementSchema(dbPool)
 
   const dumps = await Promise.all(BACKUP_TABLES.map((table) => dumpTable(table)))
   const generatedDate = new Date()

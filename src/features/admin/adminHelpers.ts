@@ -4,6 +4,7 @@ import {
     CalendarCheck2,
     ClipboardList,
     FileText,
+    Megaphone,
     Settings,
     UserCog,
     UsersRound,
@@ -34,7 +35,7 @@ export type MonitoringSubTab =
     | 'berita-acara'
     | 'kehadiran-petugas'
     | 'layanan'
-export type SettingsSubTab = 'petugas' | 'orang-tua' | 'logs' | 'backup'
+export type SettingsSubTab = 'petugas' | 'orang-tua' | 'update-pengumuman' | 'logs' | 'backup'
 
 export interface AdminNavigationState {
     scope: 'admin'
@@ -54,7 +55,11 @@ export const isMonitoringSubTab = (value: unknown): value is MonitoringSubTab =>
     value === 'layanan'
 
 export const isSettingsSubTab = (value: unknown): value is SettingsSubTab =>
-    value === 'petugas' || value === 'orang-tua' || value === 'logs' || value === 'backup'
+    value === 'petugas' ||
+    value === 'orang-tua' ||
+    value === 'update-pengumuman' ||
+    value === 'logs' ||
+    value === 'backup'
 
 export const isAdminNavigationState = (value: unknown): value is AdminNavigationState => {
     if (typeof value !== 'object' || value === null) {
@@ -153,6 +158,12 @@ export const settingsSubTabs = [
         icon: UsersRound,
     },
     {
+        key: 'update-pengumuman',
+        label: 'Update Pengumuman',
+        description: 'Kelola konten landing seperti blogspot',
+        icon: Megaphone,
+    },
+    {
         key: 'logs',
         label: 'Log Aktivitas',
         description: 'Pantau riwayat aktivitas sistem',
@@ -182,7 +193,7 @@ export const sidebarTitles: Record<AdminSidebarKey, { title: string; subtitle: s
     },
     settings: {
         title: 'Pengaturan',
-        subtitle: 'Kelola petugas, akun orang tua, log aktivitas, dan backup data',
+        subtitle: 'Kelola petugas, akun orang tua, update pengumuman, log aktivitas, dan backup data',
     },
 }
 

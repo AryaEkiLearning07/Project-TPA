@@ -233,6 +233,7 @@ export interface AuthSession {
 export interface LoginInput {
   email: string
   password: string
+  loginPreference?: 'STAFF_FIRST' | 'PARENT_FIRST'
 }
 
 export interface StaffUser {
@@ -251,6 +252,52 @@ export interface StaffUserInput {
   password: string
   isActive: boolean
   tanggalMasuk: string
+}
+
+export type LandingAnnouncementCategory = 'event' | 'dokumentasi' | 'galeri' | 'promosi' | 'ucapan'
+export type LandingAnnouncementStatus = 'draft' | 'published' | 'archived'
+export type LandingAnnouncementDisplayMode = 'section' | 'hero' | 'popup'
+
+export interface LandingAnnouncement {
+  id: string
+  slug: string
+  title: string
+  category: LandingAnnouncementCategory
+  displayMode: LandingAnnouncementDisplayMode
+  excerpt: string
+  content: string
+  coverImageDataUrl: string
+  coverImageName: string
+  ctaLabel: string
+  ctaUrl: string
+  publishStartDate: string
+  publishEndDate: string
+  status: LandingAnnouncementStatus
+  isPinned: boolean
+  publishedAt: string
+  authorName: string
+  authorEmail: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LandingAnnouncementInput {
+  title: string
+  slug?: string
+  category: LandingAnnouncementCategory
+  displayMode?: LandingAnnouncementDisplayMode
+  excerpt?: string
+  content?: string
+  coverImageDataUrl?: string
+  coverImageName?: string
+  ctaLabel?: string
+  ctaUrl?: string
+  publishStartDate?: string
+  publishEndDate?: string
+  status?: LandingAnnouncementStatus
+  isPinned?: boolean
+  authorName?: string
+  authorEmail?: string
 }
 
 export interface ActivityLogEntry {

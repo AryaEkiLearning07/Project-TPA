@@ -1,0 +1,186 @@
+﻿INFORMASI KOMPREHENSIF TPA RUMAH CERIA UBAYA
+Tanggal penyusunan: 23 Maret 2026
+Sumber internal project: apps/landing/src/App.jsx, apps/landing/index.html, proposal.md
+
+============================================================
+1) PROFIL SINGKAT
+============================================================
+Nama lembaga: TPA Rumah Ceria UBAYA
+Jenis layanan: Taman Penitipan Anak (TPA) / daycare
+Afiliasi: Di bawah naungan Fakultas Psikologi, Universitas Surabaya (UBAYA)
+Fokus layanan: Pendampingan anak usia dini yang aman, suportif, penuh kasih, dan terstruktur
+Rentang usia layanan: 2 sampai 7 tahun
+Pendekatan: Psikologi perkembangan untuk membangun kemandirian, keterampilan dasar, dan kesiapan belajar
+
+Nilai utama layanan:
+- Keamanan dan kenyamanan anak selama dititipkan
+- Pendampingan tumbuh kembang yang terarah
+- Transparansi monitoring anak melalui sistem digital
+
+============================================================
+2) VISI DAN ORIENTASI PENDIDIKAN
+============================================================
+Visi inti:
+Mendampingi anak bertumbuh dan berkembang dengan ceria pada fase usia dini yang penting untuk fondasi masa depan.
+
+Orientasi program:
+- Proses belajar yang menyenangkan dan sesuai tahap perkembangan
+- Pembiasaan aktivitas harian yang membentuk kemandirian
+- Keseimbangan aspek sosial, emosional, motorik, dan bahasa
+
+============================================================
+3) PROGRAM UNGGULAN
+============================================================
+Program yang ditampilkan pada landing page:
+1. Melatih kemandirian dalam aktivitas rutin sehari-hari
+2. Aktivitas toilet training
+3. Bermain bersama dan belajar sosial
+4. Psikodrama
+5. Olahraga dan gerak lagu
+6. Menyanyi dan stimulasi bahasa
+
+============================================================
+4) FASILITAS TPA
+============================================================
+Daftar fasilitas:
+1. Ruangan ber-AC
+   - Menjaga suhu ruang stabil agar anak nyaman, fokus belajar, dan bermain.
+2. Ruang tidur anak
+   - Mendukung rutinitas istirahat siang dan pemulihan energi.
+3. Ruang makan
+   - Melatih kebiasaan makan teratur, kemandirian, dan etika makan bersama.
+4. Dapur sehat
+   - Mendukung penyajian kebutuhan makan-minum anak secara higienis.
+5. Kamar mandi anak
+   - Mendukung toilet training serta pembiasaan hidup bersih.
+6. Permainan edukatif
+   - Menstimulasi perkembangan kognitif, motorik, bahasa, dan sosial.
+7. Area indoor (soft play)
+   - Ruang eksplorasi aman saat cuaca tidak mendukung aktivitas luar.
+8. Area outdoor (playground)
+   - Melatih motorik kasar, koordinasi, keberanian, dan rasa percaya diri.
+9. Ruang pendampingan
+   - Mendukung observasi dan pendampingan perkembangan anak secara terarah.
+
+============================================================
+5) AKTIVITAS HARIAN (GALERI / RUTINITAS)
+============================================================
+Kategori aktivitas yang ditampilkan:
+- Belajar sambil bermain
+- Stimulasi motorik
+- Aktivitas kelompok
+- Waktu makan bersama
+- Istirahat siang
+- Gerak dan lagu
+
+============================================================
+6) JAM OPERASIONAL
+============================================================
+Normal (Senin - Jumat):
+- Jam operasional: 08.00 - 16.30 WIB
+- Denda overtime: Rp 20.000/hari (jika dijemput lewat 17.00 WIB)
+- Batas jemput maksimal: 17.30 WIB
+
+Khusus Ramadhan (Senin - Jumat):
+- Jam operasional: 08.00 - 16.00 WIB
+- Denda overtime: Rp 20.000/hari (jika dijemput lewat 16.00 WIB)
+- Batas jemput maksimal: 16.30 WIB
+
+============================================================
+7) PAKET LAYANAN DAN BIAYA
+============================================================
+A. Paket layanan penitipan:
+1. Paket Harian
+   - Harga: Rp 150.000/hari
+   - Ringkasan: Fleksibel untuk kebutuhan insidental
+   - Benefit: makan siang, snack sore, buah, pendampingan aktivitas harian, monitoring digital
+
+2. Paket 2 Minggu (10 hari)
+   - Harga: Rp 1.100.000/paket
+   - Ringkasan: Untuk rutinitas menengah yang mulai terjadwal
+   - Benefit: makan siang, snack sore, buah, laporan perkembangan singkat, monitoring digital
+
+3. Paket Bulanan (Rekomendasi)
+   - Harga: Rp 1.750.000/bulan
+   - Ringkasan: Untuk pendampingan konsisten
+   - Benefit: makan siang, snack sore, buah, program pembiasaan terstruktur, monitoring digital
+
+B. Biaya pendaftaran:
+1. Administrasi: Rp 250.000
+   (tas baju kotor, buku penghubung, map hasil karya, tempat makan)
+2. Uang Pengembangan: Rp 1.000.000 (dapat diangsur 2 kali)
+3. Seragam TPA: Rp 150.000 / 1 stel
+4. Piyama Anak: Rp 125.000 / 1 stel
+
+============================================================
+8) KONTAK DAN LOKASI
+============================================================
+WhatsApp layanan:
+- https://wa.me/628155042120
+
+Telepon (footer landing page):
+- (031) 298 1277
+
+Email kontak (CTA):
+- info@ubaya.ac.id
+
+Lokasi yang ditampilkan:
+- Fakultas Psikologi, Universitas Surabaya
+- Jl. Raya Kali Rungkut, Surabaya
+
+Domain/identitas web terkait:
+- tparumahceria.my.id
+- apps.tparumahceria.my.id (parent portal host pada konfigurasi produksi)
+
+============================================================
+9) LAYANAN DIGITAL ORANG TUA (PARENT PORTAL)
+============================================================
+Portal orang tua tersedia untuk:
+- Login akun orang tua
+- Registrasi akun orang tua
+- Akses monitoring informasi anak
+
+Ringkasan nilai parent portal:
+- Akses aman dan terverifikasi
+- Terhubung langsung ke data anak
+- Mendukung pemantauan harian kebutuhan dan aktivitas anak
+
+============================================================
+10) PLATFORM MANAJEMEN INTERNAL TPA (ADMIN & PETUGAS)
+============================================================
+Berdasarkan proposal platform internal, sistem mendukung operasional end-to-end:
+
+A. Peran pengguna:
+- Admin (akses penuh manajemen operasional dan keuangan)
+- Petugas (pencatatan harian anak dan aktivitas lapangan)
+
+B. Kapabilitas petugas:
+- Absensi petugas (datang/pulang)
+- Kehadiran anak (kedatangan-kepulangan, data pengantar/penjemput, tanda tangan)
+- Berita acara harian (kondisi anak, foto barang bawaan, pesan orang tua)
+- Observasi harian perkembangan anak
+- Inventori/buku penghubung perlengkapan anak
+- Akses lihat data anak
+
+C. Kapabilitas admin:
+- Rekap layanan dan pembayaran
+- Konfigurasi tarif paket
+- Input pembayaran + lampiran bukti transfer
+- Monitoring status lunas/belum lunas
+- Rekap bulanan operasional
+- Cetak dokumen PDF (berita acara, observasi, absensi)
+- Manajemen akun petugas
+- Rekap absensi petugas
+- Kelola data anak (tambah/edit/hapus)
+- Log aktivitas untuk audit
+
+D. Keunggulan sistem:
+- Web-based, dapat diakses lintas perangkat
+- Pencatatan lebih rapi dan terpusat
+- Otomasi sebagian proses (rekap, billing, pelaporan)
+- Mendukung transparansi komunikasi dengan orang tua
+
+============================================================
+11) RINGKASAN KESELURUHAN
+============================================================
+TPA Rumah Ceria UBAYA adalah layanan penitipan anak berbasis pendampingan tumbuh kembang di bawah Fakultas Psikologi UBAYA, dengan dukungan fasilitas fisik, program pembiasaan terstruktur, paket layanan berjenjang, dan sistem digital monitoring serta manajemen operasional. Kombinasi layanan onsite dan platform digital ini diarahkan untuk meningkatkan kualitas pendampingan anak, efisiensi kerja petugas/admin, serta transparansi informasi kepada orang tua.

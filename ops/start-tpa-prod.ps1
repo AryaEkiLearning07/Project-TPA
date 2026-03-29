@@ -74,8 +74,9 @@ function Get-ListeningProcessIds {
 $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
 $adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
 $landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
+$parentFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'parent.tparumahceria.my.id'
 
-if ($backendReady -and (-not $adminFrontendReady -or -not $landingFrontendReady)) {
+if ($backendReady -and (-not $adminFrontendReady -or -not $landingFrontendReady -or -not $parentFrontendReady)) {
   Write-Output 'Backend aktif, tetapi salah satu frontend belum terlayani. Menyalakan ulang backend production...'
   foreach ($pidValue in (Get-ListeningProcessIds -Port $backendPortNumber)) {
     try {
@@ -87,9 +88,10 @@ if ($backendReady -and (-not $adminFrontendReady -or -not $landingFrontendReady)
   $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
   $adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
   $landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
+  $parentFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'parent.tparumahceria.my.id'
 }
 
-if ($adminFrontendReady -and $landingFrontendReady -and $backendReady) {
+if ($adminFrontendReady -and $landingFrontendReady -and $parentFrontendReady -and $backendReady) {
   Write-Output "TPA runtime production sudah berjalan (port $backendPortNumber aktif)."
   exit 0
 }
@@ -131,8 +133,9 @@ Start-Sleep -Seconds 8
 $backendReady = Test-HttpReady -Uri "http://127.0.0.1:$backendPortNumber/health"
 $adminFrontendReady = Test-FrontendReady -Port $backendPortNumber
 $landingFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'tparumahceria.my.id'
+$parentFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHeader 'parent.tparumahceria.my.id'
 
-if (-not ($adminFrontendReady -and $landingFrontendReady -and $backendReady)) {
+if (-not ($adminFrontendReady -and $landingFrontendReady -and $parentFrontendReady -and $backendReady)) {
   Write-Error "Gagal menyalakan runtime production TPA. Cek $logFile."
 }
 

@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react'
 import { AppMonthPickerField } from '../../../components/common/DatePickerFields'
 import type { AttendanceRecord } from '../../../types'
 import type { DownloadNoticeType } from '../adminHelpers'
@@ -57,11 +58,16 @@ const KehadiranAnakPage = ({
           </div>
           <button
             type="button"
-            className="button"
+            className="button button--download-pdf"
             onClick={() => void onDownloadPdf()}
             disabled={isDownloadingPdf || totalRecords === 0}
           >
-            {isDownloadingPdf ? 'Membuat PDF...' : 'Download PDF'}
+            {isDownloadingPdf ? 'Membuat PDF...' : (
+              <>
+                <Download size={14} />
+                <span>Unduh PDF</span>
+              </>
+            )}
           </button>
         </div>
         <div className="table-wrap">

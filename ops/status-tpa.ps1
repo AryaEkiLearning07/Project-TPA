@@ -39,3 +39,17 @@ try {
 } catch {
   Write-Output "Public root HTTP : DOWN ($($_.Exception.Message))"
 }
+
+try {
+  $publicAppsHttps = Invoke-WebRequest -Uri 'https://apps.tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
+  Write-Output "Public apps HTTPS: $($publicAppsHttps.StatusCode)"
+} catch {
+  Write-Output "Public apps HTTPS: DOWN ($($_.Exception.Message))"
+}
+
+try {
+  $publicParentHttps = Invoke-WebRequest -Uri 'https://parent.tparumahceria.my.id' -UseBasicParsing -TimeoutSec 10
+  Write-Output "Public parent HTTPS: $($publicParentHttps.StatusCode)"
+} catch {
+  Write-Output "Public parent HTTPS: DOWN ($($_.Exception.Message))"
+}

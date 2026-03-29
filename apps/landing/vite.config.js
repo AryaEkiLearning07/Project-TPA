@@ -37,6 +37,15 @@ export default defineConfig({
       output: {
         entryFileNames: 'assets/landing.js',
         chunkFileNames: 'assets/chunks/[name]-[hash].js',
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+          if (id.includes('react') || id.includes('scheduler')) {
+            return 'vendor-react'
+          }
+          return 'vendor'
+        },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith('.css')) {
             return 'assets/landing.css'

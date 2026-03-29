@@ -4,6 +4,7 @@ import {
   ParentPortalServiceError,
   getParentDashboardData,
   linkChildToParentByCode,
+  updateParentMessageForAttendance,
 } from '../services/parent-portal-service.js'
 import { sanitizeServerErrorMessage } from '../utils/error-sanitizer.js'
 
@@ -55,6 +56,26 @@ router.post('/parent/link-child', async (req, res) => {
       success: true,
       data,
       message: 'Anak berhasil ditautkan ke akun orang tua.',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.put('/parent/attendance/:attendanceId/message', async (req, res) => {
+  try {
+    const attendanceId = toText(req.params?.attendanceId)
+    const parentMessage = toText(req.body?.parentMessage)
+    const data = await updateParentMessageForAttendance({
+      parentAccountId: req.auth?.user.id ?? '',
+      attendanceId,
+      parentMessage,
+    })
+    res.json({
+      success: true,
+      data,
+      message: 'Pesan untuk petugas berhasil disimpan.',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

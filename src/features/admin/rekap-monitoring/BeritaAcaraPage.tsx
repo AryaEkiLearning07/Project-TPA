@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react'
 import SearchableSelect from '../../../components/common/SearchableSelect'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 import type { DownloadNoticeType } from '../adminHelpers'
@@ -84,12 +85,17 @@ const BeritaAcaraPage = ({
           </div>
           <button
             type="button"
-            className="button"
+            className="button button--download-pdf"
             style={{ marginLeft: 'auto' }}
             onClick={onOpenDownloadDialog}
             disabled={isDownloadingPdf}
           >
-            {isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}
+            {isDownloadingPdf ? 'Mengunduh...' : (
+              <>
+                <Download size={14} />
+                <span>Unduh PDF</span>
+              </>
+            )}
           </button>
         </div>
 

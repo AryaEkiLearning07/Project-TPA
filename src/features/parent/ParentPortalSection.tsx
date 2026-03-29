@@ -1,5 +1,5 @@
 ﻿
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -26,11 +26,13 @@ import type {
   SupplyInventoryItem,
 } from '../../types'
 import { parentApi } from '../../services/api'
+import { useHideOnScroll } from '../../utils/useHideOnScroll'
 import './parent-portal.css'
 
 const LOGO_SRC = `${import.meta.env.BASE_URL}logo_TPA.jpg`
 const ACTIVE_CHILD_STORAGE_KEY = 'tpa-parent-active-child'
 const PARENT_THEME_STORAGE_KEY = 'tpa-parent-theme'
+const PARENT_DASHBOARD_BACKGROUND_SYNC_MS = 15000
 
 type ParentMenuKey = 'dashboard' | 'daily-logs' | 'billing' | 'profile' | 'inventory'
 type ParentTheme = 'light' | 'dark'
@@ -90,14 +92,6 @@ const menus: { key: ParentMenuKey; label: string; icon: LucideIcon }[] = [
   { key: 'profile', label: 'Profil', icon: UserRound },
 ]
 
-const pageLabels: Record<ParentMenuKey, string> = {
-  dashboard: 'Beranda',
-  'daily-logs': 'Laporan',
-  billing: 'Keuangan',
-  profile: 'Profil',
-  inventory: 'Inventory',
-}
-
 const asPayload = (payload: ParentDashboardData): ParentDashboardPayload =>
   payload as unknown as ParentDashboardPayload
 
@@ -110,6 +104,9 @@ const formatDate = (value: string, options: Intl.DateTimeFormatOptions) => {
 
 const formatLongDate = (value: string) =>
   formatDate(value, { day: 'numeric', month: 'long', year: 'numeric' })
+
+const formatLongDateWithWeekday = (value: string) =>
+  formatDate(value, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
 const formatTime = (value: string) => {
   if (!value) return '--:--'
@@ -171,28 +168,54 @@ const getInitialTheme = (): ParentTheme => {
   return 'light'
 }
 
-const parseDateKey = (value: string) => {
-  if (!value) return null
-  const normalized = value.length >= 10 ? value.slice(0, 10) : value
-  const parsed = new Date(`${normalized}T00:00:00`)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed
+const asText = (value: unknown) => (typeof value === 'string' ? value : '')
+
+const hasText = (value: unknown) => asText(value).trim().length > 0
+
+const toSafeCarriedItems = (items: CarriedItem[] | null | undefined): CarriedItem[] =>
+  Array.isArray(items) ? items : []
+
+const normalizePaymentMethod = (value: string) => {
+  const raw = asText(value).trim()
+  if (!raw) return '-'
+
+  const normalized = raw.toLowerCase()
+  if (normalized.includes('qris') || normalized.includes('qriss')) {
+    return 'QRIS'
+  }
+
+  if (normalized.includes('tunai') || normalized === 'cash') {
+    return 'Tunai'
+  }
+
+  const knownBanks = ['BCA', 'BRI', 'BNI', 'MANDIRI', 'BSI', 'CIMB', 'PERMATA', 'DANAMON']
+  const matchedBank = knownBanks.find((bank) => normalized.includes(bank.toLowerCase()))
+  if (matchedBank) {
+    return matchedBank
+  }
+
+  if (normalized.includes('bank') || normalized === 'lainnya') {
+    return 'Nama Bank'
+  }
+
+  return 'Nama Bank'
 }
 
 const createActivitySummary = (report: ParentDailyReport | null) => {
   if (!report) return []
 
+  const carriedItems = toSafeCarriedItems(report.carriedItems)
   const summary: string[] = ['Pemantauan kedatangan dan kondisi awal anak.']
 
-  if (report.carriedItems.length > 0) {
-    summary.push(`Pengecekan barang bawaan (${report.carriedItems.length} item).`)
+  if (carriedItems.length > 0) {
+    summary.push(`Pengecekan barang bawaan (${carriedItems.length} item).`)
   }
 
-  if (report.parentMessage.trim()) {
+  if (hasText(report.parentMessage)) {
     summary.push('Orang tua mengirim catatan untuk petugas.')
   }
 
-  if (report.messageForParent.trim()) {
+  if (hasText(report.messageForParent)) {
     summary.push('Petugas mengirim catatan perkembangan untuk orang tua.')
   }
 
@@ -206,6 +229,7 @@ const createActivitySummary = (report: ParentDailyReport | null) => {
 const createActivityTimeline = (report: ParentDailyReport | null) => {
   if (!report) return []
 
+  const carriedItems = toSafeCarriedItems(report.carriedItems)
   const arrivalTime = formatTime(report.arrivalTime)
   const departureTime = formatTime(report.departureTime)
   const timeline: Array<{ label: string; description: string }> = [
@@ -215,21 +239,21 @@ const createActivityTimeline = (report: ParentDailyReport | null) => {
     },
   ]
 
-  if (report.carriedItems.length > 0) {
+  if (carriedItems.length > 0) {
     timeline.push({
       label: arrivalTime,
-      description: `Petugas mencatat ${report.carriedItems.length} barang bawaan.`,
+      description: `Petugas mencatat ${carriedItems.length} barang bawaan.`,
     })
   }
 
-  if (report.parentMessage.trim()) {
+  if (hasText(report.parentMessage)) {
     timeline.push({
       label: arrivalTime,
       description: 'Orang tua mengirim pesan untuk petugas.',
     })
   }
 
-  if (report.messageForParent.trim()) {
+  if (hasText(report.messageForParent)) {
     timeline.push({
       label: departureTime,
       description: 'Petugas mengirim catatan perkembangan untuk orang tua.',
@@ -241,12 +265,13 @@ const createActivityTimeline = (report: ParentDailyReport | null) => {
 
 export default function ParentPortalSection({
   user,
-  onLogout,
+  onLogout: _onLogout,
 }: ParentPortalSectionProps) {
   const [theme, setTheme] = useState<ParentTheme>(() => getInitialTheme())
   const [activeMenu, setActiveMenu] = useState<ParentMenuKey>('dashboard')
   const [dashboardData, setDashboardData] = useState<ParentDashboardPayload | null>(null)
   const [activeChildId, setActiveChildId] = useState<string | null>(null)
+  const [selectedChildCandidateId, setSelectedChildCandidateId] = useState<string | null>(null)
   const [registrationCode, setRegistrationCode] = useState('')
   const [isLinkFormOpen, setLinkFormOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -256,6 +281,12 @@ export default function ParentPortalSection({
   const [expandedMessageReportId, setExpandedMessageReportId] = useState<string | null>(null)
   const [isDashboardItemsOpen, setDashboardItemsOpen] = useState(false)
   const [expandedFinanceId, setExpandedFinanceId] = useState<string | null>(null)
+  const [parentMessageDraft, setParentMessageDraft] = useState('')
+  const [isSavingParentMessage, setIsSavingParentMessage] = useState(false)
+  const [parentMessageSaveInfo, setParentMessageSaveInfo] = useState<string | null>(null)
+  const [isChildSelectorForced, setChildSelectorForced] = useState(false)
+  const dashboardRequestIdRef = useRef(0)
+  const isHeaderHidden = useHideOnScroll()
 
   const clearSelectedChildSession = () => {
     window.localStorage.removeItem(getChildStorageKey(user.id))
@@ -265,33 +296,76 @@ export default function ParentPortalSection({
     window.localStorage.setItem(getChildStorageKey(user.id), childId)
   }
 
-  const loadDashboard = async () => {
-    setIsLoading(true)
-    setErrorMessage(null)
+  const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
+    const requestId = ++dashboardRequestIdRef.current
+    if (!options?.silent) {
+      setIsLoading(true)
+      setErrorMessage(null)
+    }
+
     try {
       const data = asPayload(await parentApi.getDashboardData())
+      if (requestId !== dashboardRequestIdRef.current) {
+        return
+      }
       setDashboardData(data)
 
-      const sessionKey = getChildStorageKey(user.id)
-      const storedChildId = window.localStorage.getItem(sessionKey)
-      const hasStoredChild =
-        !!storedChildId && data.children.some((child) => child.id === storedChildId)
+      const hasActiveChild =
+        !!activeChildId && data.children.some((child) => child.id === activeChildId)
 
-      if (hasStoredChild) {
-        setActiveChildId(storedChildId)
+      if (data.children.length === 1 && !isChildSelectorForced) {
+        const onlyChildId = data.children[0]?.id
+        if (onlyChildId) {
+          saveSelectedChildSession(onlyChildId)
+          setActiveChildId(onlyChildId)
+          setSelectedChildCandidateId(onlyChildId)
+          return
+        }
+      }
+
+      if (hasActiveChild) {
+        setActiveChildId(activeChildId)
+        setSelectedChildCandidateId(activeChildId)
       } else {
+        clearSelectedChildSession()
         setActiveChildId(null)
+        setSelectedChildCandidateId((previous) =>
+          previous && data.children.some((child) => child.id === previous)
+            ? previous
+            : data.children[0]?.id ?? null,
+        )
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Gagal memuat portal orang tua.')
+      if (!options?.silent) {
+        setErrorMessage(error instanceof Error ? error.message : 'Gagal memuat portal orang tua.')
+      }
     } finally {
-      setIsLoading(false)
+      if (!options?.silent && requestId === dashboardRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
-  }
+  }, [activeChildId, isChildSelectorForced, user.id])
 
   useEffect(() => {
     void loadDashboard()
-  }, [])
+  }, [loadDashboard])
+
+  useEffect(() => {
+    if (!dashboardData) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (isLinking) {
+        return
+      }
+      void loadDashboard({ silent: true })
+    }, PARENT_DASHBOARD_BACKGROUND_SYNC_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [dashboardData, isLinking, loadDashboard])
 
   useEffect(() => {
     window.localStorage.setItem(PARENT_THEME_STORAGE_KEY, theme)
@@ -304,10 +378,17 @@ export default function ParentPortalSection({
     setExpandedFinanceId(null)
   }, [activeChildId])
 
-  const children = dashboardData?.children ?? []
+  const children = useMemo(
+    () => dashboardData?.children ?? [],
+    [dashboardData?.children],
+  )
   const activeChild = useMemo(
     () => children.find((child) => child.id === activeChildId) ?? null,
     [activeChildId, children],
+  )
+  const selectedChildCandidate = useMemo(
+    () => children.find((child) => child.id === selectedChildCandidateId) ?? null,
+    [children, selectedChildCandidateId],
   )
 
   const reports = useMemo(() => {
@@ -323,13 +404,16 @@ export default function ParentPortalSection({
     ? dashboardData?.dailyReports?.[activeChild.id] ?? reports[0] ?? null
     : null
 
+  useEffect(() => {
+    setParentMessageDraft(todayReport?.parentMessage ?? '')
+    setParentMessageSaveInfo(null)
+  }, [activeChildId, todayReport?.attendanceId])
+
   const billing = activeChild
     ? dashboardData?.billingByChild?.[activeChild.id] ?? null
     : null
 
   const parentProfile = dashboardData?.parentAccount?.parentProfile
-  const todayDateKey = dashboardData?.todayDate || new Date().toISOString().slice(0, 10)
-
   const inventoryItems = useMemo(() => {
     if (!activeChild) return []
 
@@ -338,7 +422,7 @@ export default function ParentPortalSection({
       return fromInventory
     }
 
-    return (todayReport?.carriedItems ?? []).map((item, index) => ({
+    return toSafeCarriedItems(todayReport?.carriedItems).map((item, index) => ({
       id: `${activeChild.id}-carried-${index}`,
       childId: activeChild.id,
       productName: item.category || 'Barang bawaan',
@@ -375,28 +459,21 @@ export default function ParentPortalSection({
 
     sortedTransactions.forEach((transaction) => {
       if (!entries.has(transaction.periodId)) {
-        entries.set(transaction.periodId, transaction.notes || '-')
+        entries.set(transaction.periodId, normalizePaymentMethod(transaction.notes || ''))
       }
     })
 
     return entries
   }, [paidTransactions])
 
-  const isReportPhotoVisible = (reportDate: string) => {
-    const reportParsed = parseDateKey(reportDate)
-    const todayParsed = parseDateKey(todayDateKey)
-    if (!reportParsed || !todayParsed) return true
-
-    const diffMs = todayParsed.getTime() - reportParsed.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    return diffDays <= 31
-  }
-
   const handleSelectChild = (childId: string) => {
     saveSelectedChildSession(childId)
     setActiveChildId(childId)
+    setSelectedChildCandidateId(childId)
     setActiveMenu('dashboard')
     setLinkFormOpen(false)
+    setParentMessageSaveInfo(null)
+    setChildSelectorForced(false)
   }
 
   const handleLinkChild = async (event: FormEvent<HTMLFormElement>) => {
@@ -419,8 +496,14 @@ export default function ParentPortalSection({
         data.children.find((child) => !previousChildIds.has(child.id)) ?? data.children[0] ?? null
 
       if (newlyLinkedChild) {
-        saveSelectedChildSession(newlyLinkedChild.id)
-        setActiveChildId(newlyLinkedChild.id)
+        setSelectedChildCandidateId(newlyLinkedChild.id)
+        if (data.children.length === 1) {
+          saveSelectedChildSession(newlyLinkedChild.id)
+          setActiveChildId(newlyLinkedChild.id)
+        } else {
+          clearSelectedChildSession()
+          setActiveChildId(null)
+        }
       }
 
       setRegistrationCode('')
@@ -434,7 +517,37 @@ export default function ParentPortalSection({
 
   const handleLogoutFromProfile = async () => {
     clearSelectedChildSession()
-    await onLogout()
+    setChildSelectorForced(true)
+    setSelectedChildCandidateId(activeChildId ?? children[0]?.id ?? null)
+    setActiveChildId(null)
+    setActiveMenu('dashboard')
+    setLinkFormOpen(false)
+    setParentMessageSaveInfo(null)
+  }
+
+  const handleSaveParentMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setParentMessageSaveInfo(null)
+    setErrorMessage(null)
+
+    if (!todayReport?.attendanceId) {
+      setErrorMessage('Data kehadiran belum tersedia untuk menyimpan pesan.')
+      return
+    }
+
+    setIsSavingParentMessage(true)
+    try {
+      await parentApi.updateParentMessage({
+        attendanceId: todayReport.attendanceId,
+        parentMessage: parentMessageDraft,
+      })
+      await loadDashboard({ silent: true })
+      setParentMessageSaveInfo('Pesan berhasil disimpan.')
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Gagal menyimpan pesan.')
+    } finally {
+      setIsSavingParentMessage(false)
+    }
   }
 
   const toggleTheme = () => {
@@ -456,8 +569,8 @@ export default function ParentPortalSection({
           isFilled ? '' : 'is-empty'
         }`}
       >
-        <h4>{params.title}</h4>
-        <div className="parent-solid-status-list">
+        <h4 className="parent-solid-status-card__title">{params.title}</h4>
+        <div className="parent-solid-status-card__meta-row">
           <div>
             <span>Jam</span>
             <strong>{formatTime(params.time)}</strong>
@@ -466,12 +579,13 @@ export default function ParentPortalSection({
             <span>{params.state === 'arrival' ? 'Pengantar' : 'Penjemput'}</span>
             <strong>{params.personName || '-'}</strong>
           </div>
-          <div>
-            <span>Kondisi</span>
-            <strong>
-              {params.physical || '-'} | {params.emotional || '-'}
-            </strong>
-          </div>
+        </div>
+        <div className="parent-solid-status-card__divider" />
+        <div className="parent-solid-status-card__condition">
+          <span>Kondisi Anak</span>
+          <strong>
+            {params.physical || '-'} | {params.emotional || '-'}
+          </strong>
         </div>
       </article>
     )
@@ -534,6 +648,23 @@ export default function ParentPortalSection({
     )
   }
 
+  const renderCarriedItemList = (items: CarriedItem[], emptyLabel: string) => {
+    if (items.length === 0) {
+      return <p className="parent-solid-empty">{emptyLabel}</p>
+    }
+
+    return (
+      <ul className="parent-solid-carried-list parent-solid-carried-list--report">
+        {items.map((item, index) => (
+          <li key={`${item.id || item.category}-${index}`}>
+            <strong>{item.category || `Barang ${index + 1}`}</strong>
+            <span>{item.description || '-'}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
   const renderActivityTimelineCard = (report: ParentDailyReport | null, emptyLabel: string) => {
     const timeline = createActivityTimeline(report)
 
@@ -561,13 +692,19 @@ export default function ParentPortalSection({
     )
   }
 
-  const renderDashboard = () => (
-    <section className="parent-solid-section parent-solid-section--stacked">
+  const renderDashboard = () => {
+    const todayCarriedItems = toSafeCarriedItems(todayReport?.carriedItems)
+    const todayLabel = formatLongDateWithWeekday(
+      dashboardData?.todayDate || new Date().toISOString().slice(0, 10),
+    )
+
+    return (
+      <section className="parent-solid-section parent-solid-section--stacked">
       <article className="parent-solid-card">
         <div className="parent-solid-card__header parent-solid-card__header--stack">
           <h3>KEHADIRAN</h3>
           <p className="parent-solid-card__lead">
-            Ringkasan status kehadiran harian untuk memantau jam datang dan pulang anak.
+            {`Ringkasan status kehadiran harian • ${todayLabel}`}
           </p>
         </div>
 
@@ -596,17 +733,39 @@ export default function ParentPortalSection({
         <div className="parent-solid-card__header parent-solid-card__header--stack">
           <h3>Pesan Orang Tua</h3>
           <p className="parent-solid-card__lead">
-            Untuk Petugas dapat diinput orang tua dari portal orang tua, dan balasan petugas tampil pada kolom Untuk Orang Tua.
+            Ketik pesan untuk petugas, lalu simpan. Balasan petugas tampil pada kolom di sebelahnya.
           </p>
         </div>
         <div className="parent-solid-grid parent-solid-grid--two">
+          <form className="parent-solid-message-box parent-solid-message-box--editor" onSubmit={handleSaveParentMessage}>
+            <label htmlFor="parentMessageForStaff">Untuk Petugas</label>
+            <textarea
+              id="parentMessageForStaff"
+              className="parent-solid-textarea"
+              placeholder="Masukkan Pesan Anda"
+              value={parentMessageDraft}
+              onChange={(event) => setParentMessageDraft(event.target.value)}
+              disabled={isSavingParentMessage || !todayReport}
+            />
+            <div className="parent-solid-message-box__actions">
+              <button
+                type="submit"
+                className="parent-solid-button parent-solid-button--save"
+                disabled={isSavingParentMessage || !todayReport}
+              >
+                {isSavingParentMessage ? 'Menyimpan...' : 'Save'}
+              </button>
+            </div>
+            {parentMessageSaveInfo ? (
+              <p className="parent-solid-helper parent-solid-helper--success">{parentMessageSaveInfo}</p>
+            ) : null}
+            {!todayReport ? (
+              <p className="parent-solid-helper">Data kehadiran belum tersedia untuk menyimpan pesan.</p>
+            ) : null}
+          </form>
           <div className="parent-solid-message-box">
-            <label>Untuk Petugas</label>
-            <p>{todayReport?.parentMessage || 'Belum ada pesan untuk petugas.'}</p>
-          </div>
-          <div className="parent-solid-message-box">
-            <label>Untuk Orang Tua</label>
-            <p>{todayReport?.messageForParent || 'Belum ada pesan dari petugas.'}</p>
+            <label>Balasan Petugas</label>
+            <p>{hasText(todayReport?.messageForParent) ? todayReport?.messageForParent : 'Belum ada pesan dari petugas.'}</p>
           </div>
         </div>
       </article>
@@ -624,10 +783,10 @@ export default function ParentPortalSection({
           className="parent-solid-carried-hero"
           onClick={() => setDashboardItemsOpen((previous) => !previous)}
         >
-          {(todayReport?.carriedItems[0]?.imageDataUrl ?? '') ? (
+          {(todayCarriedItems[0]?.imageDataUrl ?? '') ? (
             <img
-              src={todayReport?.carriedItems[0]?.imageDataUrl}
-              alt={todayReport?.carriedItems[0]?.category || 'Barang bawaan anak'}
+              src={todayCarriedItems[0]?.imageDataUrl}
+              alt={todayCarriedItems[0]?.category || 'Barang bawaan anak'}
             />
           ) : (
             <div className="parent-solid-carried-hero__placeholder">
@@ -635,15 +794,15 @@ export default function ParentPortalSection({
             </div>
           )}
           <div className="parent-solid-carried-hero__meta">
-            <strong>{`Total barang: ${todayReport?.carriedItems.length ?? 0}`}</strong>
+            <strong>{`Total barang: ${todayCarriedItems.length}`}</strong>
             <span>
-              {todayReport?.carriedItems[0]?.description || 'Klik untuk tampilkan daftar barang bawaan.'}
+              {todayCarriedItems[0]?.description || 'Klik untuk tampilkan daftar barang bawaan.'}
             </span>
           </div>
         </button>
 
         {isDashboardItemsOpen
-          ? renderCarriedItems(todayReport?.carriedItems ?? [], {
+          ? renderCarriedItems(todayCarriedItems, {
             emptyLabel: 'Belum ada data barang bawaan hari ini.',
             minFrames: 0,
           })
@@ -651,8 +810,9 @@ export default function ParentPortalSection({
       </article>
 
       {renderActivityTimelineCard(todayReport, 'Ringkasan kegiatan anak belum tersedia.')}
-    </section>
-  )
+      </section>
+    )
+  }
 
   const renderDailyLogs = () => {
     return (
@@ -676,7 +836,7 @@ export default function ParentPortalSection({
 
           {lowStockItems.length > 0 ? (
             <p className="parent-solid-warning">
-              Notifikasi: {lowStockItems.length} barang memiliki stok menipis.
+              Peringatan: {lowStockItems.length} barang memiliki stok menipis.
             </p>
           ) : null}
         </article>
@@ -696,8 +856,8 @@ export default function ParentPortalSection({
               {reports.map((report) => {
                 const isExpanded = expandedReportId === report.attendanceId
                 const isMessageExpanded = expandedMessageReportId === report.attendanceId
-                const shouldShowReportPhotos = isReportPhotoVisible(report.date)
                 const activitySummary = createActivitySummary(report)
+                const reportCarriedItems = toSafeCarriedItems(report.carriedItems)
 
                 return (
                   <article key={report.attendanceId} className="parent-solid-report-item">
@@ -732,21 +892,23 @@ export default function ParentPortalSection({
 
                     {isExpanded ? (
                       <div className="parent-solid-report-item__dropdown">
-                        <div className="parent-solid-report-item__detail-grid">
-                          <article className="parent-solid-report-detail parent-solid-report-detail--arrival">
-                            <h4>Datang</h4>
-                            <p>{`${formatTime(report.arrivalTime)} | ${report.escortName || '-'}`}</p>
-                            <span>
-                              {`Kondisi: ${report.arrivalPhysicalCondition || '-'} | ${report.arrivalEmotionalCondition || '-'}`}
-                            </span>
-                          </article>
-                          <article className="parent-solid-report-detail parent-solid-report-detail--departure">
-                            <h4>Pulang</h4>
-                            <p>{`${formatTime(report.departureTime)} | ${report.pickupName || '-'}`}</p>
-                            <span>
-                              {`Kondisi: ${report.departurePhysicalCondition || '-'} | ${report.departureEmotionalCondition || '-'}`}
-                            </span>
-                          </article>
+                        <div className="parent-solid-grid parent-solid-grid--status parent-solid-grid--status-report">
+                          {renderStatusCard({
+                            title: 'Status Datang',
+                            state: 'arrival',
+                            time: report.arrivalTime,
+                            personName: report.escortName,
+                            physical: report.arrivalPhysicalCondition,
+                            emotional: report.arrivalEmotionalCondition,
+                          })}
+                          {renderStatusCard({
+                            title: 'Status Pulang',
+                            state: 'departure',
+                            time: report.departureTime,
+                            personName: report.pickupName,
+                            physical: report.departurePhysicalCondition,
+                            emotional: report.departureEmotionalCondition,
+                          })}
                         </div>
 
                         <article className="parent-solid-card parent-solid-card--nested">
@@ -767,11 +929,11 @@ export default function ParentPortalSection({
                             <div className="parent-solid-grid parent-solid-grid--two">
                               <div className="parent-solid-message-box">
                                 <label>Untuk Petugas</label>
-                                <p>{report.parentMessage || 'Belum ada pesan untuk petugas.'}</p>
+                                <p>{hasText(report.parentMessage) ? report.parentMessage : 'Belum ada pesan untuk petugas.'}</p>
                               </div>
                               <div className="parent-solid-message-box">
                                 <label>Untuk Orang Tua</label>
-                                <p>{report.messageForParent || 'Belum ada pesan dari petugas.'}</p>
+                                <p>{hasText(report.messageForParent) ? report.messageForParent : 'Belum ada pesan dari petugas.'}</p>
                               </div>
                             </div>
                           ) : null}
@@ -779,17 +941,10 @@ export default function ParentPortalSection({
 
                         <article className="parent-solid-card parent-solid-card--nested">
                           <h4>Barang Bawaan</h4>
-                          {renderCarriedItems(report.carriedItems, {
-                            emptyLabel: 'Tidak ada detail barang bawaan.',
-                            minFrames: 3,
-                            showPhotos: shouldShowReportPhotos,
-                            hiddenPhotoLabel: 'Foto diarsipkan (lebih dari 1 bulan)',
-                          })}
-                          {!shouldShowReportPhotos && report.carriedItems.length > 0 ? (
-                            <p className="parent-solid-empty parent-solid-empty--note">
-                              Foto barang bawaan hanya ditampilkan sampai 1 bulan.
-                            </p>
-                          ) : null}
+                          {renderCarriedItemList(
+                            reportCarriedItems,
+                            'Tidak ada detail barang bawaan.',
+                          )}
                         </article>
 
                         <article className="parent-solid-card parent-solid-card--nested">
@@ -837,21 +992,26 @@ export default function ParentPortalSection({
 
         {lowStockItems.length > 0 ? (
           <p className="parent-solid-warning">
-            Notifikasi: {lowStockItems.length} barang memiliki stok menipis.
+            Peringatan: {lowStockItems.length} barang memiliki stok menipis.
           </p>
         ) : null}
 
         {inventoryItems.length === 0 ? (
           <p className="parent-solid-empty">Belum ada data inventori anak.</p>
         ) : (
-          <div className="parent-solid-inventory-grid">
+          <div className="parent-solid-inventory-shop-grid">
             {inventoryItems.map((item) => (
-              <article key={item.id} className="parent-solid-item-card parent-solid-item-card--inventory">
-                {item.imageDataUrl ? <img src={item.imageDataUrl} alt={item.productName} /> : null}
-                <div>
+              <article key={item.id} className="parent-solid-inventory-shop-card">
+                <div className="parent-solid-inventory-shop-card__image-wrap">
+                  {item.imageDataUrl ? (
+                    <img src={item.imageDataUrl} alt={item.productName} />
+                  ) : (
+                    <span>Tidak ada foto</span>
+                  )}
+                </div>
+                <div className="parent-solid-inventory-shop-card__meta">
                   <strong>{item.productName}</strong>
-                  <p>{item.description || '-'}</p>
-                  <span>{`Stok: ${item.quantity}`}</span>
+                  <span>{`Sisa stok: ${item.quantity}`}</span>
                 </div>
               </article>
             ))}
@@ -967,7 +1127,7 @@ export default function ParentPortalSection({
                     totalPaid: transaction.amount,
                     packageLabel: period ? formatPackage(period.packageKey) : '-',
                     outstandingAmount: period?.outstandingAmount ?? 0,
-                    paymentMethod: transaction.notes || '-',
+                    paymentMethod: normalizePaymentMethod(transaction.notes || ''),
                   })}
                 </div>
               )
@@ -980,6 +1140,9 @@ export default function ParentPortalSection({
 
   const renderProfile = () => {
     if (!activeChild) return null
+    const pickupPersons = Array.isArray(activeChild.pickupPersons)
+      ? activeChild.pickupPersons.filter((person) => typeof person === 'string' && person.trim().length > 0)
+      : []
 
     return (
       <section className="parent-solid-section parent-solid-section--stacked">
@@ -994,7 +1157,7 @@ export default function ParentPortalSection({
           <div>
             <h3>{activeChild.fullName}</h3>
             <p>
-              {activeChild.nickName || '-'} | {activeChild.gender || '-'} | {getAgeLabel(activeChild.birthDate)}
+              {activeChild.nickName || '-'} | {getAgeLabel(activeChild.birthDate)}
             </p>
           </div>
         </article>
@@ -1021,7 +1184,7 @@ export default function ParentPortalSection({
             <div><span>Paket layanan</span><strong>{formatPackage(activeChild.servicePackage)}</strong></div>
             <div><span>Jam datang</span><strong>{activeChild.arrivalTime || '-'}</strong></div>
             <div><span>Jam pulang</span><strong>{activeChild.departureTime || '-'}</strong></div>
-            <div><span>Pengantar & Penjemput</span><strong>{activeChild.pickupPersons.join(', ') || '-'}</strong></div>
+            <div><span>Pengantar & Penjemput</span><strong>{pickupPersons.length > 0 ? pickupPersons.join(', ') : '-'}</strong></div>
             <div><span>Tujuan layanan</span><strong>{activeChild.depositPurpose || '-'}</strong></div>
           </div>
         </article>
@@ -1058,7 +1221,7 @@ export default function ParentPortalSection({
           </div>
         </article>
 
-        <article className="parent-solid-card">
+        <div className="parent-solid-logout-wrap">
           <button
             type="button"
             className="parent-solid-logout"
@@ -1069,7 +1232,7 @@ export default function ParentPortalSection({
             <LogOut size={16} />
             <span>Logout</span>
           </button>
-        </article>
+        </div>
       </section>
     )
   }
@@ -1079,13 +1242,6 @@ export default function ParentPortalSection({
 
     return (
       <>
-        <section className="parent-solid-page-head">
-          <h2>{pageLabels[activeMenu]}</h2>
-          <p>
-            {`Data monitoring harian • ${formatLongDate(dashboardData?.todayDate || new Date().toISOString().slice(0, 10))}`}
-          </p>
-        </section>
-
         {activeMenu === 'dashboard' ? renderDashboard() : null}
         {activeMenu === 'daily-logs' ? renderDailyLogs() : null}
         {activeMenu === 'inventory' ? renderInventoryPage() : null}
@@ -1094,51 +1250,59 @@ export default function ParentPortalSection({
       </>
     )
   }
+  const isChildSelectorMode = Boolean(dashboardData && children.length > 0 && !activeChild)
+  const shouldHideHeaderOnScroll = Boolean(activeChild && isHeaderHidden)
 
   return (
     <div className="parent-solid" data-theme={theme}>
-      <header className="parent-solid-header">
-        <div className="parent-solid-brand">
-          <span className="parent-solid-brand__logo">
-            <img src={LOGO_SRC} alt="Logo TPA Rumah Ceria UBAYA" />
-          </span>
-          <div>
-            <h1>TPA RUMAH CERIA UBAYA</h1>
-            <p>DASHBOARD MONITORING</p>
+      {!isChildSelectorMode ? (
+        <header
+          className={`parent-solid-header ${shouldHideHeaderOnScroll ? 'is-hidden' : ''}`}
+        >
+          <div className="parent-solid-brand">
+            <span className="parent-solid-brand__logo">
+              <img src={LOGO_SRC} alt="Logo TPA Rumah Ceria UBAYA" />
+            </span>
+            <div>
+              <h1>TPA RUMAH CERIA UBAYA</h1>
+              <p>DASHBOARD MONITORING</p>
+            </div>
           </div>
-        </div>
 
-        <div className="parent-solid-header__right">
-          <nav className="parent-solid-desktop-nav" aria-label="Navigasi orang tua">
-            {menus.map((menu) => (
+          {activeChild ? (
+            <div className="parent-solid-header__right">
+              <nav className="parent-solid-desktop-nav" aria-label="Navigasi orang tua">
+                {menus.map((menu) => (
+                  <button
+                    key={menu.key}
+                    type="button"
+                    className={
+                      activeMenu === menu.key || (activeMenu === 'inventory' && menu.key === 'daily-logs')
+                        ? 'is-active'
+                        : ''
+                    }
+                    onClick={() => setActiveMenu(menu.key)}
+                    disabled={!activeChild}
+                  >
+                    <menu.icon size={16} />
+                    <span>{menu.label}</span>
+                  </button>
+                ))}
+              </nav>
+
               <button
-                key={menu.key}
                 type="button"
-                className={
-                  activeMenu === menu.key || (activeMenu === 'inventory' && menu.key === 'daily-logs')
-                    ? 'is-active'
-                    : ''
-                }
-                onClick={() => setActiveMenu(menu.key)}
-                disabled={!activeChild}
+                className="parent-solid-theme-toggle"
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? 'Ubah ke mode terang' : 'Ubah ke mode gelap'}
               >
-                <menu.icon size={16} />
-                <span>{menu.label}</span>
+                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                <span>{theme === 'dark' ? 'Terang' : 'Gelap'}</span>
               </button>
-            ))}
-          </nav>
-
-          <button
-            type="button"
-            className="parent-solid-theme-toggle"
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? 'Ubah ke mode terang' : 'Ubah ke mode gelap'}
-          >
-            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            <span>{theme === 'dark' ? 'Terang' : 'Gelap'}</span>
-          </button>
-        </div>
-      </header>
+            </div>
+          ) : null}
+        </header>
+      ) : null}
 
       <main className="parent-solid-main">
         {errorMessage ? <p className="parent-solid-banner parent-solid-banner--error">{errorMessage}</p> : null}
@@ -1165,7 +1329,7 @@ export default function ParentPortalSection({
                   disabled={isLinking}
                 />
                 <button type="submit" className="parent-solid-button" disabled={isLinking}>
-                  {isLinking ? 'Menautkan...' : 'Tautkan Anak'}
+                  {isLinking ? 'Memproses...' : 'Daftar'}
                 </button>
               </form>
             </article>
@@ -1173,88 +1337,109 @@ export default function ParentPortalSection({
         ) : null}
 
         {dashboardData && children.length > 0 && !activeChild ? (
-          <section className="parent-solid-selector">
-            <article className="parent-solid-card parent-solid-selector__welcome">
-              <h2>Selamat datang Ayah Bunda di platform monitoring anak digital.</h2>
-              <p>
-                Silahkan pilih akun anak Anda dan dapatkan notifikasi perkembangan anak Anda
-                secara real-time.
+          <section className="parent-solid-selector parent-solid-selector--account">
+            <article className="parent-solid-card parent-solid-selector__account-card">
+              <span className="parent-solid-selector__logo" aria-hidden="true">
+                <img src={LOGO_SRC} alt="" />
+              </span>
+              <h2>Pilih Profil Anak</h2>
+              <p className="parent-solid-selector__lead">
+                Pilih profil anak untuk melanjutkan dashboard monitoring.
               </p>
-            </article>
 
-            <div className="parent-solid-child-grid">
-              {children.map((child) => (
-                <button
-                  key={child.id}
-                  type="button"
-                  className="parent-solid-child-card"
-                  onClick={() => handleSelectChild(child.id)}
-                >
-                  <span className="parent-solid-child-card__avatar">
-                    {child.photoDataUrl ? (
-                      <img src={child.photoDataUrl} alt={child.fullName} />
-                    ) : (
-                      <span>{getInitials(child.fullName)}</span>
-                    )}
-                  </span>
-                  <span className="parent-solid-child-card__name">{child.fullName}</span>
-                  <span className="parent-solid-child-card__meta">
-                    {`${child.nickName || '-'} | ${getAgeLabel(child.birthDate)}`}
-                  </span>
-                </button>
-              ))}
-            </div>
+              <div className="parent-solid-account-list">
+                {children.map((child) => {
+                  const isSelected = selectedChildCandidateId === child.id
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      className={`parent-solid-account-card ${isSelected ? 'is-selected' : ''}`}
+                      onClick={() => setSelectedChildCandidateId(child.id)}
+                    >
+                      <span className="parent-solid-account-card__avatar">
+                        {child.photoDataUrl ? (
+                          <img src={child.photoDataUrl} alt={child.fullName} />
+                        ) : (
+                          <span>{getInitials(child.fullName)}</span>
+                        )}
+                      </span>
+                      <span className="parent-solid-account-card__content">
+                        <strong>{child.fullName}</strong>
+                        <span>{getAgeLabel(child.birthDate)}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
 
-            <div className="parent-solid-add-child">
               <button
                 type="button"
-                className="parent-solid-button parent-solid-button--ghost"
-                onClick={() => setLinkFormOpen((previous) => !previous)}
+                className="parent-solid-button parent-solid-selector__continue"
+                onClick={() => {
+                  if (selectedChildCandidate) {
+                    handleSelectChild(selectedChildCandidate.id)
+                  }
+                }}
+                disabled={!selectedChildCandidate}
               >
-                <PlusCircle size={16} />
-                <span>Tambah Data Anak</span>
+                Lanjut
               </button>
 
-              {isLinkFormOpen ? (
-                <form className="parent-solid-link-form" onSubmit={handleLinkChild}>
-                  <input
-                    type="text"
-                    className="parent-solid-input"
-                    placeholder="Masukkan Kode Registrasi"
-                    value={registrationCode}
-                    onChange={(event) => setRegistrationCode(event.target.value.toUpperCase())}
+              <div className="parent-solid-selector__link-child">
+                {!isLinkFormOpen ? (
+                  <button
+                    type="button"
+                    className="parent-solid-button parent-solid-button--ghost parent-solid-selector__add-account"
+                    onClick={() => setLinkFormOpen(true)}
                     disabled={isLinking}
-                  />
-                  <button type="submit" className="parent-solid-button" disabled={isLinking}>
-                    {isLinking ? 'Menautkan...' : 'Tautkan Anak'}
+                  >
+                    <PlusCircle size={16} />
+                    <span>Tambah akun</span>
                   </button>
-                </form>
-              ) : null}
-            </div>
+                ) : (
+                  <form className="parent-solid-link-form parent-solid-link-form--selector" onSubmit={handleLinkChild}>
+                    <input
+                      type="text"
+                      className="parent-solid-input"
+                      placeholder="Masukkan Kode Registrasi"
+                      value={registrationCode}
+                      onChange={(event) => setRegistrationCode(event.target.value.toUpperCase())}
+                      disabled={isLinking}
+                    />
+                    <button type="submit" className="parent-solid-button" disabled={isLinking}>
+                      {isLinking ? 'Memproses...' : 'Daftar'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </article>
           </section>
         ) : null}
 
         {dashboardData && activeChild ? renderPortalContent() : null}
       </main>
 
-      <nav className="parent-solid-mobile-nav" aria-label="Bottom navigation orang tua">
-        {menus.map((menu) => (
-          <button
-            key={menu.key}
-            type="button"
-            className={
-              activeMenu === menu.key || (activeMenu === 'inventory' && menu.key === 'daily-logs')
-                ? 'is-active'
-                : ''
-            }
-            onClick={() => setActiveMenu(menu.key)}
-            disabled={!activeChild}
-          >
-            <menu.icon size={16} />
-            <span>{menu.label}</span>
-          </button>
-        ))}
-      </nav>
+      {activeChild ? (
+        <nav className="parent-solid-mobile-nav" aria-label="Bottom navigation orang tua">
+          {menus.map((menu) => (
+            <button
+              key={menu.key}
+              type="button"
+              className={
+                activeMenu === menu.key || (activeMenu === 'inventory' && menu.key === 'daily-logs')
+                  ? 'is-active'
+                  : ''
+              }
+              onClick={() => setActiveMenu(menu.key)}
+              disabled={!activeChild}
+            >
+              <menu.icon size={16} />
+              <span>{menu.label}</span>
+            </button>
+          ))}
+        </nav>
+      ) : null}
     </div>
   )
 }

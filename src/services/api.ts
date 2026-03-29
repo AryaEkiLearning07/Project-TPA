@@ -20,6 +20,8 @@ import type {
   StaffAttendanceStatus,
   StaffUser,
   StaffUserInput,
+  LandingAnnouncement,
+  LandingAnnouncementInput,
   AttendanceRecord,
   AttendanceRecordInput,
   IncidentReport,
@@ -45,6 +47,52 @@ interface ApiRequestOptions extends RequestInit {
   timeoutMs?: number
 }
 
+export type ApiErrorType =
+  | 'NETWORK'
+  | 'TIMEOUT'
+  | 'CANCELLED'
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'VALIDATION'
+  | 'RATE_LIMIT'
+  | 'SERVER'
+  | 'RESPONSE'
+  | 'UNKNOWN'
+
+interface ApiErrorParams {
+  type: ApiErrorType
+  message: string
+  path: string
+  method: string
+  status?: number | null
+  reference?: string
+}
+
+export class ApiError extends Error {
+  readonly type: ApiErrorType
+  readonly status: number | null
+  readonly path: string
+  readonly method: string
+  readonly reference: string
+
+  constructor({ type, message, path, method, status = null, reference }: ApiErrorParams) {
+    super(message)
+    this.name = 'ApiError'
+    this.type = type
+    this.status = status
+    this.path = path
+    this.method = method
+    this.reference = reference ?? createErrorReference()
+  }
+}
+
+const createErrorReference = (): string => {
+  const timestamp = Date.now().toString(36).toUpperCase()
+  const random = Math.random().toString(36).slice(2, 7).toUpperCase()
+  return `ERR-${timestamp}-${random}`
+}
+
 export interface ServerDateContext {
   timestamp: string
   todayDate: string
@@ -63,6 +111,87 @@ const DEFAULT_API_TIMEOUT_MS = (() => {
   }
   return 60000
 })()
+
+const API_ERROR_TYPE_LABELS: Record<ApiErrorType, string> = {
+  NETWORK: 'Jaringan',
+  TIMEOUT: 'Timeout',
+  CANCELLED: 'Permintaan Dibatalkan',
+  UNAUTHORIZED: 'Otentikasi',
+  FORBIDDEN: 'Akses Ditolak',
+  NOT_FOUND: 'Data Tidak Ditemukan',
+  VALIDATION: 'Validasi Data',
+  RATE_LIMIT: 'Batas Permintaan',
+  SERVER: 'Server',
+  RESPONSE: 'Respons Tidak Valid',
+  UNKNOWN: 'Tidak Diketahui',
+}
+
+const resolveApiErrorTypeFromStatus = (status: number): ApiErrorType => {
+  if (status === 401) return 'UNAUTHORIZED'
+  if (status === 403) return 'FORBIDDEN'
+  if (status === 404) return 'NOT_FOUND'
+  if (status === 408) return 'TIMEOUT'
+  if (status === 429) return 'RATE_LIMIT'
+  if (status >= 400 && status < 500) return 'VALIDATION'
+  if (status >= 500) return 'SERVER'
+  return 'UNKNOWN'
+}
+
+const normalizeMessage = (message: string): string => {
+  const trimmed = message.trim()
+  return trimmed.length > 0 ? trimmed : 'Terjadi kesalahan saat memproses permintaan.'
+}
+
+const formatApiErrorMessage = (params: {
+  type: ApiErrorType
+  status?: number | null
+  message: string
+  includeReference?: string
+}): string => {
+  const typeLabel = API_ERROR_TYPE_LABELS[params.type]
+  const statusLabel =
+    typeof params.status === 'number' ? ` (${params.status})` : ''
+  const parts = [
+    `Jenis error: ${typeLabel}${statusLabel}.`,
+    normalizeMessage(params.message),
+  ]
+
+  if (params.includeReference) {
+    parts.push(`Kode referensi: ${params.includeReference}.`)
+  }
+
+  return parts.join(' ')
+}
+
+const createApiError = ({
+  type,
+  status = null,
+  message,
+  path,
+  method,
+}: {
+  type: ApiErrorType
+  status?: number | null
+  message: string
+  path: string
+  method: string
+}): ApiError => {
+  const reference = createErrorReference()
+  const shouldIncludeReference = type === 'SERVER' || type === 'UNKNOWN' || type === 'RESPONSE'
+  return new ApiError({
+    type,
+    status,
+    path,
+    method,
+    reference,
+    message: formatApiErrorMessage({
+      type,
+      status,
+      message,
+      includeReference: shouldIncludeReference ? reference : undefined,
+    }),
+  })
+}
 
 const getDefaultApiErrorMessage = (response: Response): string => {
   const statusText = response.statusText.trim()
@@ -108,6 +237,7 @@ const executeFetch = async (
   options: ApiRequestOptions = {},
 ): Promise<Response> => {
   const { timeoutMs = DEFAULT_API_TIMEOUT_MS, ...fetchOptions } = options
+  const method = (fetchOptions.method ?? 'GET').toUpperCase()
   const controller = new AbortController()
   const externalSignal = fetchOptions.signal
   const onExternalAbort = () => {
@@ -140,16 +270,30 @@ const executeFetch = async (
 
     if (errorName === 'AbortError') {
       if (externalSignal?.aborted) {
-        throw new Error('Permintaan API dibatalkan.')
+        throw createApiError({
+          type: 'CANCELLED',
+          path,
+          method,
+          message: 'Permintaan dibatalkan sebelum selesai.',
+        })
       }
 
-      throw new Error(
-        'Koneksi terputus. Silakan periksa jaringan Anda atau coba lagi nanti.',
-      )
+      throw createApiError({
+        type: 'TIMEOUT',
+        path,
+        method,
+        message:
+          'Koneksi ke server melewati batas waktu. Silakan periksa jaringan lalu coba lagi.',
+      })
     }
 
-    const message = error instanceof Error ? error.message : 'Kesalahan jaringan tidak diketahui'
-    throw new Error(`Tidak dapat terhubung ke server: ${message}`)
+    const message = error instanceof Error ? error.message : 'Kesalahan jaringan tidak diketahui.'
+    throw createApiError({
+      type: 'NETWORK',
+      path,
+      method,
+      message: `Tidak dapat terhubung ke server. ${message}`,
+    })
   } finally {
     window.clearTimeout(timeoutHandle)
     if (externalSignal) {
@@ -162,6 +306,7 @@ const request = async <T>(
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<T> => {
+  const method = (options.method ?? 'GET').toUpperCase()
   const response = await executeFetch(path, options)
 
   const text = await response.text()
@@ -176,10 +321,21 @@ const request = async <T>(
   }
 
   if (!response.ok || !payload?.success || payload.data === undefined) {
-    const message =
-      payload?.message ??
-      getDefaultApiErrorMessage(response)
-    throw new Error(message)
+    const rawResponseMessage = payload === null && text ? text : null
+    const message = normalizeMessage(
+      payload?.message ?? rawResponseMessage ?? getDefaultApiErrorMessage(response),
+    )
+    const type = !response.ok
+      ? resolveApiErrorTypeFromStatus(response.status)
+      : 'RESPONSE'
+
+    throw createApiError({
+      type,
+      status: response.status,
+      message,
+      path,
+      method,
+    })
   }
 
   return payload.data
@@ -202,11 +358,18 @@ const requestDownload = async (
   path: string,
   options: ApiRequestOptions = {},
 ): Promise<{ blob: Blob; fileName: string | null }> => {
+  const method = (options.method ?? 'GET').toUpperCase()
   const response = await executeFetch(path, options)
 
   if (!response.ok) {
     const message = await parseApiErrorMessage(response)
-    throw new Error(message)
+    throw createApiError({
+      type: resolveApiErrorTypeFromStatus(response.status),
+      status: response.status,
+      message,
+      path,
+      method,
+    })
   }
 
   const blob = await response.blob()
@@ -254,6 +417,7 @@ export const authApi = {
   login: (payload: {
     email: string
     password: string
+    loginPreference?: 'STAFF_FIRST' | 'PARENT_FIRST'
   }): Promise<AuthSession> =>
     request('/auth/login', {
       method: 'POST',
@@ -298,6 +462,25 @@ export const staffAttendanceApi = {
 export const adminApi = {
   getServerDateContext: (): Promise<ServerDateContext> =>
     request('/admin/server-date-context'),
+  getLandingAnnouncements: (): Promise<LandingAnnouncement[]> =>
+    request('/admin/landing-announcements'),
+  createLandingAnnouncement: (payload: LandingAnnouncementInput): Promise<LandingAnnouncement> =>
+    request('/admin/landing-announcements', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateLandingAnnouncement: (
+    id: string,
+    payload: LandingAnnouncementInput,
+  ): Promise<LandingAnnouncement> =>
+    request(`/admin/landing-announcements/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteLandingAnnouncement: (id: string): Promise<{ id: string }> =>
+    request(`/admin/landing-announcements/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   checkInStaffAttendance: (payload: {
     staffUserId: string
     attendanceDate: string
@@ -522,6 +705,14 @@ export const parentApi = {
     request('/parent/link-child', {
       method: 'POST',
       body: JSON.stringify(payload),
+    }),
+  updateParentMessage: (payload: {
+    attendanceId: string
+    parentMessage: string
+  }): Promise<{ updated: boolean; attendanceId: string; parentMessage: string }> =>
+    request(`/parent/attendance/${encodeURIComponent(payload.attendanceId)}/message`, {
+      method: 'PUT',
+      body: JSON.stringify({ parentMessage: payload.parentMessage }),
     }),
 }
 

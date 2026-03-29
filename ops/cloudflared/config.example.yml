@@ -8,4 +8,8 @@ ingress:
     service: http://localhost:4000
   - hostname: apps.tparumahceria.my.id
     service: http://localhost:4000
+  - hostname: parent.tparumahceria.my.id
+    service: http://localhost:4000
+  - hostname: ortu.tparumahceria.my.id
+    service: http://localhost:4000
   - service: http_status:404

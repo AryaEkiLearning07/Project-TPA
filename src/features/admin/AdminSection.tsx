@@ -1,6 +1,7 @@
 import {
   Menu,
   CheckCircle2,
+  Download,
 } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -30,6 +31,9 @@ import ManajemenPetugasPage from './pengaturan/ManajemenPetugasPage'
 import LogAktivitasPage from './pengaturan/LogAktivitasPage'
 import BackupPage from './pengaturan/BackupPage'
 import ManajemenAkunOrangTuaPage from './pengaturan/ManajemenAkunOrangTuaPage'
+import UpdatePengumumanPage, {
+  type LandingAnnouncementEditorForm,
+} from './pengaturan/UpdatePengumumanPage'
 import type {
   ActivityLogEntry,
   AppData,
@@ -38,6 +42,8 @@ import type {
   ChildProfile,
   ChildProfileInput,
   ConfirmDialogOptions,
+  LandingAnnouncement,
+  LandingAnnouncementInput,
   ParentAccount,
   ServiceBillingSummaryResponse,
   ServiceBillingHistoryResponse,
@@ -87,6 +93,7 @@ import {
   initialServiceBillingRefundForm,
   ACTIVITY_LOG_LIMIT_OPTIONS,
   DEFAULT_ACTIVITY_LOG_LIMIT,
+  formatDateTime,
   formatLogDateTimeParts,
   formatDateOnly,
   formatDateWithWeekday,
@@ -123,7 +130,7 @@ interface AdminSectionProps {
 }
 
 type IncidentPdfMode = 'date' | 'month'
-type StaffAttendancePdfMode = 'daily' | 'monthly' | 'yearly'
+type StaffAttendancePdfMode = 'monthly' | 'yearly'
 type MonthDateFilterSelection = {
   month: string
   date: string
@@ -131,6 +138,8 @@ type MonthDateFilterSelection = {
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const ISO_MONTH_PATTERN = /^\d{4}-\d{2}$/
+const ADMIN_BACKGROUND_SYNC_INTERVAL_MS = 15000
+const ORDERED_OBSERVATION_GROUP_KEYS = ['matahari', 'bintang', 'pelangi', 'bulan'] as const
 
 const isIsoDateKey = (value: string): boolean => ISO_DATE_PATTERN.test(value)
 const isIsoMonthKey = (value: string): boolean => ISO_MONTH_PATTERN.test(value)
@@ -207,6 +216,9 @@ const activityActionLabelMap: Record<string, string> = {
   CREATE_SERVICE_BILLING_PAYMENT: 'Mencatat pembayaran billing',
   CREATE_SERVICE_BILLING_REFUND: 'Mencatat refund billing',
   CONFIRM_SERVICE_BILLING_UPGRADE: 'Konfirmasi upgrade billing',
+  CREATE_LANDING_ANNOUNCEMENT: 'Membuat update pengumuman landing',
+  UPDATE_LANDING_ANNOUNCEMENT: 'Memperbarui update pengumuman landing',
+  DELETE_LANDING_ANNOUNCEMENT: 'Menghapus update pengumuman landing',
   BACKUP_DATABASE: 'Unduh backup database',
   REPLACE_APP_DATA: 'Ganti data aplikasi',
   IMPORT_APP_DATA: 'Impor data aplikasi',
@@ -241,6 +253,23 @@ const createFallbackServerDateContext = () => {
   }
 }
 
+const initialLandingAnnouncementForm: LandingAnnouncementEditorForm = {
+  title: '',
+  slug: '',
+  category: 'galeri',
+  displayMode: 'section',
+  excerpt: '',
+  content: '',
+  coverImageDataUrl: '',
+  coverImageName: '',
+  ctaLabel: '',
+  ctaUrl: '',
+  publishStartDate: '',
+  publishEndDate: '',
+  status: 'published',
+  isPinned: false,
+}
+
 const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const [activeSidebar, setActiveSidebar] = useState<AdminSidebarKey>('monitoring')
   const [monitoringTab, setMonitoringTab] = useState<MonitoringSubTab>('kehadiran-anak')
@@ -270,6 +299,14 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     initialServiceBillingRefundForm,
   )
   const [staffForm, setStaffForm] = useState<StaffUserInput>(initialStaffForm)
+  const [landingAnnouncements, setLandingAnnouncements] = useState<LandingAnnouncement[]>([])
+  const [landingAnnouncementForm, setLandingAnnouncementForm] = useState<LandingAnnouncementEditorForm>(
+    initialLandingAnnouncementForm,
+  )
+  const [editingLandingAnnouncementId, setEditingLandingAnnouncementId] = useState<string | null>(null)
+  const [isLoadingLandingAnnouncements, setLoadingLandingAnnouncements] = useState(false)
+  const [isSavingLandingAnnouncement, setSavingLandingAnnouncement] = useState(false)
+  const [deletingLandingAnnouncementId, setDeletingLandingAnnouncementId] = useState<string | null>(null)
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null)
   const [showStaffPassword, setShowStaffPassword] = useState(false)
   const [searchLogs, setSearchLogs] = useState('')
@@ -329,7 +366,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 
   const [isDownloadingStaffAttendancePdf, setDownloadingStaffAttendancePdf] = useState(false)
   const [isStaffAttendancePdfDialogOpen, setStaffAttendancePdfDialogOpen] = useState(false)
-  const [staffAttendancePdfMode, setStaffAttendancePdfMode] = useState<StaffAttendancePdfMode>('daily')
+  const [staffAttendancePdfMode, setStaffAttendancePdfMode] = useState<StaffAttendancePdfMode>('monthly')
   const [staffAttendancePdfYear, setStaffAttendancePdfYear] = useState(() => getLocalDateIso().slice(0, 4))
   const [staffAttendanceActionState, setStaffAttendanceActionState] = useState<{
     staffUserId: string
@@ -600,6 +637,223 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
   }, [])
 
+  const resetLandingAnnouncementForm = useCallback(() => {
+    setLandingAnnouncementForm(initialLandingAnnouncementForm)
+    setEditingLandingAnnouncementId(null)
+  }, [])
+
+  const toLandingAnnouncementInput = useCallback((
+    form: LandingAnnouncementEditorForm,
+  ): LandingAnnouncementInput => {
+    const isGallery = form.category === 'galeri'
+    const isDocumentation = form.category === 'event' || form.category === 'dokumentasi'
+    const isPoster = form.category === 'promosi' || form.category === 'ucapan'
+    const normalizedTitle = form.title.trim() || (
+      isPoster
+        ? `Poster ${form.publishStartDate || getLocalDateIso()}`
+        : ''
+    )
+
+    return {
+      title: normalizedTitle,
+      slug: form.slug.trim(),
+      category: form.category,
+      displayMode: isPoster ? 'popup' : 'section',
+      excerpt: isDocumentation ? form.excerpt.trim() : '',
+      content: '',
+      coverImageDataUrl: form.coverImageDataUrl,
+      coverImageName: form.coverImageName,
+      ctaLabel: '',
+      ctaUrl: '',
+      publishStartDate: isGallery ? '' : form.publishStartDate,
+      publishEndDate: isPoster ? form.publishEndDate : '',
+      status: isPoster ? 'published' : form.status,
+      isPinned: false,
+      authorName: user.displayName,
+      authorEmail: user.email,
+    }
+  }, [user.displayName, user.email])
+
+  const loadLandingAnnouncements = useCallback(async (options?: { silent?: boolean }) => {
+    const isSilent = options?.silent === true
+    if (!isSilent) {
+      setLoadingLandingAnnouncements(true)
+    }
+    try {
+      const data = await adminApi.getLandingAnnouncements()
+      setLandingAnnouncements(data)
+    } catch (error) {
+      if (!isSilent) {
+        const message = error instanceof Error ? error.message : 'Gagal memuat pengumuman landing.'
+        setErrorMessage(message)
+      }
+    } finally {
+      if (!isSilent) {
+        setLoadingLandingAnnouncements(false)
+      }
+    }
+  }, [])
+
+  const handleSubmitLandingAnnouncement = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setErrorMessage(null)
+    setMessage(null)
+
+    const isDocumentationMode =
+      landingAnnouncementForm.category === 'event' ||
+      landingAnnouncementForm.category === 'dokumentasi'
+    const isPosterMode =
+      landingAnnouncementForm.category === 'promosi' ||
+      landingAnnouncementForm.category === 'ucapan'
+    const title = landingAnnouncementForm.title.trim()
+    if (!title && !isPosterMode) {
+      setErrorMessage('Judul pengumuman wajib diisi.')
+      return
+    }
+
+    if (!landingAnnouncementForm.coverImageDataUrl) {
+      setErrorMessage('Foto pengumuman wajib diunggah.')
+      return
+    }
+
+    if (
+      isDocumentationMode &&
+      !landingAnnouncementForm.publishStartDate
+    ) {
+      setErrorMessage('Tanggal dokumentasi wajib diisi.')
+      return
+    }
+
+    if (
+      isPosterMode &&
+      (!landingAnnouncementForm.publishStartDate || !landingAnnouncementForm.publishEndDate)
+    ) {
+      setErrorMessage('Poster wajib memiliki tanggal upload dan tanggal selesai.')
+      return
+    }
+
+    if (
+      landingAnnouncementForm.publishStartDate &&
+      landingAnnouncementForm.publishEndDate &&
+      landingAnnouncementForm.publishEndDate < landingAnnouncementForm.publishStartDate
+    ) {
+      setErrorMessage('Tanggal tayang selesai tidak boleh lebih awal dari tanggal mulai.')
+      return
+    }
+
+    setSavingLandingAnnouncement(true)
+    try {
+      const payload = toLandingAnnouncementInput(landingAnnouncementForm)
+      if (editingLandingAnnouncementId) {
+        await adminApi.updateLandingAnnouncement(editingLandingAnnouncementId, payload)
+      } else {
+        await adminApi.createLandingAnnouncement(payload)
+      }
+
+      await loadLandingAnnouncements()
+      setMessage(
+        editingLandingAnnouncementId
+          ? 'Update pengumuman berhasil diperbarui.'
+          : 'Update pengumuman berhasil ditambahkan.',
+      )
+      resetLandingAnnouncementForm()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Gagal menyimpan update pengumuman landing.'
+      setErrorMessage(message)
+    } finally {
+      setSavingLandingAnnouncement(false)
+    }
+  }
+
+  const handleSelectLandingAnnouncement = (announcement: LandingAnnouncement) => {
+    setEditingLandingAnnouncementId(announcement.id)
+    setLandingAnnouncementForm({
+      title: announcement.title,
+      slug: announcement.slug,
+      category: announcement.category,
+      displayMode: announcement.displayMode,
+      excerpt: announcement.excerpt,
+      content: announcement.content,
+      coverImageDataUrl: announcement.coverImageDataUrl,
+      coverImageName: announcement.coverImageName,
+      ctaLabel: announcement.ctaLabel,
+      ctaUrl: announcement.ctaUrl,
+      publishStartDate: announcement.publishStartDate,
+      publishEndDate: announcement.publishEndDate,
+      status: announcement.status,
+      isPinned: announcement.isPinned,
+    })
+    setErrorMessage(null)
+    setMessage('Mode edit aktif untuk update pengumuman terpilih.')
+  }
+
+  const handleDeleteLandingAnnouncement = async (announcement: LandingAnnouncement) => {
+    const confirmed = await requestConfirm({
+      title: 'Hapus Update Pengumuman',
+      message: `Yakin menghapus "${announcement.title}"?`,
+      confirmLabel: 'Ya, Hapus',
+      cancelLabel: 'Batal',
+      tone: 'danger',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingLandingAnnouncementId(announcement.id)
+    setErrorMessage(null)
+    setMessage(null)
+
+    try {
+      await adminApi.deleteLandingAnnouncement(announcement.id)
+      await loadLandingAnnouncements()
+      setMessage('Update pengumuman berhasil dihapus.')
+      if (editingLandingAnnouncementId === announcement.id) {
+        resetLandingAnnouncementForm()
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Gagal menghapus update pengumuman.'
+      setErrorMessage(message)
+    } finally {
+      setDeletingLandingAnnouncementId(null)
+    }
+  }
+
+  const handleUploadLandingAnnouncementCover = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    try {
+      const compressed = await compressImageToDataUrl(file, {
+        maxDimension: 1600,
+        quality: 0.8,
+        aspectRatio: 16 / 9,
+      })
+      setLandingAnnouncementForm((previous) => ({
+        ...previous,
+        coverImageDataUrl: compressed.dataUrl,
+        coverImageName: compressed.name,
+      }))
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Gagal memproses cover pengumuman.'
+      setErrorMessage(message)
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const clearLandingAnnouncementCover = () => {
+    setLandingAnnouncementForm((previous) => ({
+      ...previous,
+      coverImageDataUrl: '',
+      coverImageName: '',
+    }))
+  }
+
   const handleToggleParentAccountStatus = async (
     accountId: string,
     nextStatus: boolean,
@@ -729,6 +983,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     overrides?: {
       date?: string
       month?: string
+      silent?: boolean
     },
   ) => {
     const normalizedDate = clampDateKeyToServerToday(
@@ -738,7 +993,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       overrides?.month ?? staffAttendanceFilterMonth,
     )
 
-    setLoadingStaffAttendance(true)
+    if (!overrides?.silent) {
+      setLoadingStaffAttendance(true)
+    }
     try {
       const data = await adminApi.getStaffAttendanceRecap(
         normalizedDate,
@@ -746,14 +1003,18 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       )
       setStaffAttendanceRecapRows(data)
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Gagal memuat rekap kehadiran petugas.'
-      setErrorMessage(message)
-      setStaffAttendanceRecapRows([])
+      if (!overrides?.silent) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Gagal memuat rekap kehadiran petugas.'
+        setErrorMessage(message)
+        setStaffAttendanceRecapRows([])
+      }
     } finally {
-      setLoadingStaffAttendance(false)
+      if (!overrides?.silent) {
+        setLoadingStaffAttendance(false)
+      }
     }
   }, [clampDateKeyToServerToday, clampMonthKeyToServerToday, staffAttendanceFilterDate, staffAttendanceFilterMonth])
 
@@ -1026,8 +1287,13 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     [ensureAttendanceData, ensureChildrenData, ensureServiceRatesData],
   )
 
-  const loadServiceBillingSummary = useCallback(async (preferredChildId = '') => {
-    setLoadingServiceBilling(true)
+  const loadServiceBillingSummary = useCallback(async (
+    preferredChildId = '',
+    options?: { silent?: boolean },
+  ) => {
+    if (!options?.silent) {
+      setLoadingServiceBilling(true)
+    }
     try {
       const summary = await adminApi.getServiceBillingSummary()
       setServiceBillingSummary(summary)
@@ -1073,43 +1339,52 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         return nextChildId
       })
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Gagal memuat ringkasan pembayaran layanan.'
-      setErrorMessage(message)
-      setServiceBillingSummary(null)
-      setSelectedBillingChildId('')
-      setServiceBillingPeriodForm((previous) => ({
-        ...previous,
-        childId: '',
-      }))
-      setServiceBillingPaymentForm((previous) => ({
-        ...previous,
-        childId: '',
-        amount: 0,
-        periodId: '',
-        paymentProofDataUrl: '',
-        paymentProofName: '',
-      }))
-      setServicePaymentAmountText(formatRupiahInput(0))
-      setServiceBillingRefundForm((previous) => ({
-        ...previous,
-        childId: '',
-        periodId: '',
-      }))
+      if (!options?.silent) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Gagal memuat ringkasan pembayaran layanan.'
+        setErrorMessage(message)
+        setServiceBillingSummary(null)
+        setSelectedBillingChildId('')
+        setServiceBillingPeriodForm((previous) => ({
+          ...previous,
+          childId: '',
+        }))
+        setServiceBillingPaymentForm((previous) => ({
+          ...previous,
+          childId: '',
+          amount: 0,
+          periodId: '',
+          paymentProofDataUrl: '',
+          paymentProofName: '',
+        }))
+        setServicePaymentAmountText(formatRupiahInput(0))
+        setServiceBillingRefundForm((previous) => ({
+          ...previous,
+          childId: '',
+          periodId: '',
+        }))
+      }
     } finally {
-      setLoadingServiceBilling(false)
+      if (!options?.silent) {
+        setLoadingServiceBilling(false)
+      }
     }
   }, [])
 
-  const loadServiceBillingHistory = useCallback(async (childId: string) => {
+  const loadServiceBillingHistory = useCallback(async (
+    childId: string,
+    options?: { silent?: boolean },
+  ) => {
     if (!childId) {
       setServiceBillingHistory(null)
       return
     }
 
-    setLoadingServiceBilling(true)
+    if (!options?.silent) {
+      setLoadingServiceBilling(true)
+    }
     try {
       const history = await adminApi.getServiceBillingHistory(childId)
       setServiceBillingHistory(history)
@@ -1138,14 +1413,18 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         periodId: previous.periodId || history.summary?.activePeriod?.id || '',
       }))
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Gagal memuat histori pembayaran layanan.'
-      setErrorMessage(message)
-      setServiceBillingHistory(null)
+      if (!options?.silent) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Gagal memuat histori pembayaran layanan.'
+        setErrorMessage(message)
+        setServiceBillingHistory(null)
+      }
     } finally {
-      setLoadingServiceBilling(false)
+      if (!options?.silent) {
+        setLoadingServiceBilling(false)
+      }
     }
   }, [])
 
@@ -1167,6 +1446,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 
       if (settingsTab === 'logs') {
         void loadLogs()
+        return
+      }
+
+      if (settingsTab === 'update-pengumuman') {
+        void loadLandingAnnouncements()
       }
       return
     }
@@ -1209,11 +1493,110 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     settingsTab,
     ensureChildrenData,
     loadIncidentMonitoringData,
+    loadLandingAnnouncements,
     loadMonitoringAttendanceData,
+    loadLogs,
     loadParentAccounts,
     loadObservationMonitoringData,
     loadServiceBillingSummary,
     loadServiceManagement,
+    loadStaff,
+  ])
+
+  useEffect(() => {
+    let isDisposed = false
+
+    const syncActiveViewSilently = async () => {
+      try {
+        if (activeSidebar === 'monitoring') {
+          if (monitoringTab === 'kehadiran-anak') {
+            await Promise.all([
+              ensureChildrenData({ force: true }),
+              ensureAttendanceData({ force: true }),
+            ])
+            return
+          }
+
+          if (monitoringTab === 'observasi-anak') {
+            await Promise.all([
+              ensureChildrenData({ force: true }),
+              ensureObservationData({ force: true }),
+            ])
+            return
+          }
+
+          if (monitoringTab === 'berita-acara') {
+            await Promise.all([
+              ensureChildrenData({ force: true }),
+              ensureAttendanceData({ force: true }),
+              ensureIncidentData({ force: true }),
+            ])
+            return
+          }
+
+          if (monitoringTab === 'kehadiran-petugas') {
+            await Promise.all([
+              loadStaff(),
+              loadStaffAttendanceRecap({ silent: true }),
+            ])
+            return
+          }
+
+          if (monitoringTab === 'layanan') {
+            await Promise.all([
+              ensureChildrenData({ force: true }),
+              ensureAttendanceData({ force: true }),
+              ensureServiceRatesData({ force: true }),
+              loadServiceBillingSummary(selectedBillingChildId, { silent: true }),
+            ])
+
+            if (selectedBillingChildId) {
+              await loadServiceBillingHistory(selectedBillingChildId, { silent: true })
+            }
+            return
+          }
+        }
+
+        if (activeSidebar === 'settings') {
+          if (settingsTab === 'update-pengumuman') {
+            await loadLandingAnnouncements({ silent: true })
+          }
+          return
+        }
+
+        if (activeSidebar === 'data-anak') {
+          await ensureChildrenData({ force: true })
+        }
+      } catch {
+        if (isDisposed) {
+          return
+        }
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncActiveViewSilently()
+    }, ADMIN_BACKGROUND_SYNC_INTERVAL_MS)
+
+    return () => {
+      isDisposed = true
+      window.clearInterval(intervalId)
+    }
+  }, [
+    activeSidebar,
+    monitoringTab,
+    settingsTab,
+    selectedBillingChildId,
+    ensureAttendanceData,
+    ensureChildrenData,
+    ensureIncidentData,
+    ensureObservationData,
+    ensureServiceRatesData,
+    loadServiceBillingHistory,
+    loadServiceBillingSummary,
+    loadLandingAnnouncements,
+    loadStaff,
+    loadStaffAttendanceRecap,
   ])
 
   useEffect(() => {
@@ -1586,7 +1969,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     setMessage(null)
 
     const selectedRow =
-      serviceBillingSummary?.rows.find((rowId: any) => rowId.childId === childId) ?? null
+      serviceBillingSummary?.rows.find((row) => row.childId === childId) ?? null
     const suggestedPaymentAmount = Math.max(
       0,
       Math.round(selectedRow?.totalOutstanding ?? 0),
@@ -1830,7 +2213,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   }
 
   const openStaffAttendancePdfDialog = () => {
-    setStaffAttendancePdfMode('daily')
+    setStaffAttendancePdfMode('monthly')
     setStaffAttendancePdfYear(staffAttendanceFilterMonth.slice(0, 4))
     setStaffAttendancePdfDialogOpen(true)
     setStaffAttendancePdfNotice(null)
@@ -1996,8 +2379,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     [appData.children],
   )
 
-  const orderedObservationGroupKeys = ['matahari', 'bintang', 'pelangi', 'bulan'] as const
-
   const observationGroupOptions = useMemo(() => {
     const map = new Map<string, string>()
     for (const option of defaultObservationGroupOptions) {
@@ -2013,7 +2394,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       }
     }
 
-    const ordered = orderedObservationGroupKeys
+    const ordered = ORDERED_OBSERVATION_GROUP_KEYS
       .filter((key) => map.has(key))
       .map((key) => ({
         value: key,
@@ -2021,7 +2402,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       }))
 
     const extras = Array.from(map.entries())
-      .filter(([value]) => !orderedObservationGroupKeys.includes(value as (typeof orderedObservationGroupKeys)[number]))
+      .filter(([value]) => !ORDERED_OBSERVATION_GROUP_KEYS.includes(value as (typeof ORDERED_OBSERVATION_GROUP_KEYS)[number]))
       .map(([value, label]) => ({ value, label }))
       .sort((left, right) => left.label.localeCompare(right.label, 'id-ID'))
 
@@ -2485,21 +2866,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       const rows = sortedStaff.map((staff) => {
         const summary = staffAttendanceSummaryByStaffId.get(staff.id)
         const monthlyTotal = Math.max(0, summary?.monthlyAttendanceCount ?? 0)
-        const dailyRow = staffAttendanceDailyRows.find((row) => row.staff.id === staff.id) ?? null
-
-        if (staffAttendancePdfMode === 'daily') {
-          return {
-            fullName: staff.fullName,
-            account: staff.email,
-            attendanceDateLabel: selectedStaffAttendanceDateLabel,
-            checkInTime: formatTimeOnly(dailyRow?.checkInAt ?? ''),
-            checkOutTime: formatTimeOnly(dailyRow?.checkOutAt ?? ''),
-            dutyDuration: formatDutyDuration(dailyRow?.dutyMinutes ?? null),
-            monthlyAttendanceTotal: monthlyTotal,
-            honor: dailyRow?.pay?.honor,
-            transport: dailyRow?.pay?.transport,
-          }
-        }
 
         if (staffAttendancePdfMode === 'monthly') {
           return {
@@ -2529,7 +2895,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         }
       })
 
-      const hasDataToDownload = rows.some((row) => row.monthlyAttendanceTotal > 0 || row.checkInTime !== '-')
+      const hasDataToDownload = rows.some((row) => row.monthlyAttendanceTotal > 0)
       if (!hasDataToDownload) {
         setStaffAttendancePdfNotice({
           type: 'error',
@@ -2539,7 +2905,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       }
 
       downloadStaffAttendancePdf({
-        filterDate: staffAttendancePdfMode === 'daily' ? staffAttendanceFilterDate : '',
+        filterDate: '',
         filterMonth:
           staffAttendancePdfMode === 'yearly'
             ? staffAttendancePdfYear
@@ -2551,11 +2917,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       setStaffAttendancePdfNotice({
         type: 'success',
         text:
-          staffAttendancePdfMode === 'daily'
-            ? `PDF rekap harian ${selectedStaffAttendanceDateLabel} berhasil diunduh.`
-            : staffAttendancePdfMode === 'monthly'
-              ? `PDF rekap bulanan ${selectedStaffAttendanceMonthLabel} berhasil diunduh.`
-              : `PDF rekap tahunan ${staffAttendancePdfYear} berhasil diunduh.`,
+          staffAttendancePdfMode === 'monthly'
+            ? `PDF rekap bulanan ${selectedStaffAttendanceMonthLabel} berhasil diunduh.`
+            : `PDF rekap tahunan ${staffAttendancePdfYear} berhasil diunduh.`,
       })
     } catch {
       setStaffAttendancePdfNotice({
@@ -2828,6 +3192,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           childName: row.childName,
           packageKey: row.displayServicePackage,
           packageLabel: servicePackageLabels[row.displayServicePackage],
+          attendanceCount: Math.max(0, row.attendanceInActivePeriod),
           paidAmount: Math.max(0, Math.round(row.paidPeriod + row.paidArrears)),
           isMigrated: row.migrationInfo !== null,
         }))
@@ -3331,6 +3696,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
               paidLimitValue={serviceBillingPaidLimit}
               onChangePaidLimit={setServiceBillingPaidLimit}
               paidRows={serviceBillingPaidRows}
+              arrearsRows={serviceBillingArrearsRows}
             />
           )
 
@@ -3399,6 +3765,27 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             togglingAccountIds={togglingParentAccountIds}
             onToggleAccountStatus={handleToggleParentAccountStatus}
             formatDateOnly={formatDateOnly}
+          />
+        )
+
+      case 'update-pengumuman':
+        return (
+          <UpdatePengumumanPage
+            announcements={landingAnnouncements}
+            form={landingAnnouncementForm}
+            setForm={setLandingAnnouncementForm}
+            editingAnnouncementId={editingLandingAnnouncementId}
+            isLoading={isLoadingLandingAnnouncements}
+            isSaving={isSavingLandingAnnouncement}
+            deletingAnnouncementId={deletingLandingAnnouncementId}
+            onSubmit={handleSubmitLandingAnnouncement}
+            onResetForm={resetLandingAnnouncementForm}
+            onSelectAnnouncement={handleSelectLandingAnnouncement}
+            onDeleteAnnouncement={handleDeleteLandingAnnouncement}
+            onUploadCoverImage={handleUploadLandingAnnouncementCover}
+            onClearCoverImage={clearLandingAnnouncementCover}
+            formatDateOnly={formatDateOnly}
+            formatDateTime={formatDateTime}
           />
         )
 
@@ -3560,11 +3947,16 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
               </button>
               <button
                 type="button"
-                className="button"
+                className="button button--download-pdf"
                 onClick={() => void handleDownloadIncidentPdf()}
                 disabled={isDownloadingIncidentPdf}
               >
-                {isDownloadingIncidentPdf ? 'Mengunduh...' : 'Unduh'}
+                {isDownloadingIncidentPdf ? 'Mengunduh...' : (
+                  <>
+                    <Download size={14} />
+                    <span>Unduh PDF</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -3582,7 +3974,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         >
           <div className="app-confirm-dialog" role="dialog" aria-modal="true" style={{ maxWidth: '460px' }}>
             <h3>Unduh PDF Kehadiran Petugas</h3>
-            <p>Pilih data harian, bulanan, atau tahunan.</p>
+            <p>Pilih data bulanan atau tahunan.</p>
             <div style={{ display: 'grid', gap: '0.75rem' }}>
               <div className="field-group">
                 <label className="label">Tipe Unduhan</label>
@@ -3591,32 +3983,10 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
                   value={staffAttendancePdfMode}
                   onChange={(event) => setStaffAttendancePdfMode(event.target.value as StaffAttendancePdfMode)}
                 >
-                  <option value="daily">Harian</option>
                   <option value="monthly">Bulanan</option>
                   <option value="yearly">Tahunan</option>
                 </select>
               </div>
-              {staffAttendancePdfMode === 'daily' ? (
-                <>
-                  <div className="field-group">
-                    <label className="label">Bulan</label>
-                    <AppMonthPickerField
-                      value={staffAttendanceFilterMonth}
-                      max={todayMonthKey}
-                      onChange={(value) => handleStaffAttendanceMonthFilterChange(value)}
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label className="label">Tanggal</label>
-                    <AppDatePickerField
-                      value={staffAttendanceFilterDate}
-                      min={getMonthDateBounds(staffAttendanceFilterMonth, todayIso).min}
-                      max={getMonthDateBounds(staffAttendanceFilterMonth, todayIso).max}
-                      onChange={(value) => handleStaffAttendanceDateFilterChange(value)}
-                    />
-                  </div>
-                </>
-              ) : null}
               {staffAttendancePdfMode === 'monthly' ? (
                 <div className="field-group">
                   <label className="label">Bulan</label>
@@ -3651,11 +4021,16 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
               </button>
               <button
                 type="button"
-                className="button"
+                className="button button--download-pdf"
                 onClick={handleDownloadStaffAttendancePdf}
                 disabled={isDownloadingStaffAttendancePdf}
               >
-                {isDownloadingStaffAttendancePdf ? 'Mengunduh...' : 'Unduh'}
+                {isDownloadingStaffAttendancePdf ? 'Mengunduh...' : (
+                  <>
+                    <Download size={14} />
+                    <span>Unduh PDF</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

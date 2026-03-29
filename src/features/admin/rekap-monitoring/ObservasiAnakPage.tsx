@@ -1,3 +1,4 @@
+import { Download } from 'lucide-react'
 import SearchableSelect from '../../../components/common/SearchableSelect'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 import type { DownloadNoticeType, ObservationRecapRow } from '../adminHelpers'
@@ -109,11 +110,16 @@ const ObservasiAnakPage = ({
           <div className="inline-row" style={{ marginBottom: '1rem' }}>
             <button
               type="button"
-              className="button"
+              className="button button--download-pdf"
               onClick={() => void onDownloadAll()}
               disabled={isDownloadingAll || !canDownloadAll}
             >
-              {isDownloadingAll ? 'Mengunduh...' : 'Unduh Semua'}
+              {isDownloadingAll ? 'Mengunduh...' : (
+                <>
+                  <Download size={14} />
+                  <span>Unduh PDF</span>
+                </>
+              )}
             </button>
             {!canDownloadAll ? (
               <p className="field-hint" style={{ margin: 0 }}>
@@ -153,14 +159,19 @@ const ObservasiAnakPage = ({
                     <td>
                       <button
                         type="button"
-                        className="button button--ghost button--tiny"
+                        className="button button--download-pdf button--tiny"
                         onClick={() => void onDownloadChild(row.childId)}
                         disabled={
                           downloadingChildId === row.childId ||
                           !downloadableChildIds.has(row.childId)
                         }
                       >
-                        {downloadingChildId === row.childId ? '...' : 'Unduh'}
+                        {downloadingChildId === row.childId ? '...' : (
+                          <>
+                            <Download size={12} />
+                            <span>PDF</span>
+                          </>
+                        )}
                       </button>
                     </td>
                   </tr>

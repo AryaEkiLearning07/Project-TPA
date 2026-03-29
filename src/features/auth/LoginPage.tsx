@@ -23,7 +23,11 @@ interface LoginPageProps {
   errorMessage: string | null
   variant?: LoginPageVariant
   initialMode?: AuthMode
-  onSubmit: (payload: { email: string; password: string }) => Promise<void>
+  onSubmit: (payload: {
+    email: string
+    password: string
+    loginPreference?: 'STAFF_FIRST' | 'PARENT_FIRST'
+  }) => Promise<void>
   onRegisterParent?: (payload: {
     email: string
     password: string
@@ -48,11 +52,13 @@ const LoginPage = ({
   const [showLoginPassword, setShowLoginPassword] = useState(false)
   const [showRegisterPassword, setShowRegisterPassword] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const isParentPortalVariant = variant === 'parent-portal'
 
   useEffect(() => {
     setAuthMode(initialMode)
     setLocalError(null)
+    setSuccessMessage(null)
   }, [initialMode])
 
   useEffect(() => {
@@ -71,6 +77,7 @@ const LoginPage = ({
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLocalError(null)
+    setSuccessMessage(null)
 
     const normalizedEmail = loginEmail.trim().toLowerCase()
     if (!normalizedEmail) {
@@ -86,6 +93,7 @@ const LoginPage = ({
       await onSubmit({
         email: normalizedEmail,
         password: loginPassword,
+        loginPreference: isParentPortalVariant ? 'PARENT_FIRST' : 'STAFF_FIRST',
       })
     } catch {
       // Error ditampilkan dari parent.
@@ -95,6 +103,7 @@ const LoginPage = ({
   const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setLocalError(null)
+    setSuccessMessage(null)
 
     const normalizedEmail = registerEmail.trim().toLowerCase()
     if (!normalizedEmail) {
@@ -120,27 +129,35 @@ const LoginPage = ({
         password: registerPassword,
         registrationCode: registrationCode.trim().toUpperCase(),
       })
+      setAuthMode('login')
+      setLoginEmail(normalizedEmail)
+      setLoginPassword('')
+      setRegisterEmail('')
+      setRegisterPassword('')
+      setRegistrationCode('')
+      setShowRegisterPassword(false)
+      setSuccessMessage('Pendaftaran Berhasil, Silahkan Masuk')
     } catch {
       // Error ditampilkan dari parent.
     }
   }
 
   const title = isParentPortalVariant
-    ? 'Portal Orang Tua Terpisah'
+    ? 'Selamat Datang Di TPA Rumah Ceria'
     : 'Selamat Datang di TPA Rumah Ceria'
   const description = isParentPortalVariant
-    ? 'Login dan dashboard monitoring orang tua sekarang berdiri sendiri, tidak lagi berada di dalam landing page.'
+    ? 'Platfom ini digunakan untuk memantau perkembangan putra putri anda yang ada di TPA'
     : 'Kelola aktivitas harian, pantau perkembangan anak, dan kelola operasional TPA dengan mudah dan terstruktur.'
-  const cardEyebrow = isParentPortalVariant ? 'Portal Orang Tua' : 'Selamat Datang'
+  const cardEyebrow = isParentPortalVariant ? 'SELAMAT DATANG' : 'Selamat Datang'
   const cardTitle =
     authMode === 'register' && isParentPortalVariant
       ? 'Daftar Akun Orang Tua'
       : 'Masuk ke Dashboard'
   const cardSubtitle =
     authMode === 'register' && isParentPortalVariant
-      ? 'Silahkan daftarkan akun untuk dapat mengakses dashboard monitoring putra-putri Anda.'
+      ? 'Silahkan daftarkan akun untuk dapat mengakses dashboard monitoring putra putri anda.'
       : isParentPortalVariant
-        ? 'Silahkan login untuk membuka dashboard monitoring anak Anda.'
+        ? 'Silahkan login untuk membuka dashboard monitoring putra putri anda'
         : 'Masuk untuk mengakses panel pengelolaan TPA Anda.'
 
   return (
@@ -153,30 +170,46 @@ const LoginPage = ({
           <div className="auth-visual__highlight-card">
             <ShieldCheck size={20} />
             <div>
-              <strong>Akses Aman</strong>
-              <span>Autentikasi akun orang tua, admin, dan petugas tetap terpusat dan aman.</span>
+              <strong>{isParentPortalVariant ? 'Monitoring Digital' : 'Akses Aman'}</strong>
+              <span>
+                {isParentPortalVariant
+                  ? 'Pantau perkembangan dan kebutuhan putra putri anda secara praktis.'
+                  : 'Autentikasi akun orang tua tetap terlindungi dengan sesi yang aman.'}
+              </span>
             </div>
           </div>
           <div className="auth-visual__feature-list">
             <article className="auth-visual__feature">
               <Users size={18} />
               <div>
-                <strong>Portal Mandiri</strong>
-                <span>Alur login parent berdiri sendiri sehingga tidak lagi terasa seperti overlay landing page.</span>
+                <strong>{isParentPortalVariant ? 'Laporan Digital' : 'Portal Mandiri'}</strong>
+                <span>
+                  {isParentPortalVariant
+                    ? 'Lihat hasil laporan perkembangan putra putri anda secara digital.'
+                    : 'Alur login parent berdiri sendiri sehingga tidak lagi terasa seperti overlay landing page.'}
+                </span>
               </div>
             </article>
             <article className="auth-visual__feature">
               <Clock3 size={18} />
               <div>
-                <strong>Mobile Lebih Natural</strong>
-                <span>Scroll dan pull-to-refresh tetap mengikuti perilaku halaman biasa di perangkat mobile.</span>
+                <strong>{isParentPortalVariant ? 'Komunikasi' : 'Mobile Lebih Natural'}</strong>
+                <span>
+                  {isParentPortalVariant
+                    ? 'Komunikasikan perkembangan dan kebutuhan putra putri anda langsung dengan masing-masing kakak pendamping.'
+                    : 'Scroll dan pull-to-refresh tetap mengikuti perilaku halaman biasa di perangkat mobile.'}
+                </span>
               </div>
             </article>
             <article className="auth-visual__feature">
               <Sparkles size={18} />
               <div>
-                <strong>Monitoring Langsung</strong>
-                <span>Setelah login, orang tua langsung masuk ke portal monitoring anak full screen.</span>
+                <strong>{isParentPortalVariant ? 'Galeri Moment' : 'Monitoring Langsung'}</strong>
+                <span>
+                  {isParentPortalVariant
+                    ? 'Dapatkan moment-moment putra putri anda selama di TPA secara daring.'
+                    : 'Setelah login, orang tua langsung masuk ke portal monitoring anak full screen.'}
+                </span>
               </div>
             </article>
           </div>
@@ -188,7 +221,7 @@ const LoginPage = ({
           <div className="auth-card__badge">
             <img src={PLATFORM_LOGO_SRC} alt="" className="auth-card__logo" />
           </div>
-          <p>{isParentPortalVariant ? 'PARENT PORTAL TPA' : 'DAYCARE TPA'}</p>
+          <p>{isParentPortalVariant ? 'DASHBOARD MONITORING' : 'DAYCARE TPA'}</p>
         </div>
 
         <div className="auth-card__header">
@@ -197,35 +230,6 @@ const LoginPage = ({
           <h2>{cardTitle}</h2>
           <p className="auth-card__subtitle">{cardSubtitle}</p>
         </div>
-
-        {isParentPortalVariant && onRegisterParent ? (
-          <div className="auth-mode-switch" role="tablist" aria-label="Pilih mode akun orang tua">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'login'}
-              className={authMode === 'login' ? 'is-active' : ''}
-              onClick={() => {
-                setAuthMode('login')
-                setLocalError(null)
-              }}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={authMode === 'register'}
-              className={authMode === 'register' ? 'is-active' : ''}
-              onClick={() => {
-                setAuthMode('register')
-                setLocalError(null)
-              }}
-            >
-              Daftar
-            </button>
-          </div>
-        ) : null}
 
         {authMode === 'register' && isParentPortalVariant && onRegisterParent ? (
           <form className="auth-form auth-form--stacked" onSubmit={handleRegisterSubmit}>
@@ -304,6 +308,20 @@ const LoginPage = ({
                 {isLoading ? 'Memproses...' : 'Daftar Sekarang'}
               </button>
             </div>
+            <p className="auth-form__switch-text">
+              Sudah punya akun?{' '}
+              <button
+                type="button"
+                className="auth-form__switch-link"
+                onClick={() => {
+                  setAuthMode('login')
+                  setLocalError(null)
+                }}
+                disabled={isLoading}
+              >
+                Masuk disini
+              </button>
+            </p>
           </form>
         ) : (
           <form className="auth-form auth-form--stacked" onSubmit={handleLoginSubmit}>
@@ -361,6 +379,7 @@ const LoginPage = ({
               </div>
             </div>
 
+            {successMessage ? <p className="field-success">{successMessage}</p> : null}
             {localError ? <p className="field-error">{localError}</p> : null}
             {errorMessage ? <p className="field-error">{errorMessage}</p> : null}
 
@@ -369,6 +388,23 @@ const LoginPage = ({
                 {isLoading ? 'Memproses...' : 'Masuk Sekarang'}
               </button>
             </div>
+            {isParentPortalVariant && onRegisterParent ? (
+              <p className="auth-form__switch-text">
+                Belum punya akun?{' '}
+                <button
+                  type="button"
+                  className="auth-form__switch-link"
+                  onClick={() => {
+                    setAuthMode('register')
+                    setLocalError(null)
+                    setSuccessMessage(null)
+                  }}
+                  disabled={isLoading}
+                >
+                  Daftar disini
+                </button>
+              </p>
+            ) : null}
           </form>
         )}
       </div>

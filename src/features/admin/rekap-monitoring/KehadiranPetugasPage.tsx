@@ -1,4 +1,4 @@
-import { LogIn, LogOut, Search } from 'lucide-react'
+import { Download, LogIn, LogOut, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
   AppDatePickerField,
@@ -124,12 +124,17 @@ const KehadiranPetugasPage = ({
           </div>
           <button
             type="button"
-            className="button"
+            className="button button--download-pdf"
             style={{ marginLeft: 'auto' }}
             onClick={onOpenDownloadDialog}
             disabled={isDownloadingPdf}
           >
-            {isDownloadingPdf ? 'Mengunduh...' : 'Unduh PDF'}
+            {isDownloadingPdf ? 'Mengunduh...' : (
+              <>
+                <Download size={14} />
+                <span>Unduh PDF</span>
+              </>
+            )}
           </button>
         </div>
 

@@ -34,6 +34,7 @@ Catatan:
 - Runtime production sekarang melayani frontend + API lewat port `4000` (single service backend).
 - Host `tparumahceria.my.id` akan menampilkan landing page jika `dist-landing` tersedia.
 - Host `apps.tparumahceria.my.id` akan menampilkan app admin/petugas.
+- Host `parent.tparumahceria.my.id` (dan alias `ortu.tparumahceria.my.id`) akan menampilkan portal orang tua.
 - Panduan laptop + Cloudflare Tunnel ada di `docs/DEPLOY-LAPTOP-CLOUDFLARE-TUNNEL.md`.
 
 ## Cek status runtime production

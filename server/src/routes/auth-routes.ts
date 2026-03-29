@@ -23,9 +23,16 @@ const parseLoginPayload = (value: unknown): LoginInput => {
     throw new AuthServiceError(400, 'Payload login tidak valid.')
   }
 
+  const rawPreference = toText(value.loginPreference).trim().toUpperCase()
+  const loginPreference =
+    rawPreference === 'STAFF_FIRST' || rawPreference === 'PARENT_FIRST'
+      ? (rawPreference as LoginInput['loginPreference'])
+      : undefined
+
   return {
     email: toText(value.email),
     password: toText(value.password),
+    loginPreference,
   }
 }
 

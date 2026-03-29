@@ -65,6 +65,16 @@ interface PetugasSectionProps {
   onLogout: () => Promise<void>
 }
 
+const PETUGAS_BACKGROUND_SYNC_INTERVAL_MS = 20000
+const PETUGAS_POPUP_STORAGE_PREFIX = 'tpa:petugas:popup'
+
+const buildPetugasPopupStorageKey = (
+  staffUserId: string,
+  attendanceDate: string,
+  popupType: 'checkin' | 'checkout',
+): string =>
+  `${PETUGAS_POPUP_STORAGE_PREFIX}:${popupType}:${staffUserId}:${attendanceDate}`
+
 function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   const [appData, setAppData] = useState<AppData>(() => createEmptyAppData())
   const [staffAttendanceStatus, setStaffAttendanceStatus] = useState<StaffAttendanceStatus | null>(null)
@@ -87,6 +97,11 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(
     null,
   )
+  const [isCheckInPopupVisible, setCheckInPopupVisible] = useState(false)
+  const [checkInPopupCloseCountdown, setCheckInPopupCloseCountdown] = useState(0)
+  const [checkInPopupStorageKey, setCheckInPopupStorageKey] = useState<string | null>(null)
+  const [isCheckOutPopupVisible, setCheckOutPopupVisible] = useState(false)
+  const [checkOutPopupStorageKey, setCheckOutPopupStorageKey] = useState<string | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null)
   const confirmResolveRef = useRef<((result: boolean) => void) | null>(null)
   const initialMenuRef = useRef<PetugasMenuKey>(activeMenu)
@@ -234,7 +249,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   const loadMenuData = useCallback(
     async (
       menu: PetugasMenuKey,
-      options?: { manualReload?: boolean },
+      options?: { manualReload?: boolean; quiet?: boolean },
     ): Promise<void> => {
       const requestId = ++loadRequestIdRef.current
       const requiredSegments = menuDataSegments[menu]
@@ -298,7 +313,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
           return nextState
         })
 
-        if (options?.manualReload) {
+        if (options?.manualReload && !options.quiet) {
           setStatusMessage(`Data "${menuTitles[menu].title}" berhasil dimuat ulang.`)
         } else {
           setStatusMessage(null)
@@ -308,8 +323,10 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
           return
         }
 
-        const menuLabel = menuTitles[menu].title.toLowerCase()
-        setStatusMessage(`Gagal memuat data ${menuLabel}: ${getErrorMessage(error)} `)
+        if (!options?.quiet) {
+          const menuLabel = menuTitles[menu].title.toLowerCase()
+          setStatusMessage(`Gagal memuat data ${menuLabel}: ${getErrorMessage(error)} `)
+        }
       } finally {
         if (requestId === loadRequestIdRef.current) {
           setLoading(false)
@@ -328,6 +345,27 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   }, [activeMenu, loadMenuData, staffAttendanceStatus?.hasCheckedIn])
 
   useEffect(() => {
+    if (!staffAttendanceStatus?.hasCheckedIn) {
+      return undefined
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (isSyncing) {
+        return
+      }
+
+      void loadMenuData(activeMenu, {
+        manualReload: true,
+        quiet: true,
+      })
+    }, PETUGAS_BACKGROUND_SYNC_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [activeMenu, isSyncing, loadMenuData, staffAttendanceStatus?.hasCheckedIn])
+
+  useEffect(() => {
     if (!toastMessage) {
       return undefined
     }
@@ -340,6 +378,67 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
       window.clearTimeout(timerId)
     }
   }, [toastMessage])
+
+  useEffect(() => {
+    if (!staffAttendanceStatus?.hasCheckedIn || staffAttendanceStatus.hasCheckedOut) {
+      setCheckInPopupVisible(false)
+      setCheckInPopupCloseCountdown(0)
+      setCheckInPopupStorageKey(null)
+      return
+    }
+
+    const attendanceDate = staffAttendanceStatus.attendanceDate || new Date().toISOString().slice(0, 10)
+    const storageKey = buildPetugasPopupStorageKey(user.id, attendanceDate, 'checkin')
+    const hasShownPopup = window.localStorage.getItem(storageKey) === '1'
+    if (hasShownPopup) {
+      return
+    }
+
+    setCheckInPopupStorageKey(storageKey)
+    setCheckInPopupVisible(true)
+    setCheckInPopupCloseCountdown(5)
+  }, [
+    staffAttendanceStatus?.attendanceDate,
+    staffAttendanceStatus?.hasCheckedIn,
+    staffAttendanceStatus?.hasCheckedOut,
+    user.id,
+  ])
+
+  useEffect(() => {
+    if (!staffAttendanceStatus?.hasCheckedOut) {
+      setCheckOutPopupVisible(false)
+      setCheckOutPopupStorageKey(null)
+      return
+    }
+
+    const attendanceDate = staffAttendanceStatus.attendanceDate || new Date().toISOString().slice(0, 10)
+    const storageKey = buildPetugasPopupStorageKey(user.id, attendanceDate, 'checkout')
+    const hasShownPopup = window.localStorage.getItem(storageKey) === '1'
+    if (hasShownPopup) {
+      return
+    }
+
+    setCheckOutPopupStorageKey(storageKey)
+    setCheckOutPopupVisible(true)
+  }, [
+    staffAttendanceStatus?.attendanceDate,
+    staffAttendanceStatus?.hasCheckedOut,
+    user.id,
+  ])
+
+  useEffect(() => {
+    if (!isCheckInPopupVisible || checkInPopupCloseCountdown <= 0) {
+      return undefined
+    }
+
+    const countdownId = window.setTimeout(() => {
+      setCheckInPopupCloseCountdown((previous) => Math.max(previous - 1, 0))
+    }, 1000)
+
+    return () => {
+      window.clearTimeout(countdownId)
+    }
+  }, [checkInPopupCloseCountdown, isCheckInPopupVisible])
 
   useEffect(() => {
     if (!confirmDialog) {
@@ -552,6 +651,21 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
 
   const activeHeader = useMemo(() => menuTitles[activeMenu], [activeMenu])
   const showLoadingOverlay = isSyncing
+  const closeCheckInPopup = () => {
+    if (checkInPopupStorageKey) {
+      window.localStorage.setItem(checkInPopupStorageKey, '1')
+    }
+    setCheckInPopupVisible(false)
+    setCheckInPopupCloseCountdown(0)
+    setCheckInPopupStorageKey(null)
+  }
+  const closeCheckOutPopup = () => {
+    if (checkOutPopupStorageKey) {
+      window.localStorage.setItem(checkOutPopupStorageKey, '1')
+    }
+    setCheckOutPopupVisible(false)
+    setCheckOutPopupStorageKey(null)
+  }
   const attendanceDateLabel = useMemo(() => {
     const dateKey = staffAttendanceStatus?.attendanceDate ?? new Date().toISOString().slice(0, 10)
     const parsed = new Date(`${dateKey}T00:00:00`)
@@ -722,6 +836,45 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
             </section>
           </main>
         </div>
+
+        {isLockedAfterCheckout && isCheckOutPopupVisible ? (
+          <div
+            className="app-confirm-overlay"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                closeCheckOutPopup()
+              }
+            }}
+          >
+            <div className="app-greeting-dialog" role="dialog" aria-modal="true" aria-label="Ucapan setelah absen pulang">
+              <button
+                type="button"
+                className="app-greeting-dialog__close"
+                onClick={closeCheckOutPopup}
+                aria-label="Tutup ucapan"
+              >
+                x
+              </button>
+              <div className="app-greeting-dialog__badge">
+                <img src="/logo_TPA.jpg" alt="Logo TPA Rumah Ceria" />
+                <span>Selesai Bertugas</span>
+              </div>
+              <h3>Sampai jumpa kak {user.displayName}🙏🏻</h3>
+              <p>
+                Terima kasih atas semua kesabaran dan kasih sayang yang Kakak berikan hari ini dan menjadi bagian dari tumbuh kembang mereka, anak-anak pulang dengan aman dan bahagia berkat Kakak. hati-hati dijalan👋🏻
+              </p>
+              <div className="app-greeting-dialog__footer">
+                <button
+                  type="button"
+                  className="button"
+                  onClick={closeCheckOutPopup}
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -797,7 +950,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
         onClose={() => setSidebarOpen(false)}
         onLogout={onLogout}
         userLabel={user.displayName}
-        accountLabel="Pendamping Hari Ini"
+        accountLabel="Akun Pendamping"
         panelTitle="Panel Petugas"
         menuLabel="Menu Petugas"
         chipLabel=""
@@ -818,9 +971,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
             <p>{activeHeader.subtitle}</p>
           </div>
 
-          <div className="topbar__actions">
-            <span className="topbar__user">{user.displayName}</span>
-          </div>
+          <div className="topbar__actions" />
         </header>
 
         <main id="tour-main-content" className="app-content">
@@ -840,6 +991,54 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
         <div className="app-toast app-toast--success" role="status" aria-live="polite">
           <CheckCircle2 size={18} />
           <span>{toastMessage}</span>
+        </div>
+      ) : null}
+
+      {isCheckInPopupVisible ? (
+        <div
+          className="app-confirm-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && checkInPopupCloseCountdown <= 0) {
+              closeCheckInPopup()
+            }
+          }}
+        >
+          <div className="app-greeting-dialog" role="dialog" aria-modal="true" aria-label="Ucapan awal masuk petugas">
+            {checkInPopupCloseCountdown <= 0 ? (
+              <button
+                type="button"
+                className="app-greeting-dialog__close"
+                onClick={closeCheckInPopup}
+                aria-label="Tutup ucapan"
+              >
+                x
+              </button>
+            ) : null}
+            <div className="app-greeting-dialog__badge">
+              <img src="/logo_TPA.jpg" alt="Logo TPA Rumah Ceria" />
+              <span>Dashboard Operasional</span>
+            </div>
+            <h3>Selamat datang kak {user.displayName}✨</h3>
+            <p>
+              Setiap sentuhan dan kesabaran kak {user.displayName} memberikan rasa aman dan nyaman pada anak anak dalam lingkungan TPA, semangat dan Selamat Bertugas kak {user.displayName}.
+            </p>
+            <div className="app-greeting-dialog__footer">
+              <span className="app-greeting-dialog__countdown">
+                {checkInPopupCloseCountdown > 0
+                  ? `Tombol silang muncul dalam ${checkInPopupCloseCountdown} detik.`
+                  : 'Anda bisa mulai bertugas sekarang.'}
+              </span>
+              {checkInPopupCloseCountdown <= 0 ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={closeCheckInPopup}
+                >
+                  Mulai Bertugas
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 

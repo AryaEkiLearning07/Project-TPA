@@ -16,7 +16,12 @@ import {
 import { getChildrenByParentProfileId } from './child-service.js'
 import { ensureParentRelationshipSchema } from './parent-relations-service.js'
 import { hashPassword, PasswordError } from '../utils/password.js'
-import { parseAttendanceNotesJson, toDate, toTime } from '../utils/data-mappers.js'
+import {
+  parseAttendanceNotesJson,
+  toAttendanceNotesJson,
+  toDate,
+  toTime,
+} from '../utils/data-mappers.js'
 import type { CarriedItem, SupplyInventoryItem } from '../types/index.js'
 import {
   getServiceBillingHistory,
@@ -593,6 +598,83 @@ export const linkChildToParentByCode = async (params: {
       throw new ParentPortalServiceError(error.status, error.message)
     }
     throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export const updateParentMessageForAttendance = async (params: {
+  parentAccountId: string
+  attendanceId: string
+  parentMessage: string
+}) => {
+  const parentAccountId = parseAccountId(params.parentAccountId)
+  const attendanceId = Number.parseInt(toText(params.attendanceId), 10)
+  const parentMessage = toText(params.parentMessage).trim()
+
+  if (!Number.isFinite(attendanceId) || attendanceId <= 0) {
+    throw new ParentPortalServiceError(400, 'Data kehadiran tidak valid.')
+  }
+
+  if (parentMessage.length > 2000) {
+    throw new ParentPortalServiceError(400, 'Pesan maksimal 2000 karakter.')
+  }
+
+  const connection = await dbPool.getConnection()
+  try {
+    await ensureParentRelationshipSchema(connection)
+    const context = await getParentAccountContext(connection, parentAccountId)
+
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      `SELECT
+        ar.id,
+        ar.notes
+      FROM attendance_records ar
+      JOIN children c ON c.id = ar.child_id
+      WHERE ar.id = ?
+        AND c.parent_profile_id = ?
+        AND c.is_active = 1
+      LIMIT 1`,
+      [attendanceId, context.parentProfileId],
+    )
+
+    const attendanceRow = rows[0]
+    if (!attendanceRow) {
+      throw new ParentPortalServiceError(404, 'Data kehadiran anak tidak ditemukan.')
+    }
+
+    const currentNotes = parseAttendanceNotesJson(attendanceRow.notes)
+    const nextNotesJson = toAttendanceNotesJson({
+      arrivalPhysicalCondition: currentNotes.arrivalPhysicalCondition || 'sehat',
+      arrivalEmotionalCondition: currentNotes.arrivalEmotionalCondition || 'senang',
+      departurePhysicalCondition: currentNotes.departurePhysicalCondition || 'sehat',
+      departureEmotionalCondition: currentNotes.departureEmotionalCondition || 'senang',
+      parentMessage,
+      messageForParent: currentNotes.messageForParent || '',
+      departureNotes: currentNotes.departureNotes || '',
+      carriedItems: Array.isArray(currentNotes.carriedItems)
+        ? currentNotes.carriedItems.map((item) => ({
+            id: toText(item.id),
+            category: toText(item.category),
+            imageDataUrl: toText(item.imageDataUrl),
+            imageName: toText(item.imageName),
+            description: toText(item.description),
+          }))
+        : [],
+    })
+
+    await connection.execute(
+      `UPDATE attendance_records
+      SET notes = ?, updated_at = UTC_TIMESTAMP()
+      WHERE id = ?`,
+      [nextNotesJson, attendanceId],
+    )
+
+    return {
+      updated: true,
+      attendanceId: String(attendanceId),
+      parentMessage,
+    }
   } finally {
     connection.release()
   }
