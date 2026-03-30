@@ -21,6 +21,10 @@ const ACTIVITY_LOG_BACKWARD_SHIFT_THRESHOLD_MS = 2 * 60 * 60 * 1000
 const LOGIN_MAX_FAILED_ATTEMPTS = 5
 const LOGIN_LOCKOUT_BASE_SECONDS = 60
 const LOGIN_LOCKOUT_MAX_SECONDS = 60 * 60
+const ACTIVE_SESSION_LOCK_MESSAGE =
+  'Akun sedang aktif di perangkat lain. Silakan logout dari perangkat sebelumnya terlebih dahulu.'
+const STAFF_PENDING_APPROVAL_MESSAGE =
+  'Pendaftaran petugas Anda masih menunggu persetujuan admin.'
 
 const toText = (value: unknown): string => (typeof value === 'string' ? value : '')
 
@@ -228,6 +232,7 @@ const ensureSessionsTable = async (executor: SqlExecutor): Promise<void> => {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uq_auth_sessions_token (session_token),
       UNIQUE KEY uq_auth_sessions_token_hash (session_token_hash),
+      UNIQUE KEY uq_auth_sessions_subject (subject_role, subject_id),
       INDEX idx_auth_sessions_expires (expires_at),
       INDEX idx_auth_sessions_subject (subject_role, subject_id)
     )`,
@@ -271,6 +276,53 @@ const ensureSessionTokenHashColumn = async (executor: SqlExecutor): Promise<void
     if (!isSqlErrorWithCode(error, 'ER_DUP_KEYNAME')) {
       throw error
     }
+  })
+}
+
+const ensureSingleSessionPerSubject = async (executor: SqlExecutor): Promise<void> => {
+  await executor.execute(
+    `DELETE FROM auth_sessions
+    WHERE expires_at <= UTC_TIMESTAMP()`,
+  )
+
+  await executor.execute(
+    `DELETE s1 FROM auth_sessions s1
+    INNER JOIN auth_sessions s2
+      ON s1.subject_role = s2.subject_role
+      AND s1.subject_id = s2.subject_id
+      AND s1.id < s2.id`,
+  )
+
+  const addSubjectUniqueKey = async () => {
+    await executor.execute(
+      `ALTER TABLE auth_sessions
+      ADD UNIQUE KEY uq_auth_sessions_subject (subject_role, subject_id)`,
+    )
+  }
+
+  await addSubjectUniqueKey().catch(async (error) => {
+    if (isSqlErrorWithCode(error, 'ER_DUP_KEYNAME')) {
+      return
+    }
+
+    if (isSqlErrorWithCode(error, 'ER_DUP_ENTRY')) {
+      await executor.execute(
+        `DELETE s1 FROM auth_sessions s1
+        INNER JOIN auth_sessions s2
+          ON s1.subject_role = s2.subject_role
+          AND s1.subject_id = s2.subject_id
+          AND s1.id < s2.id`,
+      )
+
+      await addSubjectUniqueKey().catch((nestedError) => {
+        if (!isSqlErrorWithCode(nestedError, 'ER_DUP_KEYNAME')) {
+          throw nestedError
+        }
+      })
+      return
+    }
+
+    throw error
   })
 }
 
@@ -557,6 +609,7 @@ export const ensureAuthSchema = async (executor: SqlExecutor): Promise<void> => 
   await ensureUsersTable(executor)
   await ensureSessionsTable(executor)
   await ensureSessionTokenHashColumn(executor)
+  await ensureSingleSessionPerSubject(executor)
   await ensureLoginAttemptsTableReady(executor)
   await ensureActivityLogsTableReady(executor)
   await migrateLegacyRoles(executor)
@@ -657,10 +710,13 @@ const createSession = async (params: {
   const expiresDate = nowPlusHours(env.sessionHours)
   const expiresAt = toDbDateTime(expiresDate)
 
-  await revokeSessionsBySubject({
-    role: params.role,
-    subjectId: params.subjectId,
-  })
+  await dbPool.execute(
+    `DELETE FROM auth_sessions
+    WHERE subject_role = ?
+      AND subject_id = ?
+      AND expires_at <= UTC_TIMESTAMP()`,
+    [params.role, params.subjectId],
+  )
 
   await dbPool.execute(
     `INSERT INTO auth_sessions (
@@ -681,7 +737,12 @@ const createSession = async (params: {
       params.displayName,
       expiresAt,
     ],
-  )
+  ).catch((error) => {
+    if (isSqlErrorWithCode(error, 'ER_DUP_ENTRY')) {
+      throw new AuthServiceError(409, ACTIVE_SESSION_LOCK_MESSAGE)
+    }
+    throw error
+  })
 
   return { token, expiresAt: expiresDate.toISOString() }
 }
@@ -820,6 +881,31 @@ const registerFailedLoginAttempt = async (email: string): Promise<LoginAttemptSt
 
 const clearFailedLoginAttempts = async (email: string): Promise<void> => {
   await dbPool.execute('DELETE FROM auth_login_attempts WHERE email = ?', [email])
+}
+
+const loadStaffRegistrationRequestByEmailForLogin = async (
+  email: string,
+): Promise<RowDataPacket | null> => {
+  try {
+    const [rows] = await dbPool.execute<RowDataPacket[]>(
+      `SELECT
+        id,
+        full_name,
+        email,
+        password_hash,
+        status
+      FROM staff_registration_requests
+      WHERE LOWER(email) = ?
+      LIMIT 1`,
+      [email],
+    )
+    return rows[0] ?? null
+  } catch (error) {
+    if (isSqlErrorWithCode(error, 'ER_NO_SUCH_TABLE')) {
+      return null
+    }
+    throw error
+  }
 }
 
 const loadParentAccountByEmail = async (email: string): Promise<RowDataPacket | null> => {
@@ -1039,13 +1125,27 @@ export const login = async (
         }
       }
 
+      const registrationRequest = await loadStaffRegistrationRequestByEmailForLogin(email)
+      if (registrationRequest) {
+        const requestStatus = toText(registrationRequest.status).trim().toUpperCase()
+        const matchedPendingPassword = registrationRequest.password_hash
+          ? await verifyPassword(password, toText(registrationRequest.password_hash))
+          : false
+
+        if (matchedPendingPassword && requestStatus === 'PENDING') {
+          loginRoleForLog = 'PETUGAS'
+          deferredAuthError = new AuthServiceError(403, STAFF_PENDING_APPROVAL_MESSAGE)
+          return null
+        }
+      }
+
       return null
     }
 
     const attempts =
       loginPreference === 'STAFF_FIRST'
         ? [tryStaffLogin, tryParentLogin]
-        : [tryParentLogin, tryStaffLogin]
+        : [tryParentLogin]
 
     for (const attempt of attempts) {
       const session = await attempt()

@@ -482,9 +482,9 @@ const createObservationItemsFromTemplate = (
 
   return templateItems.map((templateItem) => {
     const exactMatch =
-      takeSource((item: any) => item.id === templateItem.id) ??
+      takeSource((item) => item.id === templateItem.id) ??
       takeSource(
-        (item: any) =>
+        (item) =>
           toNormalizedText(item.activity) === toNormalizedText(templateItem.activity) &&
           (templateItem.isDynamicIndicator ||
             toNormalizedText(item.indicator) === toNormalizedText(templateItem.indicator)),
@@ -939,36 +939,35 @@ const ObservasiPage = ({
     setErrors({})
   }
 
-  useEffect(() => {
-    if (!resolvedObserverName) {
+  const handleChildSelect = (childId: string) => {
+    if (!childId) {
+      setField('childId', childId)
       return
     }
-    setForm((previous) =>
-      previous.observerName === resolvedObserverName
-        ? previous
-        : {
-          ...previous,
-          observerName: resolvedObserverName,
-        },
-    )
-  }, [resolvedObserverName])
 
-  useEffect(() => {
-    if (!form.childId) return
-    const child = childById[form.childId]
-    if (!child || !isChildSubscribed(child)) return
+    const child = childById[childId]
+    if (!child || !isChildSubscribed(child)) {
+      setField('childId', childId)
+      return
+    }
+
     const autoGroupKey = resolveChildGroupKey(child, todayDate)
-    if (autoGroupKey === selectedGroupKey) return
+    if (autoGroupKey === selectedGroupKey) {
+      setField('childId', childId)
+      return
+    }
+
     const nextGroup = observationGroupByKey[autoGroupKey]
     clearDynamicIndicatorEditing()
     setSelectedGroupKey(autoGroupKey)
     setForm((previous) => ({
       ...previous,
+      childId,
       groupName: nextGroup.label,
       items: createObservationItemsFromTemplate(nextGroup.items, previous.items),
     }))
-    setErrors((previous) => removeObservationPointErrors(previous))
-  }, [childById, form.childId, selectedGroupKey, todayDate])
+    setErrors((previous) => removeObservationPointErrors(removeErrorKey(previous, 'childId')))
+  }
 
   const resetForm = () => {
     clearDynamicIndicatorEditing()
@@ -1155,7 +1154,7 @@ const ObservasiPage = ({
                 </label>
                 <SearchableSelect
                   value={form.childId}
-                  onChange={(childId) => setField('childId', childId)}
+                  onChange={handleChildSelect}
                   options={childOptions}
                   placeholder="Pilih nama anak"
                   emptyMessage="Belum ada anak sesuai kelompok yang absen datang"

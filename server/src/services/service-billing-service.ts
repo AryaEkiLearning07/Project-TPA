@@ -6,6 +6,7 @@ import {
   getServicePackageRates,
   type ServicePackageRates,
 } from './service-rate-service.js'
+import { saveBase64ToDisk } from '../utils/base64-storage.js'
 
 type SqlExecutor = Pick<Pool, 'execute'> | Pick<PoolConnection, 'execute'>
 
@@ -87,17 +88,30 @@ const servicePackageToDb: Record<ServicePackageKey, string> = {
 
 const toText = (value: unknown): string => (typeof value === 'string' ? value : '')
 
-const toOptionalPaymentProofDataUrl = (value: unknown): string => {
+const normalizePaymentProofAssetUrl = (value: unknown): string => {
   const normalized = toText(value).trim()
   if (!normalized) {
     return ''
   }
 
-  if (!normalized.startsWith('data:image/')) {
+  if (normalized.startsWith('data:image/')) return normalized
+  if (/^https?:\/\//i.test(normalized)) return normalized
+  if (normalized.startsWith('/uploads/')) return normalized
+  if (normalized.startsWith('uploads/')) return `/${normalized}`
+  return ''
+}
+
+const normalizePaymentProofStorageReference = (value: unknown): string => {
+  const normalized = toText(value).trim()
+  if (!normalized) {
     return ''
   }
 
-  return normalized
+  if (normalized.startsWith('data:image/')) return normalized
+  if (/^https?:\/\//i.test(normalized)) return normalized
+  if (normalized.startsWith('/uploads/')) return normalized.slice(1)
+  if (normalized.startsWith('uploads/')) return normalized
+  return ''
 }
 
 const toOptionalPaymentProofName = (value: unknown): string => {
@@ -451,6 +465,8 @@ export interface ServiceBillingSummaryRow {
   migrationInfo: ServiceBillingMigrationInfo | null
   needsUpgradeConfirmation: boolean
   lastPaymentAt: string
+  lastPaymentProofDataUrl: string
+  lastPaymentProofName: string
   lastTransactionAt: string
 }
 
@@ -965,7 +981,7 @@ const loadSnapshot = async (): Promise<BillingSnapshot> => {
     bucket: normalizeBucket(toText(row.bucket).toLowerCase()) ?? 'period',
     amount: toSafeAmount(Number(row.amount)),
     notes: toText(row.notes),
-    paymentProofDataUrl: toOptionalPaymentProofDataUrl(row.payment_proof_data_url),
+    paymentProofDataUrl: normalizePaymentProofAssetUrl(row.payment_proof_data_url),
     paymentProofName: toOptionalPaymentProofName(row.payment_proof_name),
     transactedAt: toIsoDateTime(row.transacted_at),
     createdAt: toIsoDateTime(row.created_at),
@@ -1146,12 +1162,14 @@ const computeChildBilling = (
     status = 'aktif-menunggak'
   }
 
-  const lastPaymentAt = childTransactions
-    .find(
+  const lastPaymentTransaction = childTransactions.find(
       (transaction) =>
         (transaction.transactionType === 'period-start' || transaction.transactionType === 'payment') &&
         transaction.amount > 0,
-    )?.transactedAt ?? ''
+    )
+  const lastPaymentAt = lastPaymentTransaction?.transactedAt ?? ''
+  const lastPaymentProofDataUrl = lastPaymentTransaction?.paymentProofDataUrl ?? ''
+  const lastPaymentProofName = lastPaymentTransaction?.paymentProofName ?? ''
 
   const lastTransactionAt = childTransactions[0]?.transactedAt ?? ''
 
@@ -1185,6 +1203,8 @@ const computeChildBilling = (
       migrationInfo,
       needsUpgradeConfirmation,
       lastPaymentAt,
+      lastPaymentProofDataUrl,
+      lastPaymentProofName,
       lastTransactionAt,
     },
     periods: normalizedPeriods,
@@ -1522,7 +1542,8 @@ export const createServiceBillingPayment = async (
 
   const periodIdInput = parseNumericId(input.periodId)
   const notes = toText(input.notes).trim()
-  const paymentProofDataUrl = toOptionalPaymentProofDataUrl(input.paymentProofDataUrl)
+  const paymentProofSource = normalizePaymentProofStorageReference(input.paymentProofDataUrl)
+  const paymentProofDataUrl = await saveBase64ToDisk(paymentProofSource, 'billing_proof')
   const paymentProofName = toOptionalPaymentProofName(input.paymentProofName)
 
   const connection = await dbPool.getConnection()

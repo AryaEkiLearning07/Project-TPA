@@ -1,7 +1,11 @@
 import { Eye, EyeOff } from 'lucide-react'
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
-import type { StaffUser, StaffUserInput } from '../../../types'
+import type {
+  StaffRegistrationRequest,
+  StaffUser,
+  StaffUserInput,
+} from '../../../types'
 
 interface ManajemenPetugasPageProps {
   editingStaffId: string | null
@@ -15,10 +19,16 @@ interface ManajemenPetugasPageProps {
   onResetStaffForm: () => void
   isLoadingStaff: boolean
   staffUsers: StaffUser[]
+  pendingStaffRequests: StaffRegistrationRequest[]
+  isLoadingPendingStaffRequests: boolean
+  processingStaffRequestId: string | null
   formatDateOnly: (value: string) => string
+  formatDateTime: (value: string) => string
   calculateServiceLength: (tanggalMasuk: string) => string
   onStartEditStaff: (staff: StaffUser) => void
   onDeleteStaff: (staff: StaffUser) => Promise<void> | void
+  onApproveStaffRequest: (request: StaffRegistrationRequest) => Promise<void> | void
+  onRejectStaffRequest: (request: StaffRegistrationRequest) => Promise<void> | void
 }
 
 const ManajemenPetugasPage = ({
@@ -33,10 +43,16 @@ const ManajemenPetugasPage = ({
   onResetStaffForm,
   isLoadingStaff,
   staffUsers,
+  pendingStaffRequests,
+  isLoadingPendingStaffRequests,
+  processingStaffRequestId,
   formatDateOnly,
+  formatDateTime,
   calculateServiceLength,
   onStartEditStaff,
   onDeleteStaff,
+  onApproveStaffRequest,
+  onRejectStaffRequest,
 }: ManajemenPetugasPageProps) => {
   return (
     <section className="page">
@@ -175,6 +191,72 @@ const ManajemenPetugasPage = ({
       </div>
 
       <div className="card">
+        <h3>Permintaan Petugas</h3>
+        <p className="card__description">
+          {pendingStaffRequests.length} permintaan pendaftaran petugas menunggu persetujuan.
+        </p>
+
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Nama Lengkap</th>
+                <th>Email</th>
+                <th>Tanggal Daftar</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoadingPendingStaffRequests ? (
+                <tr>
+                  <td colSpan={4} className="table__empty">
+                    Memuat permintaan petugas...
+                  </td>
+                </tr>
+              ) : pendingStaffRequests.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="table__empty">
+                    Belum ada permintaan petugas yang menunggu approve.
+                  </td>
+                </tr>
+              ) : (
+                pendingStaffRequests.map((request) => {
+                  const isProcessing = processingStaffRequestId === request.id
+                  return (
+                    <tr key={request.id}>
+                      <td>{request.fullName}</td>
+                      <td>{request.email}</td>
+                      <td>{formatDateTime(request.registeredAt)}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            type="button"
+                            className="button button--tiny"
+                            onClick={() => void onApproveStaffRequest(request)}
+                            disabled={isProcessing}
+                          >
+                            {isProcessing ? 'Memproses...' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            className="button button--tiny button--danger"
+                            onClick={() => void onRejectStaffRequest(request)}
+                            disabled={isProcessing}
+                          >
+                            Tolak
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
         <h3>Daftar Petugas</h3>
         <div className="table-wrap">
           <table className="table">
@@ -207,8 +289,8 @@ const ManajemenPetugasPage = ({
                     <td>{staff.fullName}</td>
                     <td>{staff.email}</td>
                     <td>{staff.isActive ? 'Aktif' : 'Nonaktif'}</td>
-                    <td>{formatDateOnly(staff.createdAt)}</td>
-                    <td>{calculateServiceLength(staff.createdAt)}</td>
+                    <td>{formatDateOnly(staff.tanggalMasuk)}</td>
+                    <td>{calculateServiceLength(staff.tanggalMasuk)}</td>
                     <td>
                       <div className="table-actions">
                         <button

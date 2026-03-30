@@ -1,4 +1,4 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
 import type { IncidentReport, IncidentReportInput, IncidentCarriedItem, IncidentCategoryKey, MealEquipment } from '../types/index.js'
 import {
@@ -8,7 +8,6 @@ import {
     toDbDateTime,
     toDbEmotionalCondition,
     toDbPhysicalCondition,
-    toDbSupplyInventoryJson,
     toIncidentCategoryKey,
     toIsoDateTime,
     toDate,
@@ -16,22 +15,6 @@ import {
 } from '../utils/data-mappers.js'
 import { toText } from '../utils/string-utils.js'
 import { saveBase64ToDisk } from '../utils/base64-storage.js'
-
-// Helper to sanitize incident carried items
-const INCIDENT_CATEGORY_KEYS: IncidentCategoryKey[] = [
-    'DRINKING_BOTTLE',
-    'MILK_CONTAINER',
-    'MEAL_CONTAINER',
-    'SNACK_CONTAINER',
-    'BATH_SUPPLIES',
-    'MEDICINE_VITAMIN',
-    'BAG',
-    'HELMET',
-    'SHOES',
-    'JACKET',
-    'OTHER',
-]
-const INCIDENT_CATEGORY_KEY_SET = new Set<IncidentCategoryKey>(INCIDENT_CATEGORY_KEYS)
 
 const createIncidentItemId = (index: number): string => `incident-item-${index}`
 

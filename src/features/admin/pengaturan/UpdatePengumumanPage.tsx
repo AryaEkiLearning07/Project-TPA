@@ -29,7 +29,7 @@ export interface LandingAnnouncementEditorForm {
   isPinned: boolean
 }
 
-type AnnouncementFunction = 'galeri' | 'dokumentasi' | 'poster'
+type AnnouncementFunction = 'galeri' | 'dokumentasi' | 'fasilitas' | 'poster'
 
 interface UpdatePengumumanPageProps {
   announcements: LandingAnnouncement[]
@@ -58,6 +58,7 @@ const statusLabelMap: Record<LandingAnnouncementStatus, string> = {
 const functionLabelMap: Record<AnnouncementFunction, string> = {
   galeri: 'Galeri',
   dokumentasi: 'Dokumentasi',
+  fasilitas: 'Fasilitas',
   poster: 'Poster',
 }
 
@@ -67,6 +68,9 @@ const mapCategoryToFunction = (category: LandingAnnouncementCategory): Announcem
   }
   if (category === 'event' || category === 'dokumentasi') {
     return 'dokumentasi'
+  }
+  if (category === 'fasilitas') {
+    return 'fasilitas'
   }
   return 'poster'
 }
@@ -80,6 +84,9 @@ const matchesFunction = (
   }
   if (currentFunction === 'dokumentasi') {
     return announcement.category === 'event' || announcement.category === 'dokumentasi'
+  }
+  if (currentFunction === 'fasilitas') {
+    return announcement.category === 'fasilitas'
   }
   return announcement.category === 'promosi' || announcement.category === 'ucapan'
 }
@@ -127,6 +134,7 @@ const UpdatePengumumanPage = ({
   )
   const isGalleryMode = activeFunction === 'galeri'
   const isDocumentationMode = activeFunction === 'dokumentasi'
+  const isFacilityMode = activeFunction === 'fasilitas'
   const isPosterMode = activeFunction === 'poster'
 
   const handleFunctionChange = (nextFunction: AnnouncementFunction) => {
@@ -155,6 +163,21 @@ const UpdatePengumumanPage = ({
           ctaLabel: '',
           ctaUrl: '',
           content: '',
+        }
+      }
+
+      if (nextFunction === 'fasilitas') {
+        return {
+          ...previous,
+          category: 'fasilitas',
+          displayMode: 'section',
+          publishStartDate: '',
+          publishEndDate: '',
+          ctaLabel: '',
+          ctaUrl: '',
+          excerpt: '',
+          content: '',
+          status: 'published',
         }
       }
 
@@ -197,6 +220,7 @@ const UpdatePengumumanPage = ({
           >
             <option value="galeri">Update Galeri</option>
             <option value="dokumentasi">Update Dokumentasi</option>
+            <option value="fasilitas">Update Fasilitas TPA</option>
             <option value="poster">Update Poster</option>
           </select>
         </div>
@@ -241,17 +265,28 @@ const UpdatePengumumanPage = ({
                   <th>Aksi</th>
                 </tr>
               ) : null}
+              {isFacilityMode ? (
+                <tr>
+                  <th>Foto</th>
+                  <th>Judul</th>
+                  <th>Keterangan Singkat</th>
+                  <th>Fungsi</th>
+                  <th>Status</th>
+                  <th>Update</th>
+                  <th>Aksi</th>
+                </tr>
+              ) : null}
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={isPosterMode ? 6 : isDocumentationMode ? 7 : 5} className="table__empty">
+                  <td colSpan={isPosterMode ? 6 : isDocumentationMode || isFacilityMode ? 7 : 5} className="table__empty">
                     Memuat daftar update...
                   </td>
                 </tr>
               ) : filteredAnnouncements.length === 0 ? (
                 <tr>
-                  <td colSpan={isPosterMode ? 6 : isDocumentationMode ? 7 : 5} className="table__empty">
+                  <td colSpan={isPosterMode ? 6 : isDocumentationMode || isFacilityMode ? 7 : 5} className="table__empty">
                     Tidak ada data {functionLabelMap[activeFunction].toLowerCase()}.
                   </td>
                 </tr>
@@ -295,6 +330,39 @@ const UpdatePengumumanPage = ({
                         <td><strong>{announcement.title}</strong></td>
                         <td>{announcement.publishStartDate ? formatDateOnly(announcement.publishStartDate) : '-'}</td>
                         <td>{announcement.excerpt || '-'}</td>
+                        <td>{statusLabelMap[announcement.status]}</td>
+                        <td>{formatDateTime(announcement.updatedAt)}</td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              type="button"
+                              className="button button--tiny button--ghost"
+                              onClick={() => onSelectAnnouncement(announcement)}
+                              disabled={isSaving}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="button button--tiny button--danger"
+                              onClick={() => void onDeleteAnnouncement(announcement)}
+                              disabled={deletingAnnouncementId === announcement.id}
+                            >
+                              {deletingAnnouncementId === announcement.id ? 'Menghapus...' : 'Hapus'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  if (isFacilityMode) {
+                    return (
+                      <tr key={announcement.id}>
+                        <td>{renderImageCell(announcement)}</td>
+                        <td><strong>{announcement.title}</strong></td>
+                        <td>{announcement.excerpt || '-'}</td>
+                        <td>{announcement.content || '-'}</td>
                         <td>{statusLabelMap[announcement.status]}</td>
                         <td>{formatDateTime(announcement.updatedAt)}</td>
                         <td>
@@ -382,7 +450,9 @@ const UpdatePengumumanPage = ({
                 placeholder={
                   isGalleryMode
                     ? 'Contoh: Bermain Sensorik'
-                    : 'Contoh: Dokumentasi kegiatan motorik halus'
+                    : isFacilityMode
+                      ? 'Contoh: Area Indoor (Soft Play)'
+                      : 'Contoh: Dokumentasi kegiatan motorik halus'
                 }
               />
             </div>
@@ -473,6 +543,69 @@ const UpdatePengumumanPage = ({
             </div>
           ) : null}
 
+          {isFacilityMode ? (
+            <>
+              <div className="field-group field-group--small">
+                <label className="label" htmlFor="announcementStatusFacility">
+                  Status
+                </label>
+                <select
+                  id="announcementStatusFacility"
+                  className="input"
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      status: event.target.value as LandingAnnouncementStatus,
+                    }))
+                  }
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="facilityShortDescription">
+                  Keterangan Singkat
+                </label>
+                <textarea
+                  id="facilityShortDescription"
+                  className="textarea"
+                  rows={3}
+                  value={form.excerpt}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      excerpt: event.target.value,
+                    }))
+                  }
+                  placeholder="Isi keterangan singkat fasilitas."
+                />
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="facilityFunctionDescription">
+                  Fungsi
+                </label>
+                <textarea
+                  id="facilityFunctionDescription"
+                  className="textarea"
+                  rows={4}
+                  value={form.content}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      content: event.target.value,
+                    }))
+                  }
+                  placeholder="Isi fungsi fasilitas untuk ditampilkan di landing page."
+                />
+              </div>
+            </>
+          ) : null}
+
           {isPosterMode ? (
             <>
               <div className="form-grid form-grid--2">
@@ -516,7 +649,7 @@ const UpdatePengumumanPage = ({
 
           <div className="field-group">
             <label className="label" htmlFor="announcementImage">
-              Foto
+              {isFacilityMode ? 'Gambar Fasilitas' : 'Foto'}
             </label>
             <input
               id="announcementImage"

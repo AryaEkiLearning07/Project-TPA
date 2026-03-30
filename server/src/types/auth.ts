@@ -47,6 +47,7 @@ export interface StaffUser {
   email: string
   role: 'PETUGAS'
   isActive: boolean
+  tanggalMasuk: string
   createdAt: string
   updatedAt: string
 }
@@ -56,4 +57,23 @@ export interface StaffUserInput {
   email: string
   password: string
   isActive: boolean
+  tanggalMasuk: string
+}
+
+export type StaffRegistrationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface StaffRegistrationRequest {
+  id: string
+  fullName: string
+  email: string
+  status: StaffRegistrationRequestStatus
+  registeredAt: string
+  approvedAt: string | null
+  rejectedAt: string | null
+}
+
+export interface StaffRegistrationInput {
+  fullName: string
+  email: string
+  password: string
 }

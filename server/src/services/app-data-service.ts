@@ -11,7 +11,6 @@ import type {
   CarriedItem,
   AttendanceRecord,
   ChildProfile,
-  CommunicationBookEntry,
   IncidentCarriedItem,
   IncidentCategoryKey,
   IncidentReport,
@@ -23,8 +22,6 @@ import type {
 } from '../types/app-data.js'
 
 const APP_DATA_VERSION = 1
-const SUPPLY_INVENTORY_META_KEY = 'supply_inventory_json'
-const OBSERVATION_RECORDS_META_KEY = 'observation_records_json'
 
 type DbGender = 'MALE' | 'FEMALE'
 type DbReligion =
@@ -577,53 +574,6 @@ const toDbAttendanceNotesJson = (record: AttendanceRecord): string =>
     ),
   })
 
-const parseSupplyInventoryJson = (value: unknown): SupplyInventoryItem[] => {
-  if (typeof value !== 'string' || value.length === 0) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-
-    return parsed
-      .filter((item): item is Record<string, unknown> => isObject(item))
-      .map((item) => ({
-        id: toText(item.id),
-        createdAt: toText(item.createdAt) || new Date().toISOString(),
-        updatedAt: toText(item.updatedAt) || new Date().toISOString(),
-        childId: toText(item.childId),
-        productName: toText(item.productName),
-        category: toText(item.category),
-        quantity: Number(item.quantity) || 0,
-        description: toText(item.description),
-        imageDataUrl: toText(item.imageDataUrl),
-        imageName: toText(item.imageName),
-      }))
-      .filter((item) => item.id.length > 0 && item.productName.trim().length > 0)
-  } catch {
-    return []
-  }
-}
-
-const toDbSupplyInventoryJson = (items: SupplyInventoryItem[]): string =>
-  JSON.stringify(
-    (Array.isArray(items) ? items : []).map((item) => ({
-      id: toText(item.id),
-      createdAt: toText(item.createdAt) || new Date().toISOString(),
-      updatedAt: toText(item.updatedAt) || new Date().toISOString(),
-      childId: toText(item.childId).trim(),
-      productName: toText(item.productName).trim(),
-      category: toText(item.category).trim(),
-      quantity: Number(item.quantity) || 0,
-      description: toText(item.description).trim(),
-      imageDataUrl: toText(item.imageDataUrl),
-      imageName: toText(item.imageName),
-    })),
-  )
-
 const toObservationCategory = (value: unknown): ObservationCategory => {
   const normalized = toText(value).trim().toLowerCase()
   if (normalized === 'perlu-latihan') {
@@ -634,81 +584,6 @@ const toObservationCategory = (value: unknown): ObservationCategory => {
   }
   return 'perlu-arahan'
 }
-
-const sanitizeObservationItem = (value: unknown, index: number): ObservationItem => {
-  if (!isObject(value)) {
-    return {
-      id: `observation-item-${index}`,
-      activity: '',
-      indicator: '',
-      category: 'perlu-arahan',
-      notes: '',
-    }
-  }
-
-  return {
-    id: toText(value.id) || `observation-item-${index}`,
-    activity: toText(value.activity),
-    indicator: toText(value.indicator),
-    category: toObservationCategory(value.category),
-    notes: toText(value.notes),
-  }
-}
-
-const parseObservationRecordsJson = (value: unknown): ObservationRecord[] => {
-  if (typeof value !== 'string' || value.length === 0) {
-    return []
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-
-    return parsed
-      .filter((item): item is Record<string, unknown> => isObject(item))
-      .map((item, index) => ({
-        id: toText(item.id) || `observation-${index}`,
-        createdAt: toText(item.createdAt) || new Date().toISOString(),
-        updatedAt: toText(item.updatedAt) || new Date().toISOString(),
-        childId: toText(item.childId),
-        date: toDate(item.date),
-        groupName: toText(item.groupName),
-        observerName: toText(item.observerName),
-        items: Array.isArray(item.items)
-          ? item.items.map((observationItem, itemIndex) =>
-            sanitizeObservationItem(observationItem, itemIndex),
-          )
-          : [],
-      }))
-      .filter((item) => item.id.length > 0 && item.childId.length > 0)
-  } catch {
-    return []
-  }
-}
-
-const toDbObservationRecordsJson = (records: ObservationRecord[]): string =>
-  JSON.stringify(
-    (Array.isArray(records) ? records : [])
-      .map((record) => ({
-        id: toText(record.id),
-        createdAt: toText(record.createdAt) || new Date().toISOString(),
-        updatedAt: toText(record.updatedAt) || new Date().toISOString(),
-        childId: toText(record.childId),
-        date: toDbDate(record.date),
-        groupName: toText(record.groupName),
-        observerName: toText(record.observerName),
-        items: (Array.isArray(record.items) ? record.items : []).map((item, index) => ({
-          id: toText(item.id) || `observation-item-${index}`,
-          activity: toText(item.activity),
-          indicator: toText(item.indicator),
-          category: toObservationCategory(item.category),
-          notes: toText(item.notes),
-        })),
-      }))
-      .filter((record) => record.id.length > 0 && record.childId.length > 0),
-  )
 
 type SqlExecutor = {
   execute: (sql: string, values?: unknown) => Promise<unknown>
@@ -999,16 +874,6 @@ const mapIncidentRow = (row: RowDataPacket): IncidentReport => {
   }
 }
 
-const mapCommunicationRow = (row: RowDataPacket): CommunicationBookEntry => ({
-  id: String(row.id),
-  createdAt: toIsoDateTime(row.created_at),
-  updatedAt: toIsoDateTime(row.updated_at),
-  childId: String(row.child_id),
-  date: toDate(row.entry_date),
-  inventoryItems: parseStringArrayJson(row.inventory_items_json),
-  notes: typeof row.notes === 'string' ? row.notes : '',
-})
-
 export const getAppData = async (): Promise<AppData> => {
   await ensureChildrenTable(dbPool)
   await ensureIncidentReportsSchema(dbPool)
@@ -1048,15 +913,21 @@ export const getAppData = async (): Promise<AppData> => {
 
   // Map observation records with items
   const obsRecords = observationRows[0] ?? []
-  const obsIds = obsRecords.map((r: any) => r.id)
-  let obsItemsMap = new Map<number, ObservationItem[]>()
+  const obsIds = obsRecords
+    .map((record) => Number(record.id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+  const obsItemsMap = new Map<number, ObservationItem[]>()
   if (obsIds.length > 0) {
     const [itemRows] = await dbPool.query<RowDataPacket[]>(
       `SELECT * FROM observation_items WHERE observation_record_id IN (${obsIds.map(() => '?').join(',')}) ORDER BY sort_order ASC`,
       obsIds
     )
     for (const item of itemRows) {
-      const list = obsItemsMap.get(item.observation_record_id) || []
+      const observationRecordId = Number(item.observation_record_id)
+      if (!Number.isFinite(observationRecordId)) {
+        continue
+      }
+      const list = obsItemsMap.get(observationRecordId) || []
       list.push({
         id: String(item.id),
         activity: toText(item.activity),
@@ -1064,22 +935,27 @@ export const getAppData = async (): Promise<AppData> => {
         category: toObservationCategory(item.category),
         notes: toText(item.notes),
       })
-      obsItemsMap.set(item.observation_record_id, list)
+      obsItemsMap.set(observationRecordId, list)
     }
   }
 
-  const observationRecords: ObservationRecord[] = obsRecords.map((row: any) => ({
-    id: String(row.id),
-    createdAt: toIsoDateTime(row.created_at),
-    updatedAt: toIsoDateTime(row.updated_at),
-    childId: String(row.child_id),
-    date: toDate(row.observation_date),
-    groupName: toText(row.group_name),
-    observerName: toText(row.observer_name),
-    items: obsItemsMap.get(row.id) || [],
-  }))
+  const observationRecords: ObservationRecord[] = obsRecords.map((row) => {
+    const observationRecordId = Number(row.id)
+    return {
+      id: String(row.id),
+      createdAt: toIsoDateTime(row.created_at),
+      updatedAt: toIsoDateTime(row.updated_at),
+      childId: String(row.child_id),
+      date: toDate(row.observation_date),
+      groupName: toText(row.group_name),
+      observerName: toText(row.observer_name),
+      items: Number.isFinite(observationRecordId)
+        ? obsItemsMap.get(observationRecordId) || []
+        : [],
+    }
+  })
 
-  const supplyInventory: SupplyInventoryItem[] = (supplyRows[0] ?? []).map((row: any) => ({
+  const supplyInventory: SupplyInventoryItem[] = (supplyRows[0] ?? []).map((row) => ({
     id: String(row.id),
     createdAt: toIsoDateTime(row.created_at),
     updatedAt: toIsoDateTime(row.updated_at),
@@ -1267,19 +1143,6 @@ const serializeIncident = (report: IncidentReport, childId: number) => {
     updatedAt: toDbDateTime(report.updatedAt),
   }
 }
-
-const serializeCommunication = (entry: CommunicationBookEntry, childId: number) => ({
-  childId,
-  date: toDbDate(entry.date),
-  inventoryItemsJson: JSON.stringify(
-    (Array.isArray(entry.inventoryItems) ? entry.inventoryItems : [])
-      .map((item) => toText(item).trim())
-      .filter(Boolean),
-  ),
-  notes: toNullable(entry.notes),
-  createdAt: toDbDateTime(entry.createdAt),
-  updatedAt: toDbDateTime(entry.updatedAt),
-})
 
 const insertChild = async (
   connection: PoolConnection,

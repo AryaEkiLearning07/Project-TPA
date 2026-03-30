@@ -242,6 +242,7 @@ export interface StaffUser {
   email: string
   role: 'PETUGAS'
   isActive: boolean
+  tanggalMasuk: string
   createdAt: string
   updatedAt: string
 }
@@ -254,7 +255,31 @@ export interface StaffUserInput {
   tanggalMasuk: string
 }
 
-export type LandingAnnouncementCategory = 'event' | 'dokumentasi' | 'galeri' | 'promosi' | 'ucapan'
+export type StaffRegistrationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+
+export interface StaffRegistrationRequest {
+  id: string
+  fullName: string
+  email: string
+  status: StaffRegistrationRequestStatus
+  registeredAt: string
+  approvedAt: string | null
+  rejectedAt: string | null
+}
+
+export interface StaffRegistrationInput {
+  fullName: string
+  email: string
+  password: string
+}
+
+export type LandingAnnouncementCategory =
+  | 'event'
+  | 'dokumentasi'
+  | 'galeri'
+  | 'fasilitas'
+  | 'promosi'
+  | 'ucapan'
 export type LandingAnnouncementStatus = 'draft' | 'published' | 'archived'
 export type LandingAnnouncementDisplayMode = 'section' | 'hero' | 'popup'
 
@@ -449,6 +474,8 @@ export interface ServiceBillingSummaryRow {
   migrationInfo: ServiceBillingMigrationInfo | null
   needsUpgradeConfirmation: boolean
   lastPaymentAt: string
+  lastPaymentProofDataUrl: string
+  lastPaymentProofName: string
   lastTransactionAt: string
 }
 

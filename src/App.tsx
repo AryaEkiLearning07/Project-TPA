@@ -148,6 +148,25 @@ const App = () => {
     }
   }
 
+  const handleRegisterStaff = async (payload: {
+    fullName: string
+    email: string
+    password: string
+  }) => {
+    setSubmittingAuth(true)
+    setAuthError(null)
+    try {
+      await authApi.registerStaff(payload)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Pendaftaran akun petugas gagal.'
+      setAuthError(message)
+      throw error
+    } finally {
+      setSubmittingAuth(false)
+    }
+  }
+
   const handleLogout = async () => {
     try {
       await authApi.logout()
@@ -181,7 +200,7 @@ const App = () => {
       events.forEach(e => window.removeEventListener(e, resetTimer))
       window.clearInterval(interval)
     }
-  }, [session])
+  }, [INACTIVITY_TIMEOUT, session])
 
   const searchParams = new URLSearchParams(window.location.search)
   const normalizedPath = (window.location.pathname || '/').replace(/\/+$/, '') || '/'
@@ -259,6 +278,7 @@ const App = () => {
         initialMode={initialAuthMode}
         onSubmit={handleLogin}
         onRegisterParent={isParentPortalEntry ? handleRegisterParent : undefined}
+        onRegisterStaff={isParentPortalEntry ? undefined : handleRegisterStaff}
       />
     )
   }

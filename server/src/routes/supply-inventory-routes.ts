@@ -6,7 +6,6 @@ import {
     ServiceError,
     updateSupplyItem,
 } from '../services/supply-inventory-service.js'
-import type { SupplyInventoryItemInput } from '../types/index.js'
 import {
     requireAuth,
     requirePetugasCheckedIn,
@@ -25,7 +24,7 @@ router.get('/', async (_req: Request, res: Response) => {
     try {
         const items = await getSupplyInventory()
         res.json({ success: true, data: items })
-    } catch (error) {
+    } catch {
         res.status(500).json({ success: false, message: 'Gagal memuat inventori' })
     }
 })

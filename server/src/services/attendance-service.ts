@@ -1,9 +1,8 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
-import type { AttendanceRecord, AttendanceRecordInput, DbAttendanceNotes } from '../types/index.js'
+import type { AttendanceRecord, AttendanceRecordInput } from '../types/index.js'
 import {
     parseAttendanceNotesJson,
-    toAttendanceNotesJson,
     toDate,
     toDbAttendanceNotesJson,
     toDbDate,
@@ -11,7 +10,6 @@ import {
     toDbTime,
     toIsoDateTime,
     toTime,
-    toNumericDbId,
 } from '../utils/data-mappers.js'
 import { toText } from '../utils/string-utils.js'
 import { saveBase64ToDisk } from '../utils/base64-storage.js'
@@ -66,7 +64,6 @@ const serializeAttendance = (record: AttendanceRecord, childId: number) => ({
 import { ServiceError } from '../utils/service-error.js'
 export { ServiceError }
 
-const createId = (): string => `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 const nowIso = (): string => new Date().toISOString()
 
 export const getAttendanceRecords = async (month?: string): Promise<AttendanceRecord[]> => {

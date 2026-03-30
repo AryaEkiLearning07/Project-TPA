@@ -12,6 +12,7 @@ import {
 } from '../services/parent-portal-service.js'
 import type { LoginInput } from '../types/auth.js'
 import { sanitizeServerErrorMessage } from '../utils/error-sanitizer.js'
+import { registerStaffRequest } from '../services/staff-user-service.js'
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
@@ -49,6 +50,22 @@ const parseParentRegistrationPayload = (value: unknown): {
     email: toText(value.email),
     password: toText(value.password),
     registrationCode: toText(value.registrationCode),
+  }
+}
+
+const parseStaffRegistrationPayload = (value: unknown): {
+  fullName: string
+  email: string
+  password: string
+} => {
+  if (!isObject(value)) {
+    throw new AuthServiceError(400, 'Payload pendaftaran petugas tidak valid.')
+  }
+
+  return {
+    fullName: toText(value.fullName),
+    email: toText(value.email),
+    password: toText(value.password),
   }
 }
 
@@ -135,6 +152,23 @@ router.post('/auth/register-parent-with-code', async (req, res) => {
         dashboard: result.dashboard,
       },
       message: 'Akun orang tua berhasil dibuat.',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.post('/auth/register-staff', async (req, res) => {
+  try {
+    const payload = parseStaffRegistrationPayload(req.body)
+    const request = await registerStaffRequest(payload)
+
+    res.status(201).json({
+      success: true,
+      data: request,
+      message:
+        'Pendaftaran petugas berhasil. Akun Anda menunggu persetujuan admin.',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

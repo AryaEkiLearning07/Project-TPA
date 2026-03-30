@@ -461,7 +461,7 @@ export const parseObservationRecordsJson = (value: unknown): ObservationRecord[]
                 groupName: toText(item.groupName),
                 observerName: toText(item.observerName),
                 items: Array.isArray(item.items)
-                    ? item.items.map((observationItem: any, itemIndex: number) =>
+                    ? item.items.map((observationItem: unknown, itemIndex: number) =>
                         sanitizeObservationItem(observationItem, itemIndex),
                     )
                     : [],

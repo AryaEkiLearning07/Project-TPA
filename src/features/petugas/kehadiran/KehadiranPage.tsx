@@ -728,17 +728,17 @@ const KehadiranPage = ({
                     className={`textarea ${!form.childId ? 'input--locked' : ''}`}
                     rows={2}
                     value={form.parentMessage}
-                    onChange={(event) => setField('parentMessage', event.target.value)}
                     placeholder={
                       !form.childId
                         ? 'Silahkan pilih nama anak'
-                        : 'Tuliskan pesan dari orang tua'
+                        : 'Pesan dari orang tua tampil otomatis'
                     }
-                    disabled={!form.childId}
+                    disabled
+                    readOnly
                   />
-                  {errors.parentMessage ? (
-                    <p className="field-error">{errors.parentMessage}</p>
-                  ) : null}
+                  <p className="field-hint">
+                    Field ini hanya ditulis dari Portal Orang Tua.
+                  </p>
                 </div>
 
                 <div id="tour-kehadiran-message-for-parent" className="field-group" style={{ marginTop: '0.82rem' }}>

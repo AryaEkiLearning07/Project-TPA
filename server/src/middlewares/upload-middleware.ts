@@ -82,11 +82,9 @@ export interface CompressedFileInfo {
 }
 
 // Extend Express Request
-declare global {
-    namespace Express {
-        interface Request {
-            compressedFiles?: CompressedFileInfo[];
-        }
+declare module 'express-serve-static-core' {
+    interface Request {
+        compressedFiles?: CompressedFileInfo[];
     }
 }
 

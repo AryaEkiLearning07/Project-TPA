@@ -5,6 +5,7 @@ import type {
   RowDataPacket,
 } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
+import { saveBase64ToDisk } from '../utils/base64-storage.js'
 
 type SqlExecutor = Pick<Pool, 'execute'> | Pick<PoolConnection, 'execute'>
 
@@ -12,6 +13,7 @@ const LANDING_ANNOUNCEMENT_CATEGORIES = [
   'event',
   'dokumentasi',
   'galeri',
+  'fasilitas',
   'promosi',
   'ucapan',
 ] as const
@@ -106,6 +108,38 @@ export class LandingAnnouncementError extends Error {
 }
 
 const toText = (value: unknown): string => (typeof value === 'string' ? value : '')
+
+const normalizeImageAssetUrl = (value: unknown): string => {
+  const normalized = toText(value).trim()
+  if (!normalized) return ''
+  if (normalized.startsWith('data:image/')) return normalized
+  if (/^https?:\/\//i.test(normalized)) return normalized
+  if (normalized.startsWith('/landing-media/')) return normalized
+  if (normalized.startsWith('landing-media/')) return `/${normalized}`
+  if (normalized.startsWith('/uploads/')) {
+    return `/landing-media/${normalized.slice('/uploads/'.length)}`
+  }
+  if (normalized.startsWith('uploads/')) {
+    return `/landing-media/${normalized.slice('uploads/'.length)}`
+  }
+  return ''
+}
+
+const normalizeImageStorageReference = (value: unknown): string => {
+  const normalized = toText(value).trim()
+  if (!normalized) return ''
+  if (normalized.startsWith('data:image/')) return normalized
+  if (/^https?:\/\//i.test(normalized)) return normalized
+  if (normalized.startsWith('/landing-media/')) {
+    return `uploads/${normalized.slice('/landing-media/'.length)}`
+  }
+  if (normalized.startsWith('landing-media/')) {
+    return `uploads/${normalized.slice('landing-media/'.length)}`
+  }
+  if (normalized.startsWith('/uploads/')) return normalized.slice(1)
+  if (normalized.startsWith('uploads/')) return normalized
+  return ''
+}
 
 const toIsoDateTime = (value: Date | string | null | undefined): string => {
   if (!value) {
@@ -235,7 +269,7 @@ const mapLandingAnnouncementRow = (row: LandingAnnouncementRow): LandingAnnounce
     : 'section',
   excerpt: toText(row.excerpt),
   content: toText(row.content),
-  coverImageDataUrl: toText(row.cover_image_data_url),
+  coverImageDataUrl: normalizeImageAssetUrl(row.cover_image_data_url),
   coverImageName: toText(row.cover_image_name),
   ctaLabel: toText(row.cta_label),
   ctaUrl: toText(row.cta_url),
@@ -311,7 +345,7 @@ const sanitizeInput = (input: LandingAnnouncementInput): Required<
     displayMode,
     excerpt: toText(input.excerpt).trim().slice(0, 320),
     content: toText(input.content).trim(),
-    coverImageDataUrl: toText(input.coverImageDataUrl).trim(),
+    coverImageDataUrl: normalizeImageStorageReference(input.coverImageDataUrl),
     coverImageName: toText(input.coverImageName).trim().slice(0, 255),
     ctaLabel: toNullableTrimmedText(input.ctaLabel, 120) ?? '',
     ctaUrl: toNullableTrimmedText(input.ctaUrl, 512) ?? '',
@@ -434,7 +468,7 @@ export const ensureLandingAnnouncementSchema = async (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       slug VARCHAR(180) NOT NULL,
       title VARCHAR(180) NOT NULL,
-      category ENUM('event', 'dokumentasi', 'galeri', 'promosi', 'ucapan') NOT NULL DEFAULT 'event',
+      category ENUM('event', 'dokumentasi', 'galeri', 'fasilitas', 'promosi', 'ucapan') NOT NULL DEFAULT 'event',
       display_mode ENUM('section', 'hero', 'popup') NOT NULL DEFAULT 'section',
       excerpt VARCHAR(320) NULL,
       content LONGTEXT NULL,
@@ -459,7 +493,7 @@ export const ensureLandingAnnouncementSchema = async (
 
   await executor.execute(
     `ALTER TABLE landing_announcements
-    MODIFY COLUMN category ENUM('event', 'dokumentasi', 'galeri', 'promosi', 'ucapan') NOT NULL DEFAULT 'event'`,
+    MODIFY COLUMN category ENUM('event', 'dokumentasi', 'galeri', 'fasilitas', 'promosi', 'ucapan') NOT NULL DEFAULT 'event'`,
   )
 
   const displayModeExists = await hasDisplayModeColumn(executor)
@@ -580,6 +614,10 @@ export const createLandingAnnouncement = async (
     const nextSlug = await resolveUniqueSlug(connection, payload.slug)
     const shouldPublish = payload.status === 'published'
     const publishedAt = shouldPublish ? toDbDateTime(new Date()) : null
+    const coverImageDataUrl = await saveBase64ToDisk(
+      payload.coverImageDataUrl,
+      'landing_announcement',
+    )
 
     const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO landing_announcements (
@@ -608,7 +646,7 @@ export const createLandingAnnouncement = async (
         payload.displayMode,
         payload.excerpt || null,
         payload.content || null,
-        payload.coverImageDataUrl || null,
+        coverImageDataUrl || null,
         payload.coverImageName || null,
         payload.ctaLabel || null,
         payload.ctaUrl || null,
@@ -661,6 +699,10 @@ export const updateLandingAnnouncement = async (
     const nextPublishedAt = shouldPublish
       ? existingPublishedAt ?? toDbDateTime(new Date())
       : null
+    const coverImageDataUrl = await saveBase64ToDisk(
+      payload.coverImageDataUrl,
+      'landing_announcement',
+    )
 
     await connection.execute(
       `UPDATE landing_announcements
@@ -691,7 +733,7 @@ export const updateLandingAnnouncement = async (
         payload.displayMode,
         payload.excerpt || null,
         payload.content || null,
-        payload.coverImageDataUrl || null,
+        coverImageDataUrl || null,
         payload.coverImageName || null,
         payload.ctaLabel || null,
         payload.ctaUrl || null,

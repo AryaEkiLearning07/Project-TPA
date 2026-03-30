@@ -10,6 +10,7 @@ const CATEGORY_SET = new Set<LandingAnnouncementCategory>([
   'event',
   'dokumentasi',
   'galeri',
+  'fasilitas',
   'promosi',
   'ucapan',
 ])

@@ -44,7 +44,7 @@ const mapRecordRow = (row: ObsRecordRow, items: ObservationItem[]): ObservationR
     updatedAt: String(row.updated_at),
 })
 
-const mapItemRow = (row: ObsItemRow, index: number): ObservationItem => ({
+const mapItemRow = (row: ObsItemRow): ObservationItem => ({
     id: String(row.id),
     activity: toText(row.activity),
     indicator: toText(row.indicator),
@@ -57,7 +57,7 @@ const loadItemsForRecord = async (recordId: number): Promise<ObservationItem[]> 
         'SELECT * FROM observation_items WHERE observation_record_id = ? ORDER BY sort_order ASC',
         [recordId]
     )
-    return rows.map((row, i) => mapItemRow(row, i))
+    return rows.map((row) => mapItemRow(row))
 }
 
 export const getObservationRecords = async (month?: string): Promise<ObservationRecord[]> => {
@@ -84,7 +84,7 @@ export const getObservationRecords = async (month?: string): Promise<Observation
     const itemsByRecord = new Map<number, ObservationItem[]>()
     for (const item of allItems) {
         const list = itemsByRecord.get(item.observation_record_id) || []
-        list.push(mapItemRow(item, list.length))
+        list.push(mapItemRow(item))
         itemsByRecord.set(item.observation_record_id, list)
     }
 

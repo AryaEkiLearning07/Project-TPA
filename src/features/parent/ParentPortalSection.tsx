@@ -33,6 +33,7 @@ const LOGO_SRC = `${import.meta.env.BASE_URL}logo_TPA.jpg`
 const ACTIVE_CHILD_STORAGE_KEY = 'tpa-parent-active-child'
 const PARENT_THEME_STORAGE_KEY = 'tpa-parent-theme'
 const PARENT_DASHBOARD_BACKGROUND_SYNC_MS = 15000
+const PARENT_WELCOME_POPUP_STORAGE_PREFIX = 'tpa-parent:welcome-popup'
 
 type ParentMenuKey = 'dashboard' | 'daily-logs' | 'billing' | 'profile' | 'inventory'
 type ParentTheme = 'light' | 'dark'
@@ -154,6 +155,8 @@ const getAgeLabel = (birthDate: string) => {
 }
 
 const getChildStorageKey = (userId: string) => `${ACTIVE_CHILD_STORAGE_KEY}:${userId}`
+const getParentWelcomePopupStorageKey = (userId: string) =>
+  `${PARENT_WELCOME_POPUP_STORAGE_PREFIX}:${userId}`
 
 const getInitialTheme = (): ParentTheme => {
   if (typeof window === 'undefined') {
@@ -267,6 +270,7 @@ export default function ParentPortalSection({
   user,
   onLogout: _onLogout,
 }: ParentPortalSectionProps) {
+  void _onLogout
   const [theme, setTheme] = useState<ParentTheme>(() => getInitialTheme())
   const [activeMenu, setActiveMenu] = useState<ParentMenuKey>('dashboard')
   const [dashboardData, setDashboardData] = useState<ParentDashboardPayload | null>(null)
@@ -285,16 +289,17 @@ export default function ParentPortalSection({
   const [isSavingParentMessage, setIsSavingParentMessage] = useState(false)
   const [parentMessageSaveInfo, setParentMessageSaveInfo] = useState<string | null>(null)
   const [isChildSelectorForced, setChildSelectorForced] = useState(false)
+  const [isWelcomePopupVisible, setWelcomePopupVisible] = useState(false)
   const dashboardRequestIdRef = useRef(0)
   const isHeaderHidden = useHideOnScroll()
 
-  const clearSelectedChildSession = () => {
+  const clearSelectedChildSession = useCallback(() => {
     window.localStorage.removeItem(getChildStorageKey(user.id))
-  }
+  }, [user.id])
 
-  const saveSelectedChildSession = (childId: string) => {
+  const saveSelectedChildSession = useCallback((childId: string) => {
     window.localStorage.setItem(getChildStorageKey(user.id), childId)
-  }
+  }, [user.id])
 
   const loadDashboard = useCallback(async (options?: { silent?: boolean }) => {
     const requestId = ++dashboardRequestIdRef.current
@@ -344,7 +349,7 @@ export default function ParentPortalSection({
         setIsLoading(false)
       }
     }
-  }, [activeChildId, isChildSelectorForced, user.id])
+  }, [activeChildId, clearSelectedChildSession, isChildSelectorForced, saveSelectedChildSession])
 
   useEffect(() => {
     void loadDashboard()
@@ -407,7 +412,22 @@ export default function ParentPortalSection({
   useEffect(() => {
     setParentMessageDraft(todayReport?.parentMessage ?? '')
     setParentMessageSaveInfo(null)
-  }, [activeChildId, todayReport?.attendanceId])
+  }, [activeChildId, todayReport?.attendanceId, todayReport?.parentMessage])
+
+  useEffect(() => {
+    if (!activeChild) {
+      setWelcomePopupVisible(false)
+      return
+    }
+
+    const storageKey = getParentWelcomePopupStorageKey(user.id)
+    const hasShownPopup = window.localStorage.getItem(storageKey) === '1'
+    if (hasShownPopup) {
+      return
+    }
+
+    setWelcomePopupVisible(true)
+  }, [activeChild, user.id])
 
   const billing = activeChild
     ? dashboardData?.billingByChild?.[activeChild.id] ?? null
@@ -523,6 +543,12 @@ export default function ParentPortalSection({
     setActiveMenu('dashboard')
     setLinkFormOpen(false)
     setParentMessageSaveInfo(null)
+  }
+
+  const closeWelcomePopup = () => {
+    const storageKey = getParentWelcomePopupStorageKey(user.id)
+    window.localStorage.setItem(storageKey, '1')
+    setWelcomePopupVisible(false)
   }
 
   const handleSaveParentMessage = async (event: FormEvent<HTMLFormElement>) => {
@@ -1419,6 +1445,33 @@ export default function ParentPortalSection({
 
         {dashboardData && activeChild ? renderPortalContent() : null}
       </main>
+
+      {isWelcomePopupVisible && activeChild ? (
+        <div
+          className="app-confirm-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeWelcomePopup()
+            }
+          }}
+        >
+          <div className="app-greeting-dialog" role="dialog" aria-modal="true" aria-label="Ucapan selamat datang orang tua">
+            <div className="app-greeting-dialog__badge">
+              <img src={LOGO_SRC} alt="Logo TPA Rumah Ceria" />
+              <span>Selamat Datang</span>
+            </div>
+            <h3>Selamat datang Ayah/Bunda</h3>
+            <p>
+              Terimakasih telah mempercayai TPA RUMAH CERIA UBAYA untuk menjadi bagian dari perkembangan anak anda.
+            </p>
+            <div className="app-greeting-dialog__footer">
+              <button type="button" className="button" onClick={closeWelcomePopup}>
+                Mulai Monitoring
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {activeChild ? (
         <nav className="parent-solid-mobile-nav" aria-label="Bottom navigation orang tua">

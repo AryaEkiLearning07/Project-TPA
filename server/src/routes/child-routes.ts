@@ -7,7 +7,7 @@ import {
     getChildren,
     updateChild,
 } from '../services/child-service.js'
-import type { ChildProfile, ChildProfileInput } from '../types/index.js'
+import type { ChildProfile } from '../types/index.js'
 import {
     normalizeUserRole,
     requireAuth,
@@ -26,6 +26,21 @@ const respondChildError = (
 ) => {
     if (error instanceof ServiceError) {
         res.status(error.statusCode).json({ success: false, message: error.message })
+        return
+    }
+
+    if (
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        typeof (error as { status?: unknown }).status === 'number'
+    ) {
+        const status = (error as { status: number }).status
+        const message =
+            error instanceof Error && error.message.trim().length > 0
+                ? error.message
+                : fallbackMessage
+        res.status(status).json({ success: false, message })
         return
     }
 

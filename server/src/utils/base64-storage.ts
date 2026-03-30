@@ -13,19 +13,6 @@ export const isBase64Image = (value: unknown): value is string => {
 }
 
 /**
- * Mengambil ekstensi file dari MIME type di Data URL
- */
-const getExtFromMime = (dataUrl: string): string => {
-    const match = /^data:(image\/[a-zA-Z+]+);base64,/.exec(dataUrl)
-    const mime = match ? match[1] : 'image/jpeg'
-
-    if (mime.includes('png')) return '.png'
-    if (mime.includes('webp')) return '.webp'
-    if (mime.includes('avif')) return '.avif'
-    return '.jpg'
-}
-
-/**
  * Menyimpan Base64 Image ke Disk dangan Auto-Compress
  * 
  * @param base64Data - String base64 (Data URL)
@@ -41,7 +28,7 @@ export const saveBase64ToDisk = async (
     }
 
     // Pisahkan header Base64 dari datanya
-    const [header, body] = base64Data.split(';base64,')
+    const [, body] = base64Data.split(';base64,')
     const buffer = Buffer.from(body, 'base64')
 
     // Tentukan path penyimpanan (Folder per bulan)

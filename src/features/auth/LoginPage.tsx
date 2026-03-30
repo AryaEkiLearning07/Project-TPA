@@ -14,6 +14,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 const PLATFORM_LOGO_SRC = `${import.meta.env.BASE_URL}logo_TPA.jpg`
 const PARENT_DEACTIVATED_MESSAGE =
   'Akun Anda telah dinonaktifkan. Silahkan hubungi admin untuk mengaktifkan kembali.'
+const STAFF_PENDING_APPROVAL_KEYWORD = 'menunggu persetujuan admin'
 
 type AuthMode = 'login' | 'register'
 type LoginPageVariant = 'default' | 'parent-portal'
@@ -33,6 +34,11 @@ interface LoginPageProps {
     password: string
     registrationCode: string
   }) => Promise<void>
+  onRegisterStaff?: (payload: {
+    fullName: string
+    email: string
+    password: string
+  }) => Promise<void>
 }
 
 const LoginPage = ({
@@ -42,10 +48,12 @@ const LoginPage = ({
   initialMode = 'login',
   onSubmit,
   onRegisterParent,
+  onRegisterStaff,
 }: LoginPageProps) => {
   const [authMode, setAuthMode] = useState<AuthMode>(initialMode)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
+  const [registerFullName, setRegisterFullName] = useState('')
   const [registerEmail, setRegisterEmail] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [registrationCode, setRegistrationCode] = useState('')
@@ -54,12 +62,11 @@ const LoginPage = ({
   const [localError, setLocalError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const isParentPortalVariant = variant === 'parent-portal'
-
-  useEffect(() => {
-    setAuthMode(initialMode)
-    setLocalError(null)
-    setSuccessMessage(null)
-  }, [initialMode])
+  const isStaffPendingApproval = Boolean(
+    !isParentPortalVariant &&
+      errorMessage &&
+      errorMessage.toLowerCase().includes(STAFF_PENDING_APPROVAL_KEYWORD),
+  )
 
   useEffect(() => {
     if (!errorMessage) {
@@ -106,6 +113,49 @@ const LoginPage = ({
     setSuccessMessage(null)
 
     const normalizedEmail = registerEmail.trim().toLowerCase()
+    if (isParentPortalVariant) {
+      if (!normalizedEmail) {
+        setLocalError('Email wajib diisi.')
+        return
+      }
+      if (!registerPassword.trim()) {
+        setLocalError('Password wajib diisi.')
+        return
+      }
+      if (!registrationCode.trim()) {
+        setLocalError('Kode registrasi wajib diisi.')
+        return
+      }
+      if (!onRegisterParent) {
+        setLocalError('Pendaftaran akun orang tua belum tersedia di halaman ini.')
+        return
+      }
+
+      try {
+        await onRegisterParent({
+          email: normalizedEmail,
+          password: registerPassword,
+          registrationCode: registrationCode.trim().toUpperCase(),
+        })
+        setAuthMode('login')
+        setLoginEmail(normalizedEmail)
+        setLoginPassword('')
+        setRegisterEmail('')
+        setRegisterPassword('')
+        setRegistrationCode('')
+        setShowRegisterPassword(false)
+        setSuccessMessage('Pendaftaran Berhasil, Silahkan Masuk')
+      } catch {
+        // Error ditampilkan dari parent.
+      }
+      return
+    }
+
+    const normalizedFullName = registerFullName.trim()
+    if (!normalizedFullName) {
+      setLocalError('Nama lengkap wajib diisi.')
+      return
+    }
     if (!normalizedEmail) {
       setLocalError('Email wajib diisi.')
       return
@@ -114,29 +164,27 @@ const LoginPage = ({
       setLocalError('Password wajib diisi.')
       return
     }
-    if (!registrationCode.trim()) {
-      setLocalError('Kode registrasi wajib diisi.')
-      return
-    }
-    if (!onRegisterParent) {
-      setLocalError('Pendaftaran akun orang tua belum tersedia di halaman ini.')
+    if (!onRegisterStaff) {
+      setLocalError('Pendaftaran akun petugas belum tersedia di halaman ini.')
       return
     }
 
     try {
-      await onRegisterParent({
+      await onRegisterStaff({
+        fullName: normalizedFullName,
         email: normalizedEmail,
         password: registerPassword,
-        registrationCode: registrationCode.trim().toUpperCase(),
       })
       setAuthMode('login')
       setLoginEmail(normalizedEmail)
       setLoginPassword('')
+      setRegisterFullName('')
       setRegisterEmail('')
       setRegisterPassword('')
-      setRegistrationCode('')
       setShowRegisterPassword(false)
-      setSuccessMessage('Pendaftaran Berhasil, Silahkan Masuk')
+      setSuccessMessage(
+        'Pendaftaran berhasil. Akun Anda menunggu persetujuan admin.',
+      )
     } catch {
       // Error ditampilkan dari parent.
     }
@@ -152,10 +200,14 @@ const LoginPage = ({
   const cardTitle =
     authMode === 'register' && isParentPortalVariant
       ? 'Daftar Akun Orang Tua'
+      : authMode === 'register' && !isParentPortalVariant
+        ? 'Daftar Akun Petugas'
       : 'Masuk ke Dashboard'
   const cardSubtitle =
     authMode === 'register' && isParentPortalVariant
       ? 'Silahkan daftarkan akun untuk dapat mengakses dashboard monitoring putra putri anda.'
+      : authMode === 'register' && !isParentPortalVariant
+        ? 'Daftarkan akun petugas Anda. Akses dashboard aktif setelah disetujui admin.'
       : isParentPortalVariant
         ? 'Silahkan login untuk membuka dashboard monitoring putra putri anda'
         : 'Masuk untuk mengakses panel pengelolaan TPA Anda.'
@@ -231,8 +283,31 @@ const LoginPage = ({
           <p className="auth-card__subtitle">{cardSubtitle}</p>
         </div>
 
-        {authMode === 'register' && isParentPortalVariant && onRegisterParent ? (
+        {authMode === 'register' &&
+        ((isParentPortalVariant && onRegisterParent) ||
+          (!isParentPortalVariant && onRegisterStaff)) ? (
           <form className="auth-form auth-form--stacked" onSubmit={handleRegisterSubmit}>
+            {!isParentPortalVariant ? (
+              <div className="field-group">
+                <label className="label" htmlFor="registerFullName">
+                  Nama Lengkap
+                </label>
+                <div className="input-with-icon">
+                  <Users size={16} />
+                  <input
+                    id="registerFullName"
+                    className="input"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="Masukkan Nama Lengkap Anda"
+                    value={registerFullName}
+                    onChange={(event) => setRegisterFullName(event.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            ) : null}
+
             <div className="field-group">
               <label className="label" htmlFor="registerEmail">
                 Email
@@ -281,24 +356,26 @@ const LoginPage = ({
               </div>
             </div>
 
-            <div className="field-group">
-              <label className="label" htmlFor="registerCode">
-                Kode Registrasi Anak
-              </label>
-              <div className="input-with-icon">
-                <KeyRound size={16} />
-                <input
-                  id="registerCode"
-                  className="input"
-                  type="text"
-                  autoCapitalize="characters"
-                  placeholder="Masukkan Kode Registrasi"
-                  value={registrationCode}
-                  onChange={(event) => setRegistrationCode(event.target.value.toUpperCase())}
-                  disabled={isLoading}
-                />
+            {isParentPortalVariant ? (
+              <div className="field-group">
+                <label className="label" htmlFor="registerCode">
+                  Kode Registrasi Anak
+                </label>
+                <div className="input-with-icon">
+                  <KeyRound size={16} />
+                  <input
+                    id="registerCode"
+                    className="input"
+                    type="text"
+                    autoCapitalize="characters"
+                    placeholder="Masukkan Kode Registrasi"
+                    value={registrationCode}
+                    onChange={(event) => setRegistrationCode(event.target.value.toUpperCase())}
+                    disabled={isLoading}
+                  />
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {localError ? <p className="field-error">{localError}</p> : null}
             {errorMessage ? <p className="field-error">{errorMessage}</p> : null}
@@ -404,10 +481,43 @@ const LoginPage = ({
                   Daftar disini
                 </button>
               </p>
+            ) : !isParentPortalVariant && onRegisterStaff ? (
+              <p className="auth-form__switch-text">
+                Belum punya akun petugas?{' '}
+                <button
+                  type="button"
+                  className="auth-form__switch-link"
+                  onClick={() => {
+                    setAuthMode('register')
+                    setLocalError(null)
+                    setSuccessMessage(null)
+                  }}
+                  disabled={isLoading}
+                >
+                  Daftar disini
+                </button>
+              </p>
             ) : null}
           </form>
         )}
       </div>
+
+      {isStaffPendingApproval ? (
+        <div className="app-confirm-overlay">
+          <div className="app-confirm-dialog" role="alertdialog" aria-modal="true">
+            <h3>Pendaftaran Menunggu Persetujuan</h3>
+            <p>
+              Akun petugas Anda sudah terdaftar tetapi belum disetujui admin. Akses
+              dashboard akan aktif setelah proses approve selesai.
+            </p>
+            <div className="app-greeting-dialog__footer">
+              <span className="app-greeting-dialog__countdown">
+                Silakan tunggu konfirmasi dari admin, lalu coba login kembali.
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

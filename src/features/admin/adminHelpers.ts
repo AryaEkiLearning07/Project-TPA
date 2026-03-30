@@ -35,7 +35,12 @@ export type MonitoringSubTab =
     | 'berita-acara'
     | 'kehadiran-petugas'
     | 'layanan'
-export type SettingsSubTab = 'petugas' | 'orang-tua' | 'update-pengumuman' | 'logs' | 'backup'
+export type SettingsSubTab =
+    | 'petugas'
+    | 'orang-tua'
+    | 'update-pengumuman'
+    | 'logs'
+    | 'backup'
 
 export interface AdminNavigationState {
     scope: 'admin'
@@ -262,12 +267,27 @@ export const ACTIVITY_LOG_LIMIT_OPTIONS = [20, 50, 100, 500, 1000]
 
 // ─── Staff service calculation ────────────────────────────────────────────────
 
+const parseDateOnlyInput = (value: string): Date | null => {
+    if (!value) {
+        return null
+    }
+
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    const parsed = new Date(isDateOnly ? `${value}T00:00:00` : value)
+    if (Number.isNaN(parsed.getTime())) {
+        return null
+    }
+
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
+}
+
 // Calculate service length from tanggalMasuk to current date
 export const calculateServiceLength = (tanggalMasuk: string): string => {
-    const start = new Date(tanggalMasuk)
-    const now = new Date()
+    const start = parseDateOnlyInput(tanggalMasuk)
+    const nowRaw = new Date()
+    const now = new Date(nowRaw.getFullYear(), nowRaw.getMonth(), nowRaw.getDate())
 
-    if (isNaN(start.getTime())) {
+    if (!start) {
         return '-'
     }
 
@@ -296,9 +316,10 @@ export const calculateServiceLength = (tanggalMasuk: string): string => {
 
 // Check if staff is senior (> 1 year of service)
 export const calculateIsSenior = (tanggalMasuk: string): boolean => {
-    const start = new Date(tanggalMasuk)
-    const now = new Date()
-    if (isNaN(start.getTime())) return false
+    const start = parseDateOnlyInput(tanggalMasuk)
+    const nowRaw = new Date()
+    const now = new Date(nowRaw.getFullYear(), nowRaw.getMonth(), nowRaw.getDate())
+    if (!start) return false
     const yearsDiff = (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
     return yearsDiff > 1
 }
@@ -393,8 +414,8 @@ export const formatDateOnly = (value: string): string => {
         return '-'
     }
 
-    const parsed = new Date(value)
-    if (Number.isNaN(parsed.getTime())) {
+    const parsed = parseDateOnlyInput(value)
+    if (!parsed) {
         return value
     }
 

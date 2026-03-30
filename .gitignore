@@ -18,6 +18,7 @@ server/.env
 .chrome-headless/
 .edge-headless/
 .codex_write_test.tmp
+ARCHIVE_PRE_PRODUCTION_*/
 
 # Sensitive data files
 *.sql
@@ -34,3 +35,5 @@ server/uploads/
 *.njsproj
 *.sln
 *.sw?
+
+.env.example

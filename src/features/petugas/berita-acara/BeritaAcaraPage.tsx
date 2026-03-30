@@ -291,7 +291,7 @@ const BeritaAcaraPage = ({
             'id',
           ),
         ),
-    [reports, historyDateFilter, historyChildFilter],
+    [reports, historyDateFilter, historyChildFilter, todayDate],
   )
 
   const historyTotalPages = Math.max(1, Math.ceil(filteredReports.length / HISTORY_PAGE_SIZE))
@@ -321,6 +321,30 @@ const BeritaAcaraPage = ({
       })),
     [childrenData],
   )
+
+  const parentMessageFromAttendance = useMemo(() => {
+    if (!form.childId) {
+      return ''
+    }
+    const attendance = attendanceRecords.find(
+      (record) =>
+        record.childId === form.childId &&
+        record.date === incidentTargetDate &&
+        Boolean(record.arrivalTime),
+    )
+    return attendance?.parentMessage?.trim() ?? ''
+  }, [attendanceRecords, form.childId, incidentTargetDate])
+
+  useEffect(() => {
+    if (editingId) {
+      return
+    }
+    setForm((previous) =>
+      previous.parentMessage === parentMessageFromAttendance
+        ? previous
+        : { ...previous, parentMessage: parentMessageFromAttendance },
+    )
+  }, [editingId, parentMessageFromAttendance])
 
   const setField = <K extends keyof IncidentReportInput>(
     key: K,
@@ -782,11 +806,16 @@ const BeritaAcaraPage = ({
                 </label>
                 <textarea
                   id="parentMessage"
-                  className="textarea"
+                  className="textarea input--locked"
                   rows={2}
                   value={form.parentMessage}
-                  onChange={(event) => setField('parentMessage', event.target.value)}
+                  placeholder="Pesan dari orang tua tampil otomatis"
+                  disabled
+                  readOnly
                 />
+                <p className="field-hint">
+                  Ditulis dari Portal Orang Tua, petugas hanya melihat.
+                </p>
               </div>
               <div className="field-group">
                 <label className="label" htmlFor="messageForParent">

@@ -512,6 +512,37 @@ app.use('/api/v1', adminRoutes)
 
 // Serve uploads folder
 import { UPLOADS_DIR } from './middlewares/upload-middleware.js'
+const isAllowedPublicLandingAssetPath = (requestPath: string): boolean => {
+  const normalizedPath = decodeURIComponent(requestPath || '')
+  const fileName = path.basename(normalizedPath).toLowerCase()
+  if (!fileName.startsWith('landing_announcement_')) {
+    return false
+  }
+  return /\.(webp|png|jpe?g|gif|avif)$/.test(fileName)
+}
+
+app.use(
+  '/landing-media',
+  (req, res, next) => {
+    try {
+      if (!isAllowedPublicLandingAssetPath(req.path)) {
+        res.status(404).end()
+        return
+      }
+      next()
+    } catch {
+      res.status(400).end()
+    }
+  },
+  express.static(UPLOADS_DIR, {
+    fallthrough: false,
+    index: false,
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable')
+    },
+  }),
+)
+
 app.use(
   '/uploads',
   requireAuth,
@@ -641,11 +672,18 @@ app.use((_req, res) => {
   })
 })
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  void next
   console.error('Unhandled Server Error:', err)
 
   const message = sanitizeServerErrorMessage(err, 'Terjadi kesalahan pada sistem.')
-  const status = (err as any).status || 500
+  const status =
+    typeof err === 'object' &&
+      err !== null &&
+      'status' in err &&
+      typeof (err as { status?: unknown }).status === 'number'
+      ? (err as { status: number }).status
+      : 500
 
   res.status(status).json({
     success: false,

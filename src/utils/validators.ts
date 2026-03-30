@@ -114,9 +114,6 @@ export const validateAttendanceRecordInput = (
     if (!input.pickupName.trim()) {
       errors.pickupName = 'Nama penjemput wajib diisi'
     }
-    if (!input.parentMessage.trim()) {
-      errors.parentMessage = 'Pesan dari orang tua wajib diisi'
-    }
     if (!input.messageForParent.trim()) {
       errors.messageForParent = 'Pesan untuk orang tua wajib diisi'
     }

@@ -181,7 +181,7 @@ const buildObservationBodyRows = (
   const rows: ObservationPdfBodyRow[] = []
 
   groups.forEach((group) => {
-    group.items.forEach((item: any, itemIndex: number) => {
+    group.items.forEach((item, itemIndex: number) => {
       const indicator = item.indicator.trim()
       const notes = item.notes.trim()
       const categoryPerluArahan =

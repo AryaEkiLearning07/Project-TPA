@@ -716,7 +716,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
 
   if (isAttendanceStatusLoading && !staffAttendanceStatus) {
     return (
-      <div className="app-shell app-shell--attendance-gate">
+      <div className="app-shell app-shell--petugas app-shell--attendance-gate">
         <div className="app-main">
           <main className="app-content app-content--attendance-gate">
             <section className="page page--attendance-gate">
@@ -740,7 +740,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
     const isLockedAfterCheckout = hasCheckedOutToday
 
     return (
-      <div className="app-shell app-shell--attendance-gate">
+      <div className="app-shell app-shell--petugas app-shell--attendance-gate">
         <div className="app-main">
           <main className="app-content app-content--attendance-gate">
             <section className="page page--attendance-gate">
@@ -941,7 +941,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell app-shell--petugas">
       <Sidebar
         activeMenu={activeMenu}
         menus={petugasMenus}

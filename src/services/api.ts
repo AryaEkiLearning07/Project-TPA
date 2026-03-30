@@ -18,6 +18,8 @@ import type {
   StaffAttendanceActionResult,
   StaffAttendanceRecapRow,
   StaffAttendanceStatus,
+  StaffRegistrationInput,
+  StaffRegistrationRequest,
   StaffUser,
   StaffUserInput,
   LandingAnnouncement,
@@ -112,20 +114,6 @@ const DEFAULT_API_TIMEOUT_MS = (() => {
   return 60000
 })()
 
-const API_ERROR_TYPE_LABELS: Record<ApiErrorType, string> = {
-  NETWORK: 'Jaringan',
-  TIMEOUT: 'Timeout',
-  CANCELLED: 'Permintaan Dibatalkan',
-  UNAUTHORIZED: 'Otentikasi',
-  FORBIDDEN: 'Akses Ditolak',
-  NOT_FOUND: 'Data Tidak Ditemukan',
-  VALIDATION: 'Validasi Data',
-  RATE_LIMIT: 'Batas Permintaan',
-  SERVER: 'Server',
-  RESPONSE: 'Respons Tidak Valid',
-  UNKNOWN: 'Tidak Diketahui',
-}
-
 const resolveApiErrorTypeFromStatus = (status: number): ApiErrorType => {
   if (status === 401) return 'UNAUTHORIZED'
   if (status === 403) return 'FORBIDDEN'
@@ -143,24 +131,9 @@ const normalizeMessage = (message: string): string => {
 }
 
 const formatApiErrorMessage = (params: {
-  type: ApiErrorType
-  status?: number | null
   message: string
-  includeReference?: string
 }): string => {
-  const typeLabel = API_ERROR_TYPE_LABELS[params.type]
-  const statusLabel =
-    typeof params.status === 'number' ? ` (${params.status})` : ''
-  const parts = [
-    `Jenis error: ${typeLabel}${statusLabel}.`,
-    normalizeMessage(params.message),
-  ]
-
-  if (params.includeReference) {
-    parts.push(`Kode referensi: ${params.includeReference}.`)
-  }
-
-  return parts.join(' ')
+  return normalizeMessage(params.message)
 }
 
 const createApiError = ({
@@ -177,7 +150,6 @@ const createApiError = ({
   method: string
 }): ApiError => {
   const reference = createErrorReference()
-  const shouldIncludeReference = type === 'SERVER' || type === 'UNKNOWN' || type === 'RESPONSE'
   return new ApiError({
     type,
     status,
@@ -185,25 +157,17 @@ const createApiError = ({
     method,
     reference,
     message: formatApiErrorMessage({
-      type,
-      status,
       message,
-      includeReference: shouldIncludeReference ? reference : undefined,
     }),
   })
 }
 
 const getDefaultApiErrorMessage = (response: Response): string => {
-  const statusText = response.statusText.trim()
-  const statusLabel = statusText.length > 0
-    ? `${response.status} ${statusText}`
-    : `${response.status}`
-
   if (response.status >= 500) {
     return 'Maaf, terjadi kesalahan pada sistem. Silakan muat ulang halaman atau coba lagi nanti.'
   }
 
-  return `Request gagal (${statusLabel})`
+  return 'Permintaan tidak dapat diproses. Silakan periksa data lalu coba lagi.'
 }
 
 const toHeaders = (
@@ -440,6 +404,11 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  registerStaff: (payload: StaffRegistrationInput): Promise<StaffRegistrationRequest> =>
+    request('/auth/register-staff', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   me: (): Promise<{ user: AuthSession['user']; expiresAt: string }> =>
     request('/auth/me'),
 }
@@ -498,6 +467,18 @@ export const adminApi = {
       body: JSON.stringify(payload),
     }),
   getStaffUsers: (): Promise<StaffUser[]> => request('/admin/staff-users'),
+  getPendingStaffRegistrationRequests: (): Promise<StaffRegistrationRequest[]> =>
+    request('/admin/staff-registration-requests'),
+  approveStaffRegistrationRequest: (requestId: string): Promise<StaffUser> =>
+    request(`/admin/staff-registration-requests/${encodeURIComponent(requestId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  rejectStaffRegistrationRequest: (requestId: string): Promise<{ id: string }> =>
+    request(`/admin/staff-registration-requests/${encodeURIComponent(requestId)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
   createStaffUser: (payload: StaffUserInput): Promise<StaffUser> =>
     request('/admin/staff-users', {
       method: 'POST',

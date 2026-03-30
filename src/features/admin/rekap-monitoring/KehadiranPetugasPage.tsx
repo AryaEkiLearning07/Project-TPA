@@ -1,5 +1,5 @@
 import { Download, LogIn, LogOut, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import {
   AppDatePickerField,
   AppMonthPickerField,
@@ -77,18 +77,9 @@ const KehadiranPetugasPage = ({
       row.staff.fullName.toLowerCase().includes(normalizedSearchQuery),
     )
 
-  const filteredBelumAbsenMasukRows = useMemo(
-    () => filterRowsBySearch(belumAbsenMasukRows),
-    [belumAbsenMasukRows, normalizedSearchQuery],
-  )
-  const filteredBertugasRows = useMemo(
-    () => filterRowsBySearch(bertugasRows),
-    [bertugasRows, normalizedSearchQuery],
-  )
-  const filteredSudahAbsenMasukRows = useMemo(
-    () => filterRowsBySearch(sudahAbsenMasukRows),
-    [sudahAbsenMasukRows, normalizedSearchQuery],
-  )
+  const filteredBelumAbsenMasukRows = filterRowsBySearch(belumAbsenMasukRows)
+  const filteredBertugasRows = filterRowsBySearch(bertugasRows)
+  const filteredSudahAbsenMasukRows = filterRowsBySearch(sudahAbsenMasukRows)
 
   return (
     <section className="page page--admin-staff-attendance">

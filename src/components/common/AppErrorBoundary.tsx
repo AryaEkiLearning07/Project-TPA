@@ -183,14 +183,6 @@ class AppErrorBoundary extends Component<
           <p className="card__description">
             {this.state.userMessage}
           </p>
-          <p className="app-error-boundary__meta">
-            Jenis error: <strong>{this.state.errorTypeLabel}</strong>
-          </p>
-          {this.state.errorReference ? (
-            <p className="app-error-boundary__meta app-error-boundary__meta--reference">
-              Kode referensi: <code>{this.state.errorReference}</code>
-            </p>
-          ) : null}
           {this.state.technicalMessage ? (
             <details className="app-error-boundary__details">
               <summary>Detail teknis</summary>

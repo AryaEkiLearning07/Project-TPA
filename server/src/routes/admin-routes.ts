@@ -6,9 +6,12 @@ import {
   writeActivityLog,
 } from '../services/auth-service.js'
 import {
+  approveStaffRegistrationRequest,
   createStaffUser,
   deleteStaffUser,
+  getPendingStaffRegistrationRequests,
   getStaffUsers,
+  rejectStaffRegistrationRequest,
   updateStaffUser,
 } from '../services/staff-user-service.js'
 import { createDatabaseBackup } from '../services/database-backup-service.js'
@@ -90,6 +93,7 @@ const parseStaffPayload = (value: unknown): StaffUserInput => {
     email: toText(value.email),
     password: toText(value.password),
     isActive: asBoolean(value.isActive, true),
+    tanggalMasuk: toText(value.tanggalMasuk),
   }
 }
 
@@ -147,6 +151,14 @@ const toStaffUserId = (value: unknown): number => {
   }
 
   return parsed
+}
+
+const toStaffRegistrationRequestId = (value: unknown): string => {
+  const normalized = toText(value).trim()
+  if (!/^\d+$/.test(normalized)) {
+    throw new AuthServiceError(400, 'ID permintaan petugas tidak valid.')
+  }
+  return normalized
 }
 
 const toPeriodId = (value: unknown): string => {
@@ -538,6 +550,71 @@ router.get('/admin/staff-users', async (_req, res) => {
     res.json({
       success: true,
       data,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.get('/admin/staff-registration-requests', async (_req, res) => {
+  try {
+    const data = await getPendingStaffRegistrationRequests()
+    res.json({
+      success: true,
+      data,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.post('/admin/staff-registration-requests/:id/approve', async (req, res) => {
+  try {
+    const requestId = toStaffRegistrationRequestId(req.params.id)
+    const data = await approveStaffRegistrationRequest({
+      requestId,
+      adminUserId: req.auth?.user.id ?? null,
+    })
+
+    await writeAdminLog(
+      req,
+      'APPROVE_STAFF_REGISTRATION',
+      `staff-registration:${requestId}`,
+      `Permintaan petugas disetujui (${data.email}).`,
+    )
+
+    res.json({
+      success: true,
+      data,
+      message: 'Permintaan petugas berhasil disetujui.',
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    handleError(res, error)
+  }
+})
+
+router.post('/admin/staff-registration-requests/:id/reject', async (req, res) => {
+  try {
+    const requestId = toStaffRegistrationRequestId(req.params.id)
+    await rejectStaffRegistrationRequest({
+      requestId,
+      adminUserId: req.auth?.user.id ?? null,
+    })
+
+    await writeAdminLog(
+      req,
+      'REJECT_STAFF_REGISTRATION',
+      `staff-registration:${requestId}`,
+      'Permintaan petugas ditolak.',
+    )
+
+    res.json({
+      success: true,
+      data: { id: requestId },
+      message: 'Permintaan petugas berhasil ditolak.',
       timestamp: new Date().toISOString(),
     })
   } catch (error) {

@@ -1,5 +1,6 @@
 ﻿import { type FormEvent, useMemo, useState } from 'react'
 import { religionOptions, servicePackageOptions } from '../../../constants/options'
+import { useEffect } from 'react'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 import type {
   ChildRegistrationCode,
@@ -68,6 +69,90 @@ const createInitialForm = (): ChildProfileInput => ({
   otherHabits: '',
 })
 
+const ADMIN_CHILD_FORM_DRAFT_STORAGE_KEY = 'tpa:admin:child-form:draft'
+const ADMIN_CHILD_FORM_DRAFT_TTL_MS = 10 * 60 * 1000
+
+interface AdminChildFormDraftPayload {
+  form: ChildProfileInput
+  pickupInput: string
+  savedAt: number
+  expiresAt: number
+}
+
+const hasDraftData = (
+  input: ChildProfileInput,
+  pickupInput: string,
+): boolean =>
+  Object.values(input).some((value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0
+    }
+    return typeof value === 'string' && value.trim().length > 0
+  }) || pickupInput.trim().length > 0
+
+const saveAdminChildDraft = (
+  payload: Pick<AdminChildFormDraftPayload, 'form' | 'pickupInput'>,
+) => {
+  const now = Date.now()
+  const draftPayload: AdminChildFormDraftPayload = {
+    form: payload.form,
+    pickupInput: payload.pickupInput,
+    savedAt: now,
+    expiresAt: now + ADMIN_CHILD_FORM_DRAFT_TTL_MS,
+  }
+
+  window.localStorage.setItem(
+    ADMIN_CHILD_FORM_DRAFT_STORAGE_KEY,
+    JSON.stringify(draftPayload),
+  )
+}
+
+const clearAdminChildDraft = () => {
+  window.localStorage.removeItem(ADMIN_CHILD_FORM_DRAFT_STORAGE_KEY)
+}
+
+const loadAdminChildDraft = (): AdminChildFormDraftPayload | null => {
+  const raw = window.localStorage.getItem(ADMIN_CHILD_FORM_DRAFT_STORAGE_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as AdminChildFormDraftPayload
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      !parsed.form ||
+      typeof parsed.savedAt !== 'number' ||
+      typeof parsed.expiresAt !== 'number'
+    ) {
+      clearAdminChildDraft()
+      return null
+    }
+
+    if (parsed.expiresAt <= Date.now()) {
+      clearAdminChildDraft()
+      return null
+    }
+
+    return parsed
+  } catch {
+    clearAdminChildDraft()
+    return null
+  }
+}
+
+const MAX_CHILD_PHOTO_FILE_SIZE_BYTES = 12 * 1024 * 1024
+const SUPPORTED_CHILD_PHOTO_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+])
+const SUPPORTED_CHILD_PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif']
+
 const removeErrorKey = (errors: FieldErrors, key: string): FieldErrors => {
   if (!errors[key]) return errors
   const next = { ...errors }
@@ -78,6 +163,7 @@ const removeErrorKey = (errors: FieldErrors, key: string): FieldErrors => {
 const validateAdminMandatoryFields = (input: ChildProfileInput): FieldErrors => {
   const errors: FieldErrors = {}
   const optionalKeys = new Set<keyof ChildProfileInput>([
+    'photoDataUrl',
     'allergy',
     'toiletTrainingBab',
     'toiletTrainingBak',
@@ -176,7 +262,9 @@ const DataAnakPage = ({
   const [isLoadingRegistrationCode, setLoadingRegistrationCode] = useState(false)
   const [isGeneratingRegistrationCode, setGeneratingRegistrationCode] = useState(false)
   const [registrationCodeNotice, setRegistrationCodeNotice] = useState<string | null>(null)
+  const [draftNotice, setDraftNotice] = useState<string | null>(null)
   const isPetugasView = viewerRole === 'PETUGAS'
+  const isAdminDraftEnabled = viewerRole === 'ADMIN' && canManageData
   const selectedChildRegistrationCode = selectedChild
     ? registrationCodesByChildId[selectedChild.id] ?? null
     : null
@@ -240,11 +328,28 @@ const DataAnakPage = ({
     setSaveError(null)
     setEditingId(null)
     setPickupInput('')
+    setDraftNotice(null)
   }
 
   const openAddModal = () => {
     if (!canManageData) return
-    resetForm()
+
+    if (isAdminDraftEnabled) {
+      const draft = loadAdminChildDraft()
+      if (draft) {
+        setForm(draft.form)
+        setErrors({})
+        setSaveError(null)
+        setEditingId(null)
+        setPickupInput(draft.pickupInput)
+        setDraftNotice('Draft terakhir berhasil dipulihkan (maksimal 10 menit).')
+      } else {
+        resetForm()
+      }
+    } else {
+      resetForm()
+    }
+
     setModalOpen(true)
   }
 
@@ -252,6 +357,22 @@ const DataAnakPage = ({
     setModalOpen(false)
     resetForm()
   }
+
+  useEffect(() => {
+    if (!isAdminDraftEnabled || !isModalOpen || editingId) {
+      return
+    }
+
+    if (!hasDraftData(form, pickupInput)) {
+      clearAdminChildDraft()
+      return
+    }
+
+    saveAdminChildDraft({
+      form,
+      pickupInput,
+    })
+  }, [isAdminDraftEnabled, isModalOpen, editingId, form, pickupInput])
 
   const addPickupPerson = () => {
     const candidate = pickupInput.trim()
@@ -271,9 +392,45 @@ const DataAnakPage = ({
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    const normalizedMimeType = file.type.toLowerCase()
+    const normalizedFileName = file.name.toLowerCase()
+    const isSupportedByMime = SUPPORTED_CHILD_PHOTO_MIME_TYPES.has(normalizedMimeType)
+    const isSupportedByExtension = SUPPORTED_CHILD_PHOTO_EXTENSIONS.some((extension) =>
+      normalizedFileName.endsWith(extension),
+    )
+    const isSupportedImage = isSupportedByMime || isSupportedByExtension
+    if (!isSupportedImage) {
+      setErrors((previous) => ({
+        ...previous,
+        photoDataUrl: 'Format foto tidak didukung. Gunakan JPG, JPEG, PNG, WEBP, GIF, atau AVIF.',
+      }))
+      setSaveError('Foto anak harus berformat JPG, JPEG, PNG, WEBP, GIF, atau AVIF.')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > MAX_CHILD_PHOTO_FILE_SIZE_BYTES) {
+      setErrors((previous) => ({
+        ...previous,
+        photoDataUrl: 'Ukuran foto maksimal 12 MB.',
+      }))
+      setSaveError('Ukuran foto anak terlalu besar. Maksimal 12 MB.')
+      event.target.value = ''
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = (e) => {
       setField('photoDataUrl', (e.target?.result as string) || '')
+    }
+    reader.onerror = () => {
+      setErrors((previous) => ({
+        ...previous,
+        photoDataUrl: 'Foto anak tidak dapat dibaca.',
+      }))
+      setSaveError('Gagal membaca file foto anak. Silakan pilih file lain.')
+      event.target.value = ''
     }
     reader.readAsDataURL(file)
   }
@@ -291,7 +448,7 @@ const DataAnakPage = ({
     if (Object.keys(strictErrors).length > 0) {
       setErrors(strictErrors)
       setSaveError(
-        'Semua field wajib diisi kecuali Alergi dan field pada bagian Kebiasaan Sehari-hari.',
+        'Semua field wajib diisi kecuali Foto, Alergi, dan field pada bagian Kebiasaan Sehari-hari.',
       )
       return
     }
@@ -303,6 +460,9 @@ const DataAnakPage = ({
     }
     const success = await onSave(normalized, editingId ?? undefined)
     if (success) {
+      if (isAdminDraftEnabled && !editingId) {
+        clearAdminChildDraft()
+      }
       closeModal()
       return
     }
@@ -320,6 +480,7 @@ const DataAnakPage = ({
     setErrors({})
     setEditingId(id)
     setPickupInput('')
+    setDraftNotice(null)
     setModalOpen(true)
   }
 
@@ -758,6 +919,9 @@ const DataAnakPage = ({
                 <p className="child-photo-upload__hint">
                   {form.photoDataUrl ? 'Klik frame untuk ganti foto' : 'Klik frame untuk menambahkan foto'}
                 </p>
+                {errors.photoDataUrl ? (
+                  <p className="field-error">{errors.photoDataUrl}</p>
+                ) : null}
                 {form.photoDataUrl ? (
                   <button
                     type="button"
@@ -1056,6 +1220,7 @@ const DataAnakPage = ({
               </div>
 
               <div className="form-actions">
+                {draftNotice ? <p className="field-hint">{draftNotice}</p> : null}
                 {saveError ? <p className="field-error">{saveError}</p> : null}
                 <button className="button" type="submit">
                   {editingId ? 'Update Data Anak' : 'Simpan Data Anak'}

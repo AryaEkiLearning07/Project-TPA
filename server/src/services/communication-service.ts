@@ -1,4 +1,4 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { dbPool } from '../config/database.js' // Fixed import with extension
 import type { CommunicationBookEntry, CommunicationBookEntryInput } from '../types/index.js' // Fixed import with extension
 import {

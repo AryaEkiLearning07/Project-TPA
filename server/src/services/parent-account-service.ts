@@ -253,7 +253,6 @@ const syncChildrenForProfile = async (
   connection: PoolConnection,
   profileId: number,
   childIds: number[],
-  profile: ParentProfile,
 ): Promise<void> => {
   await ensureChildIdsExist(connection, childIds)
   const placeholders = toInClausePlaceholders(childIds)
@@ -467,7 +466,6 @@ export const createParentAccount = async (
       connection,
       parentProfileId,
       validated.childIds,
-      validated.profile,
     )
 
     const accountId = Number(result.insertId)
@@ -583,7 +581,6 @@ export const updateParentAccount = async (
       connection,
       nextProfileId,
       validated.childIds,
-      validated.profile,
     )
 
     await cleanupOrphanProfile(connection, existing.parentProfileId)

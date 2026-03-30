@@ -1,15 +1,6 @@
 import type { ChangeEvent } from 'react'
-import SearchableSelect from '../../../components/common/SearchableSelect'
-import { AppMonthPickerField } from '../../../components/common/DatePickerFields'
-import { servicePackageOptions } from '../../../constants/options'
-import type { ServiceBillingPaymentInput, ServicePackage } from '../../../types'
+import type { ServiceBillingPaymentInput } from '../../../types'
 import type { ServiceBillingArrearsRow } from '../adminHelpers'
-
-interface SelectOption {
-  value: string
-  label: string
-  badge?: string
-}
 
 interface BillingPaidRow {
   childId: string
@@ -17,64 +8,47 @@ interface BillingPaidRow {
   packageLabel: string
   paidAmount: number
   attendanceCount: number
-  isMigrated: boolean
+  paymentProofDataUrl: string
+  paymentProofName: string
 }
 
 interface BillingPageProps {
   isSettlementOpen: boolean
   onToggleSettlementOpen: (open: boolean) => void
-  selectedBillingChildId: string
   onSelectBillingChild: (value: string) => void
-  arrearsChildOptions: SelectOption[]
-  paymentAmountText: string
-  onPaymentAmountInput: (value: string) => void
-  onPaymentAmountBlur: () => void
   selectedArrearsRow: ServiceBillingArrearsRow | null
   isMutating: boolean
   paymentForm: ServiceBillingPaymentInput
   onPaymentProofChange: (event: ChangeEvent<HTMLInputElement>) => Promise<void> | void
   onClearPaymentProof: () => void
-  onChangePaymentMethod: (method: string) => void
   onQuickPayment: () => Promise<void> | void
   formatCurrency: (value: number) => string
   isLoadingPaidRows: boolean
-  paidMonthValue: string
-  paidMonthMax: string
-  onChangePaidMonth: (value: string) => void
-  paidPackageValue: ServicePackage | ''
-  onChangePaidPackage: (value: ServicePackage | '') => void
-  paidLimitValue: number
-  onChangePaidLimit: (value: number) => void
   paidRows: BillingPaidRow[]
+  paidPage: number
+  paidTotalPages: number
+  onPrevPaidPage: () => void
+  onNextPaidPage: () => void
   arrearsRows: ServiceBillingArrearsRow[]
 }
 
 const BillingPage = ({
   isSettlementOpen,
   onToggleSettlementOpen,
-  selectedBillingChildId,
   onSelectBillingChild,
-  arrearsChildOptions,
-  paymentAmountText,
-  onPaymentAmountInput,
-  onPaymentAmountBlur,
   selectedArrearsRow,
   isMutating,
   paymentForm,
   onPaymentProofChange,
   onClearPaymentProof,
-  onChangePaymentMethod,
   onQuickPayment,
   formatCurrency,
   isLoadingPaidRows,
-  paidMonthValue,
-  paidMonthMax,
-  onChangePaidMonth,
-  paidPackageValue,
-  onChangePaidPackage,
-  paidLimitValue,
-  onChangePaidLimit,
   paidRows,
+  paidPage,
+  paidTotalPages,
+  onPrevPaidPage,
+  onNextPaidPage,
   arrearsRows,
 }: BillingPageProps) => {
   return (
@@ -92,6 +66,9 @@ const BillingPage = ({
           <p className="card__description">
             Nama anak [lama hari], paket layanan, dan total pembayaran yang masih harus dilunasi.
           </p>
+          <p className="field-hint" style={{ marginTop: '-0.35rem', marginBottom: '0.75rem' }}>
+            Jumlah : <strong>{arrearsRows.length}</strong> Anak
+          </p>
           <div className="table-wrap">
             <table className="table service-billing-arrears-table">
               <thead>
@@ -99,12 +76,13 @@ const BillingPage = ({
                   <th>Nama Anak [Lama Hari]</th>
                   <th>Paket Layanan</th>
                   <th style={{ textAlign: 'center' }}>Total Pembayaran</th>
+                  <th style={{ textAlign: 'center' }}>Aksi</th>
                 </tr>
               </thead>
               <tbody>
                 {arrearsRows.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="table__empty">Tidak ada anak yang menunggak.</td>
+                    <td colSpan={4} className="table__empty">Tidak ada anak yang menunggak.</td>
                   </tr>
                 ) : (
                   arrearsRows.map((row) => (
@@ -115,6 +93,18 @@ const BillingPage = ({
                       </td>
                       <td>{row.packageLabel}</td>
                       <td style={{ textAlign: 'center' }}>{formatCurrency(row.totalOutstanding)}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className="button button--tiny button--success"
+                          onClick={() => {
+                            onSelectBillingChild(row.childId)
+                            onToggleSettlementOpen(true)
+                          }}
+                        >
+                          Bayar
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -122,55 +112,67 @@ const BillingPage = ({
             </table>
           </div>
         </div>
+      </div>
 
-        <details
-          className="service-section-collapse"
-          open={isSettlementOpen}
-          onToggle={(event) =>
-            onToggleSettlementOpen(
-              (event.currentTarget as HTMLDetailsElement).open,
-            )
-          }
+      {isSettlementOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Input Pembayaran"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999,
+            background: 'rgba(17, 24, 39, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+          onClick={() => {
+            if (!isMutating) {
+              onToggleSettlementOpen(false)
+            }
+          }}
         >
-          <summary className="service-section-collapse__summary">
-            Input Pembayaran (Pelunasan)
-          </summary>
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '640px',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              padding: '1rem',
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '1rem' }}>Input Pembayaran</h3>
 
-          <div className="service-section-collapse__body">
-            <div className="form-grid form-grid--2 service-billing-settlement-grid">
-              <div className="field-group">
-                <label className="label">Pilih Anak yang Belum Lunas</label>
-                <SearchableSelect
-                  value={selectedBillingChildId}
-                  onChange={onSelectBillingChild}
-                  options={arrearsChildOptions}
-                  placeholder="Pilih anak yang belum lunas"
-                  emptyMessage="Tidak ada anak yang belum lunas"
-                  clearable={false}
-                  usePortal
-                />
-              </div>
-
-              <div className="field-group">
-                <label className="label" htmlFor="serviceBillingAmount">
-                  Nominal Pembayaran
-                </label>
-                <input
-                  id="serviceBillingAmount"
-                  className="input service-billing-amount-input"
-                  type="text"
-                  inputMode="numeric"
-                  value={paymentAmountText}
-                  onChange={(event) =>
-                    onPaymentAmountInput(event.target.value)
-                  }
-                  onBlur={onPaymentAmountBlur}
-                  disabled={!selectedArrearsRow || isMutating}
-                />
-              </div>
+            <div
+              style={{
+                border: '1px solid #f0b0be',
+                borderRadius: '12px',
+                padding: '0.9rem',
+                background: '#fff7fa',
+                marginBottom: '1rem',
+                display: 'grid',
+                gap: '0.45rem',
+              }}
+            >
+              <p style={{ margin: 0 }}>
+                <strong>Nama Anak:</strong>{' '}
+                {selectedArrearsRow?.childName || '-'}
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>Jumlah Tunggakan:</strong>{' '}
+                {selectedArrearsRow ? formatCurrency(selectedArrearsRow.totalOutstanding) : '-'}
+              </p>
             </div>
 
-            <div className="form-grid form-grid--3 service-billing-settlement-grid">
+            <div
+              className="form-grid service-billing-settlement-grid"
+              style={{ gridTemplateColumns: '1fr' }}
+            >
               <div className="field-group">
                 <label className="label">Bukti Transfer</label>
                 <input
@@ -188,9 +190,9 @@ const BillingPage = ({
                     if (!selectedArrearsRow || isMutating) return
                     document.getElementById('serviceBillingPaymentProof')?.click()
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
                       if (!selectedArrearsRow || isMutating) return
                       document.getElementById('serviceBillingPaymentProof')?.click()
                     }
@@ -232,149 +234,138 @@ const BillingPage = ({
                 ) : null}
               </div>
 
-              <div className="field-group">
-                <label className="label" htmlFor="serviceBillingNotes">
-                  Metode Pembayaran
-                </label>
-                <select
-                  id="serviceBillingNotes"
-                  className="input"
-                  value={paymentForm.notes ?? ''}
-                  onChange={(event) => onChangePaymentMethod(event.target.value)}
-                  disabled={!selectedArrearsRow || isMutating}
-                >
-                  <option value="">-- Pilih Metode --</option>
-                  <option value="Cash">Cash</option>
-                  <option value="BCA">BCA</option>
-                  <option value="BRI">BRI</option>
-                  <option value="MANDIRI">MANDIRI</option>
-                  <option value="BNI">BNI</option>
-                  <option value="QRIS">QRIS</option>
-                  <option value="Lainnya">Lainnya</option>
-                </select>
-              </div>
-
-              <div className="form-actions" style={{ alignSelf: 'end' }}>
+              <div
+                className="form-actions"
+                style={{
+                  alignSelf: 'stretch',
+                  marginTop: '0.75rem',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '0.5rem',
+                  alignItems: 'stretch',
+                }}
+              >
                 <button
                   type="button"
-                  className="button button--success"
-                  onClick={() => void onQuickPayment()}
-                  disabled={
-                    !selectedArrearsRow ||
-                    isMutating ||
-                    paymentForm.amount <= 0
-                  }
+                  className="button"
+                  onClick={() => onToggleSettlementOpen(false)}
+                  disabled={isMutating}
+                  style={{
+                    width: '100%',
+                    minHeight: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 800,
+                    fontSize: '1rem',
+                    backgroundColor: '#e03131',
+                    borderColor: '#e03131',
+                    color: '#ffffff',
+                  }}
                 >
-                  {isMutating
-                    ? 'Menyimpan Pembayaran...'
-                    : 'Simpan Pembayaran'}
+                  Tutup
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => void onQuickPayment()}
+                  disabled={!selectedArrearsRow || isMutating || !paymentForm.paymentProofDataUrl}
+                  style={{
+                    width: '100%',
+                    minHeight: '46px',
+                    borderRadius: '12px',
+                    fontWeight: 800,
+                    fontSize: '1rem',
+                    backgroundColor: '#2f9e44',
+                    borderColor: '#2f9e44',
+                    color: '#ffffff',
+                  }}
+                >
+                  {isMutating ? 'Menyimpan...' : 'Simpan Pembayaran'}
                 </button>
               </div>
             </div>
 
             <p className="field-hint">
               {selectedArrearsRow
-                ? `Sisa tagihan (belum lunas) saat ini: ${formatCurrency(selectedArrearsRow.totalOutstanding)}.`
-                : 'Pilih anak belum lunas untuk mulai pembayaran.'}{' '}
-              Nominal pas akan membuat tagihan otomatis lunas; jika kurang, sisa tagihan otomatis berkurang.
+                ? `Tagihan anak ini akan dibayar penuh otomatis sebesar ${formatCurrency(selectedArrearsRow.totalOutstanding)} dan status berubah ke LUNAS.`
+                : 'Pilih anak belum lunas untuk mulai pembayaran.'}
             </p>
-            <p className="field-hint">
-              Aturan paket: harian berlaku 1 hari, paket 2 mingguan berlaku 10 hari ke depan,
-              dan paket bulanan berlaku 30 hari ke depan (hari berjalan tetap dihitung).
-            </p>
-          </div>
-        </details>
-      </div>
-
-      <div className="card service-billing-arrears-card">
-        <h3>Daftar Pembayaran LUNAS</h3>
-        <p className="card__description">
-          Menampilkan daftar anak yang pembayarannya sudah berstatus <strong>LUNAS</strong> beserta total nominal yang disetorkan pada periode aktif. Seluruh kelas digabung dan diurutkan.
-        </p>
-
-        <div className="form-grid form-grid--3" style={{ marginBottom: '1.5rem' }}>
-          <div className="field-group">
-            <label className="label">Bulan</label>
-            <AppMonthPickerField
-              value={paidMonthValue}
-              max={paidMonthMax}
-              onChange={onChangePaidMonth}
-            />
-          </div>
-          <div className="field-group">
-            <label className="label">Kategori Paket</label>
-            <select
-              className="input"
-              value={paidPackageValue}
-              onChange={(e) => onChangePaidPackage(e.target.value as ServicePackage | '')}
-            >
-              <option value="">Semua Paket</option>
-              {servicePackageOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field-group">
-            <label className="label">Jumlah Data</label>
-            <select
-              className="input"
-              value={paidLimitValue}
-              onChange={(e) => onChangePaidLimit(Number(e.target.value))}
-            >
-              <option value={20}>20 Data</option>
-              <option value={50}>50 Data</option>
-              <option value={100}>100 Data</option>
-              <option value={9999}>Semua Data</option>
-            </select>
           </div>
         </div>
+      ) : null}
+
+      <div className="card service-billing-arrears-card">
+        <h3>Daftar Pelunasan</h3>
+        <p className="card__description">
+          Format: nama anak [paket], bukti pembayaran, jumlah kehadiran, total dibayarkan.
+        </p>
 
         <div className="table-wrap">
           <table className="table service-billing-arrears-table">
             <thead>
               <tr>
-                <th>Nama Anak</th>
-                <th>Paket</th>
+                <th>Nama Anak [Paket]</th>
+                <th style={{ textAlign: 'center' }}>Bukti Pembayaran</th>
                 <th style={{ textAlign: 'center' }}>Jumlah Kehadiran</th>
-                <th style={{ textAlign: 'center' }}>Status</th>
                 <th style={{ textAlign: 'center' }}>Total Dibayarkan</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingPaidRows && paidRows.length === 0 ? (
-                <tr><td colSpan={5} className="table__empty">Memuat daftar lunas...</td></tr>
+                <tr><td colSpan={4} className="table__empty">Memuat daftar lunas...</td></tr>
               ) : paidRows.length === 0 ? (
-                <tr><td colSpan={5} className="table__empty">Tidak ada anak yang sudah lunas.</td></tr>
+                <tr><td colSpan={4} className="table__empty">Tidak ada data pelunasan.</td></tr>
               ) : (
                 paidRows.map((row) => (
                   <tr key={row.childId}>
                     <td>
-                      <div className="service-billing-package-name">
-                        <strong>{row.childName}</strong>
-                        {row.isMigrated && <span className="service-billing-migration-badge">Migrasi</span>}
-                      </div>
+                      <strong>{row.childName}</strong>{' '}
+                      <span className="field-hint">[{row.packageLabel}]</span>
                     </td>
-                    <td>{row.packageLabel}</td>
-                    <td style={{ textAlign: 'center' }}>{row.attendanceCount}</td>
                     <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '4px 12px',
-                        fontSize: '0.85rem',
-                        fontWeight: 'bold',
-                        color: '#fff',
-                        backgroundColor: 'var(--color-success, #38a169)',
-                        borderRadius: '9999px',
-                      }}>LUNAS</span>
+                      {row.paymentProofDataUrl ? (
+                        <a
+                          href={row.paymentProofDataUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="button button--tiny button--ghost"
+                        >
+                          Lihat Bukti
+                        </a>
+                      ) : (
+                        '-'
+                      )}
                     </td>
+                    <td style={{ textAlign: 'center' }}>{row.attendanceCount}</td>
                     <td style={{ textAlign: 'center' }}>{formatCurrency(row.paidAmount)}</td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="inline-row" style={{ justifyContent: 'space-between', marginTop: '0.9rem' }}>
+          <p className="field-hint" style={{ margin: 0 }}>
+            Halaman {paidPage} dari {paidTotalPages} (20 data per halaman)
+          </p>
+          <div className="inline-row" style={{ gap: '0.5rem' }}>
+            <button
+              type="button"
+              className="button button--tiny button--ghost"
+              onClick={onPrevPaidPage}
+              disabled={paidPage <= 1}
+            >
+              Sebelumnya
+            </button>
+            <button
+              type="button"
+              className="button button--tiny button--ghost"
+              onClick={onNextPaidPage}
+              disabled={paidPage >= paidTotalPages}
+            >
+              Berikutnya
+            </button>
+          </div>
         </div>
       </div>
     </section>

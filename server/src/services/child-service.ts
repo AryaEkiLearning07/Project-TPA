@@ -1,4 +1,4 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from 'mysql2/promise'
+import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
 import {
     ensureParentRelationshipSchema,
@@ -32,6 +32,89 @@ const normalizeAssetUrl = (value: string): string => {
     return normalized
 }
 
+const toChildReligion = (value: unknown): ChildProfile['religion'] => {
+    const normalized = toText(value).trim().toLowerCase()
+    if (
+        normalized === 'islam' ||
+        normalized === 'kristen' ||
+        normalized === 'christian' ||
+        normalized === 'katolik' ||
+        normalized === 'catholic' ||
+        normalized === 'hindu' ||
+        normalized === 'buddha' ||
+        normalized === 'buddhist' ||
+        normalized === 'konghucu' ||
+        normalized === 'confucian'
+    ) {
+        if (normalized === 'christian') return 'kristen'
+        if (normalized === 'catholic') return 'katolik'
+        if (normalized === 'buddhist') return 'buddha'
+        if (normalized === 'confucian') return 'konghucu'
+        return normalized
+    }
+    return 'lainnya'
+}
+
+const supportedChildPhotoMimeTypes = new Set([
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/avif',
+])
+
+const parseDataUrlMimeType = (value: string): string | null => {
+    const matched = toText(value).trim().match(/^data:(image\/[a-z0-9.+-]+);base64,/i)
+    if (!matched) {
+        return null
+    }
+    return matched[1].toLowerCase()
+}
+
+const ensureSupportedChildPhotoMimeType = (value: string): void => {
+    const mimeType = parseDataUrlMimeType(value)
+    if (!mimeType) {
+        return
+    }
+    if (supportedChildPhotoMimeTypes.has(mimeType)) {
+        return
+    }
+    throw new ServiceError(
+        400,
+        'Foto anak tidak didukung. Gunakan format JPG, JPEG, PNG, WEBP, GIF, atau AVIF.',
+    )
+}
+
+const mapChildPhotoProcessingError = (error: unknown): ServiceError | null => {
+    const message = error instanceof Error ? error.message : ''
+    if (!message) {
+        return null
+    }
+
+    if (/(unsupported image|input buffer|corrupt|heif|bad seek|invalid input)/i.test(message)) {
+        return new ServiceError(
+            400,
+            'Foto anak tidak dapat diproses. Gunakan format JPG, JPEG, PNG, WEBP, GIF, atau AVIF.',
+        )
+    }
+
+    return null
+}
+
+const resolveChildPhotoPath = async (photoDataUrl: string): Promise<string> => {
+    ensureSupportedChildPhotoMimeType(photoDataUrl)
+    try {
+        return await saveBase64ToDisk(photoDataUrl, 'child')
+    } catch (error) {
+        const mappedError = mapChildPhotoProcessingError(error)
+        if (mappedError) {
+            throw mappedError
+        }
+        throw error
+    }
+}
+
 const mapChildRow = (row: RowDataPacket): ChildProfile => ({
     id: String(row.id),
     createdAt: toText(row.created_at),
@@ -44,7 +127,7 @@ const mapChildRow = (row: RowDataPacket): ChildProfile => ({
     birthPlace: toText(row.birth_place),
     birthDate: toDbDate(row.birth_date),
     childOrder: toText(row.child_order),
-    religion: toText(row.religion).toLowerCase() as any,
+    religion: toChildReligion(row.religion),
     outsideActivities: toText(row.outside_activities),
     // Parent data comes from JOIN with parent_profiles
     fatherName: toText(row.profile_father_name),
@@ -193,7 +276,7 @@ export const createChild = async (input: ChildProfileInput): Promise<ChildProfil
         })
 
         const timestamp = nowIso()
-        const photoPath = await saveBase64ToDisk(input.photoDataUrl, 'child')
+        const photoPath = await resolveChildPhotoPath(input.photoDataUrl)
 
         const [result] = await connection.execute<ResultSetHeader>(
             `INSERT INTO children (
@@ -279,7 +362,7 @@ export const updateChild = async (id: string, input: ChildProfileInput): Promise
         })
 
         const timestamp = nowIso()
-        const photoPath = await saveBase64ToDisk(input.photoDataUrl, 'child')
+        const photoPath = await resolveChildPhotoPath(input.photoDataUrl)
 
         await connection.execute(
             `UPDATE children SET

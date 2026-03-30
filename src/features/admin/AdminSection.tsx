@@ -52,6 +52,7 @@ import type {
   ServiceBillingRefundInput,
   ServicePackage,
   ServicePackageRates,
+  StaffRegistrationRequest,
   StaffAttendanceRecapRow,
   StaffUser,
   StaffUserInput,
@@ -104,8 +105,6 @@ import {
   calculateStaffPay,
   formatRupiah,
   formatCurrency,
-  formatRupiahInput,
-  parseRupiahInput,
   toUnpaidAttendanceDays,
   downloadBlob,
   toLocalDateKey,
@@ -115,7 +114,6 @@ import {
   clampMonthKeyToToday,
   servicePackageLabels,
   createServicePackageCounter,
-  servicePackageTableOrder,
   resolveServiceGenderKey,
   createEmptyObservationCategorySummary,
   summarizeObservationItems,
@@ -211,6 +209,8 @@ const activityActionLabelMap: Record<string, string> = {
   CREATE_STAFF: 'Membuat akun petugas',
   UPDATE_STAFF: 'Memperbarui akun petugas',
   DELETE_STAFF: 'Menghapus akun petugas',
+  APPROVE_STAFF_REGISTRATION: 'Menyetujui pendaftaran petugas',
+  REJECT_STAFF_REGISTRATION: 'Menolak pendaftaran petugas',
   UPDATE_SERVICE_RATES: 'Memperbarui tarif layanan',
   CREATE_SERVICE_BILLING_PERIOD: 'Membuat periode billing',
   CREATE_SERVICE_BILLING_PAYMENT: 'Mencatat pembayaran billing',
@@ -276,6 +276,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const [settingsTab, setSettingsTab] = useState<SettingsSubTab>('petugas')
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([])
+  const [pendingStaffRequests, setPendingStaffRequests] = useState<StaffRegistrationRequest[]>([])
   const [parentAccounts, setParentAccounts] = useState<ParentAccount[]>([])
   const [activityLogs, setActivityLogs] = useState<ActivityLogEntry[]>([])
   const [staffAttendanceRecapRows, setStaffAttendanceRecapRows] = useState<
@@ -338,14 +339,12 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const [serviceRecapMonth, setServiceRecapMonth] = useState(() =>
     getLocalDateIso().slice(0, 7),
   )
-  const [isServiceBillingSettlementOpen, setServiceBillingSettlementOpen] = useState(true)
-  const [serviceBillingPaidMonth, setServiceBillingPaidMonth] = useState(() => getLocalDateIso().slice(0, 7))
-  const [serviceBillingPaidPackage, setServiceBillingPaidPackage] = useState<ServicePackage | ''>('')
-  const [serviceBillingPaidLimit, setServiceBillingPaidLimit] = useState<number>(20)
-  const [servicePaymentAmountText, setServicePaymentAmountText] = useState(
-    formatRupiahInput(initialServiceBillingPaymentForm.amount),
-  )
+  const [isServiceBillingSettlementOpen, setServiceBillingSettlementOpen] = useState(false)
+  const [serviceBillingPaidPage, setServiceBillingPaidPage] = useState(1)
+  const SERVICE_BILLING_PAID_PAGE_SIZE = 20
   const [isLoadingStaff, setLoadingStaff] = useState(false)
+  const [isLoadingPendingStaffRequests, setLoadingPendingStaffRequests] = useState(false)
+  const [processingStaffRequestId, setProcessingStaffRequestId] = useState<string | null>(null)
   const [isLoadingParentAccounts, setLoadingParentAccounts] = useState(false)
   const [togglingParentAccountIds, setTogglingParentAccountIds] = useState<Set<string>>(
     () => new Set(),
@@ -623,6 +622,23 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
   }, [])
 
+  const loadPendingStaffRequests = useCallback(async () => {
+    setLoadingPendingStaffRequests(true)
+    try {
+      const data = await adminApi.getPendingStaffRegistrationRequests()
+      setPendingStaffRequests(data)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Gagal memuat permintaan pendaftaran petugas.'
+      setErrorMessage(message)
+      setPendingStaffRequests([])
+    } finally {
+      setLoadingPendingStaffRequests(false)
+    }
+  }, [])
+
   const loadParentAccounts = useCallback(async () => {
     setLoadingParentAccounts(true)
     try {
@@ -647,6 +663,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   ): LandingAnnouncementInput => {
     const isGallery = form.category === 'galeri'
     const isDocumentation = form.category === 'event' || form.category === 'dokumentasi'
+    const isFacility = form.category === 'fasilitas'
     const isPoster = form.category === 'promosi' || form.category === 'ucapan'
     const normalizedTitle = form.title.trim() || (
       isPoster
@@ -659,13 +676,13 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       slug: form.slug.trim(),
       category: form.category,
       displayMode: isPoster ? 'popup' : 'section',
-      excerpt: isDocumentation ? form.excerpt.trim() : '',
-      content: '',
+      excerpt: isDocumentation || isFacility ? form.excerpt.trim() : '',
+      content: isFacility ? form.content.trim() : '',
       coverImageDataUrl: form.coverImageDataUrl,
       coverImageName: form.coverImageName,
       ctaLabel: '',
       ctaUrl: '',
-      publishStartDate: isGallery ? '' : form.publishStartDate,
+      publishStartDate: isGallery || isFacility ? '' : form.publishStartDate,
       publishEndDate: isPoster ? form.publishEndDate : '',
       status: isPoster ? 'published' : form.status,
       isPinned: false,
@@ -702,6 +719,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     const isDocumentationMode =
       landingAnnouncementForm.category === 'event' ||
       landingAnnouncementForm.category === 'dokumentasi'
+    const isFacilityMode = landingAnnouncementForm.category === 'fasilitas'
     const isPosterMode =
       landingAnnouncementForm.category === 'promosi' ||
       landingAnnouncementForm.category === 'ucapan'
@@ -721,6 +739,16 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       !landingAnnouncementForm.publishStartDate
     ) {
       setErrorMessage('Tanggal dokumentasi wajib diisi.')
+      return
+    }
+
+    if (isFacilityMode && !landingAnnouncementForm.excerpt.trim()) {
+      setErrorMessage('Keterangan singkat fasilitas wajib diisi.')
+      return
+    }
+
+    if (isFacilityMode && !landingAnnouncementForm.content.trim()) {
+      setErrorMessage('Fungsi fasilitas wajib diisi.')
       return
     }
 
@@ -1332,10 +1360,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           childId: nextChildId,
           periodId: childChanged ? '' : previousRefundForm.periodId,
         }))
-        if (childChanged) {
-          setServicePaymentAmountText(formatRupiahInput(suggestedPaymentAmount))
-        }
-
         return nextChildId
       })
     } catch (error) {
@@ -1359,7 +1383,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           paymentProofDataUrl: '',
           paymentProofName: '',
         }))
-        setServicePaymentAmountText(formatRupiahInput(0))
         setServiceBillingRefundForm((previous) => ({
           ...previous,
           childId: '',
@@ -1392,11 +1415,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         0,
         Math.round(history.summary?.totalOutstanding ?? 0),
       )
-      let shouldSyncPaymentText = false
       setServiceBillingPaymentForm((previous) => {
         const shouldAutoFillAmount =
           previous.childId !== childId || previous.amount <= 0
-        shouldSyncPaymentText = shouldAutoFillAmount
         return {
           ...previous,
           periodId: previous.periodId || history.summary?.activePeriod?.id || '',
@@ -1405,9 +1426,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             : previous.amount,
         }
       })
-      if (shouldSyncPaymentText) {
-        setServicePaymentAmountText(formatRupiahInput(suggestedPaymentAmount))
-      }
       setServiceBillingRefundForm((previous) => ({
         ...previous,
         periodId: previous.periodId || history.summary?.activePeriod?.id || '',
@@ -1431,7 +1449,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   useEffect(() => {
     if (activeSidebar === 'settings') {
       if (settingsTab === 'petugas') {
-        void loadStaff()
+        void Promise.all([loadStaff(), loadPendingStaffRequests()])
         return
       }
 
@@ -1496,6 +1514,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     loadLandingAnnouncements,
     loadMonitoringAttendanceData,
     loadLogs,
+    loadPendingStaffRequests,
     loadParentAccounts,
     loadObservationMonitoringData,
     loadServiceBillingSummary,
@@ -1558,6 +1577,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         }
 
         if (activeSidebar === 'settings') {
+          if (settingsTab === 'petugas') {
+            await loadPendingStaffRequests()
+            return
+          }
+
           if (settingsTab === 'update-pengumuman') {
             await loadLandingAnnouncements({ silent: true })
           }
@@ -1595,6 +1619,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     loadServiceBillingHistory,
     loadServiceBillingSummary,
     loadLandingAnnouncements,
+    loadPendingStaffRequests,
     loadStaff,
     loadStaffAttendanceRecap,
   ])
@@ -1826,6 +1851,60 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
   }
 
+  const handleApproveStaffRequest = async (request: StaffRegistrationRequest) => {
+    setErrorMessage(null)
+    setMessage(null)
+    setProcessingStaffRequestId(request.id)
+    try {
+      await adminApi.approveStaffRegistrationRequest(request.id)
+      setMessage(`Permintaan ${request.fullName} berhasil disetujui.`)
+      await Promise.all([
+        loadPendingStaffRequests(),
+        loadStaff(),
+        loadLogs(searchLogs),
+        loadStaffAttendanceRecap(),
+      ])
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Gagal menyetujui permintaan petugas.'
+      setErrorMessage(message)
+    } finally {
+      setProcessingStaffRequestId(null)
+    }
+  }
+
+  const handleRejectStaffRequest = async (request: StaffRegistrationRequest) => {
+    setErrorMessage(null)
+    setMessage(null)
+    const confirmed = await requestConfirm({
+      title: 'Tolak Permintaan Petugas',
+      message: `Tolak pendaftaran petugas "${request.fullName}" (${request.email})?`,
+      confirmLabel: 'Ya, Tolak',
+      cancelLabel: 'Batal',
+      tone: 'danger',
+    })
+    if (!confirmed) {
+      return
+    }
+
+    setProcessingStaffRequestId(request.id)
+    try {
+      await adminApi.rejectStaffRegistrationRequest(request.id)
+      setMessage(`Permintaan ${request.fullName} berhasil ditolak.`)
+      await Promise.all([loadPendingStaffRequests(), loadLogs(searchLogs)])
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Gagal menolak permintaan petugas.'
+      setErrorMessage(message)
+    } finally {
+      setProcessingStaffRequestId(null)
+    }
+  }
+
   const startEditStaff = (staff: StaffUser) => {
     setEditingStaffId(staff.id)
     setStaffForm({
@@ -1833,7 +1912,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       email: staff.email,
       password: '',
       isActive: staff.isActive,
-      tanggalMasuk: staff.createdAt.slice(0, 10),
+      tanggalMasuk: staff.tanggalMasuk || staff.createdAt.slice(0, 10),
     })
     setShowStaffPassword(false)
     setActiveSidebar('settings')
@@ -1912,21 +1991,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
   }
 
-  const handleServicePaymentAmountInput = (value: string) => {
-    const amount = parseRupiahInput(value)
-    setServicePaymentAmountText(formatRupiahInput(amount))
-    setServiceBillingPaymentForm((previous) => ({
-      ...previous,
-      amount,
-    }))
-  }
-
-  const handleServicePaymentAmountBlur = () => {
-    setServicePaymentAmountText(
-      formatRupiahInput(serviceBillingPaymentForm.amount),
-    )
-  }
-
   const handleServicePaymentProofChange = async (
     event: ChangeEvent<HTMLInputElement>,
   ) => {
@@ -1986,7 +2050,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       childId,
       periodId: selectedRow?.activePeriod?.id || '',
       amount: suggestedPaymentAmount,
-      notes: previous.childId === childId ? previous.notes : '',
       paymentProofDataUrl: previous.childId === childId ? previous.paymentProofDataUrl : '',
       paymentProofName: previous.childId === childId ? previous.paymentProofName : '',
     }))
@@ -1995,7 +2058,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       childId,
       periodId: selectedRow?.activePeriod?.id || '',
     }))
-    setServicePaymentAmountText(formatRupiahInput(suggestedPaymentAmount))
   }, [serviceBillingSummary?.rows])
 
   const handleQuickServicePayment = async () => {
@@ -2013,10 +2075,14 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       setErrorMessage('Ringkasan billing anak belum tersedia.')
       return
     }
+    if (!serviceBillingPaymentForm.paymentProofDataUrl) {
+      setErrorMessage('Bukti pembayaran wajib diunggah.')
+      return
+    }
 
-    const amount = Math.max(0, Math.round(serviceBillingPaymentForm.amount))
+    const amount = Math.max(0, Math.round(summary.totalOutstanding))
     if (amount <= 0) {
-      setErrorMessage('Nominal pembayaran harus lebih dari 0.')
+      setErrorMessage('Tagihan anak ini sudah lunas.')
       return
     }
 
@@ -2042,7 +2108,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             amount: paymentAmount,
             bucket: 'period',
             periodId: activePeriodId,
-            notes: serviceBillingPaymentForm.notes?.trim() || 'Pembayaran tunggakan layanan',
+            notes: 'Pembayaran tunggakan layanan',
             paymentProofDataUrl:
               serviceBillingPaymentForm.paymentProofDataUrl || undefined,
             paymentProofName: serviceBillingPaymentForm.paymentProofName || undefined,
@@ -2061,9 +2127,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             childId,
             amount: arrearsPaymentAmount,
             bucket: 'arrears',
-            notes:
-              serviceBillingPaymentForm.notes?.trim() ||
-              'Pembayaran tunggakan harian layanan',
+            notes: 'Pembayaran tunggakan harian layanan',
             paymentProofDataUrl:
               serviceBillingPaymentForm.paymentProofDataUrl || undefined,
             paymentProofName: serviceBillingPaymentForm.paymentProofName || undefined,
@@ -2080,7 +2144,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           amount: remaining,
           bucket: fallbackBucket,
           periodId: fallbackBucket === 'period' ? activePeriodId || undefined : undefined,
-          notes: serviceBillingPaymentForm.notes?.trim() || 'Pembayaran layanan',
+          notes: 'Pembayaran layanan',
           paymentProofDataUrl:
             serviceBillingPaymentForm.paymentProofDataUrl || undefined,
           paymentProofName: serviceBillingPaymentForm.paymentProofName || undefined,
@@ -2096,11 +2160,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       setServiceBillingPaymentForm((previous) => ({
         ...previous,
         amount: 0,
-        notes: '',
         paymentProofDataUrl: '',
         paymentProofName: '',
       }))
-      setServicePaymentAmountText(formatRupiahInput(0))
     } catch (error) {
       const message =
         error instanceof Error
@@ -2304,10 +2366,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     setStaffAttendancePdfNotice(null)
   }
 
-  const handleServiceBillingPaidMonthFilterChange = (value: string) => {
-    setServiceBillingPaidMonth(clampMonthKeyToServerToday(value))
-  }
-
   useEffect(() => {
     const clampedObservationMonth = clampMonthKeyToServerToday(observationFilterMonth)
     if (clampedObservationMonth !== observationFilterMonth) {
@@ -2343,11 +2401,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       setIncidentPdfFilterDate('')
     }
 
-    const clampedServiceBillingPaidMonth = clampMonthKeyToServerToday(serviceBillingPaidMonth)
-    if (clampedServiceBillingPaidMonth !== serviceBillingPaidMonth) {
-      setServiceBillingPaidMonth(clampedServiceBillingPaidMonth)
-    }
-
     if (
       /^\d{4}$/.test(staffAttendancePdfYear) &&
       Number(staffAttendancePdfYear) > Number(todayYearKey)
@@ -2363,7 +2416,6 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     incidentPdfFilterMonth,
     observationFilterDate,
     observationFilterMonth,
-    serviceBillingPaidMonth,
     staffAttendanceFilterDate,
     staffAttendanceFilterMonth,
     staffAttendancePdfYear,
@@ -2787,7 +2839,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             : (() => {
               const { honor, transport } = calculateStaffPay(
                 dutyMinutes / 60,
-                calculateIsSenior(staff.createdAt),
+                calculateIsSenior(staff.tanggalMasuk),
               )
               return {
                 honor,
@@ -3165,27 +3217,13 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   )
 
   const serviceBillingPaidRows = useMemo(
-    () => {
-      const filteredAndSorted = (serviceBillingSummary?.rows ?? [])
+    () =>
+      (serviceBillingSummary?.rows ?? [])
         .filter((row) => {
-          // Lunas = tidak punya tunggakan
           if (row.totalOutstanding > 0) return false
-
-          // Tetap tampilkan jika dia punya periode aktif ATAU jika sudah pernah bayar sesuatu
           const hasPeriod = row.status !== 'belum-periode'
           const hasPaidInfo = row.paidPeriod > 0 || row.paidArrears > 0 || row.arrearsAttendanceDays > 0
-          if (!hasPeriod && !hasPaidInfo) return false
-
-          if (serviceBillingPaidMonth && row.lastPaymentAt) {
-            // lastPaymentAt format is ISO like YYYY-MM-DDTHH:mm:ssZ
-            if (!row.lastPaymentAt.startsWith(serviceBillingPaidMonth)) return false
-          }
-
-          if (serviceBillingPaidPackage) {
-            if (row.displayServicePackage !== serviceBillingPaidPackage) return false
-          }
-
-          return true
+          return hasPeriod || hasPaidInfo
         })
         .map((row) => ({
           childId: row.childId,
@@ -3194,29 +3232,30 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           packageLabel: servicePackageLabels[row.displayServicePackage],
           attendanceCount: Math.max(0, row.attendanceInActivePeriod),
           paidAmount: Math.max(0, Math.round(row.paidPeriod + row.paidArrears)),
-          isMigrated: row.migrationInfo !== null,
+          paymentProofDataUrl: row.lastPaymentProofDataUrl || '',
+          paymentProofName: row.lastPaymentProofName || '',
+          lastPaymentAt: row.lastPaymentAt || '',
         }))
-        .sort((left, right) => {
-          const leftPkgIdx = servicePackageTableOrder.indexOf(left.packageKey)
-          const rightPkgIdx = servicePackageTableOrder.indexOf(right.packageKey)
-          if (leftPkgIdx !== rightPkgIdx) return leftPkgIdx - rightPkgIdx
-          return left.childName.localeCompare(right.childName, 'id-ID')
-        })
-
-      return filteredAndSorted.slice(0, serviceBillingPaidLimit)
-    },
-    [serviceBillingSummary?.rows, serviceBillingPaidMonth, serviceBillingPaidPackage, serviceBillingPaidLimit],
+        .sort((left, right) =>
+          right.lastPaymentAt.localeCompare(left.lastPaymentAt, 'id-ID') ||
+          left.childName.localeCompare(right.childName, 'id-ID'),
+        ),
+    [serviceBillingSummary?.rows],
   )
 
-  const serviceBillingArrearsChildOptions = useMemo(
-    () =>
-      serviceBillingArrearsRows.map((row) => ({
-        value: row.childId,
-        label: `${row.childName} · ${row.packageLabel}`,
-        badge: `${row.unpaidAttendanceDays} hari belum lunas`,
-      })),
-    [serviceBillingArrearsRows],
+  const serviceBillingPaidTotalPages = Math.max(
+    1,
+    Math.ceil(serviceBillingPaidRows.length / SERVICE_BILLING_PAID_PAGE_SIZE),
   )
+
+  const paginatedServiceBillingPaidRows = useMemo(() => {
+    const start = (serviceBillingPaidPage - 1) * SERVICE_BILLING_PAID_PAGE_SIZE
+    return serviceBillingPaidRows.slice(
+      start,
+      start + SERVICE_BILLING_PAID_PAGE_SIZE,
+    )
+  }, [SERVICE_BILLING_PAID_PAGE_SIZE, serviceBillingPaidPage, serviceBillingPaidRows])
+
 
   const selectedServiceBillingSummary = useMemo(
     () =>
@@ -3294,6 +3333,14 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     selectedBillingChildId,
     serviceBillingArrearsRows,
   ])
+
+  useEffect(() => {
+    setServiceBillingPaidPage((previous) =>
+      previous > serviceBillingPaidTotalPages
+        ? serviceBillingPaidTotalPages
+        : previous,
+    )
+  }, [serviceBillingPaidTotalPages])
 
   const unusedServiceBillingAdvancedRefs = {
     handleCreateBillingPeriod,
@@ -3668,34 +3715,24 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             <BillingPage
               isSettlementOpen={isServiceBillingSettlementOpen}
               onToggleSettlementOpen={setServiceBillingSettlementOpen}
-              selectedBillingChildId={selectedBillingChildId}
               onSelectBillingChild={handleSelectServiceBillingArrearsChild}
-              arrearsChildOptions={serviceBillingArrearsChildOptions}
-              paymentAmountText={servicePaymentAmountText}
-              onPaymentAmountInput={handleServicePaymentAmountInput}
-              onPaymentAmountBlur={handleServicePaymentAmountBlur}
               selectedArrearsRow={selectedServiceBillingArrearsRow}
               isMutating={isMutatingServiceBilling}
               paymentForm={serviceBillingPaymentForm}
               onPaymentProofChange={handleServicePaymentProofChange}
               onClearPaymentProof={clearServicePaymentProof}
-              onChangePaymentMethod={(method) =>
-                setServiceBillingPaymentForm((previous) => ({
-                  ...previous,
-                  notes: method,
-                }))
-              }
               onQuickPayment={handleQuickServicePayment}
               formatCurrency={formatCurrency}
               isLoadingPaidRows={isLoadingServiceBilling}
-              paidMonthValue={serviceBillingPaidMonth}
-              paidMonthMax={todayMonthKey}
-              onChangePaidMonth={handleServiceBillingPaidMonthFilterChange}
-              paidPackageValue={serviceBillingPaidPackage}
-              onChangePaidPackage={setServiceBillingPaidPackage}
-              paidLimitValue={serviceBillingPaidLimit}
-              onChangePaidLimit={setServiceBillingPaidLimit}
-              paidRows={serviceBillingPaidRows}
+              paidRows={paginatedServiceBillingPaidRows}
+              paidPage={serviceBillingPaidPage}
+              paidTotalPages={serviceBillingPaidTotalPages}
+              onPrevPaidPage={() => setServiceBillingPaidPage((previous) => Math.max(1, previous - 1))}
+              onNextPaidPage={() =>
+                setServiceBillingPaidPage((previous) =>
+                  Math.min(serviceBillingPaidTotalPages, previous + 1),
+                )
+              }
               arrearsRows={serviceBillingArrearsRows}
             />
           )
@@ -3749,10 +3786,16 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             onResetStaffForm={resetStaffForm}
             isLoadingStaff={isLoadingStaff}
             staffUsers={staffUsers}
+            pendingStaffRequests={pendingStaffRequests}
+            isLoadingPendingStaffRequests={isLoadingPendingStaffRequests}
+            processingStaffRequestId={processingStaffRequestId}
             formatDateOnly={formatDateOnly}
+            formatDateTime={formatDateTime}
             calculateServiceLength={calculateServiceLength}
             onStartEditStaff={startEditStaff}
             onDeleteStaff={handleDeleteStaff}
+            onApproveStaffRequest={handleApproveStaffRequest}
+            onRejectStaffRequest={handleRejectStaffRequest}
           />
         )
 
@@ -4082,3 +4125,4 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 }
 
 export default AdminSection
+

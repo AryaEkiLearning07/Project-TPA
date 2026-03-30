@@ -17,6 +17,66 @@
   overflow-x: clip;
 }
 
+.app-shell--petugas {
+  --petugas-solid-pink: #e85d7a;
+  --petugas-solid-pink-deep: #d04a68;
+}
+
+.app-shell--petugas::before,
+.app-shell--petugas::after {
+  display: none;
+}
+
+.app-shell--petugas .topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #f2d4df;
+}
+
+.app-shell--petugas .card {
+  background: #ffffff;
+}
+
+.app-shell--petugas .card::before {
+  background: var(--petugas-solid-pink);
+}
+
+.app-shell--petugas .staff-attendance-hero,
+.app-shell--petugas .staff-attendance-gate,
+.app-shell--petugas .staff-attendance-hero__badge,
+.app-shell--petugas .staff-attendance-clock,
+.app-shell--petugas .staff-attendance-module,
+.app-shell--petugas .staff-attendance-module__security,
+.app-shell--petugas .staff-attendance-banner,
+.app-shell--petugas .staff-attendance-banner.is-warning,
+.app-shell--petugas .staff-attendance-banner.is-danger,
+.app-shell--petugas .app-confirm-dialog,
+.app-shell--petugas .app-loading-dialog {
+  background-image: none;
+}
+
+.app-shell--petugas .button,
+.app-shell--petugas .button--auth-primary {
+  border-color: var(--petugas-solid-pink-deep);
+  background: var(--petugas-solid-pink);
+}
+
+.app-shell--petugas .button--success {
+  border-color: var(--petugas-solid-pink-deep);
+  background: var(--petugas-solid-pink-deep);
+}
+
+.app-shell--petugas .button--ghost {
+  border-color: #f2bfd1;
+  background: #ffffff;
+  color: #7a3050;
+}
+
+.app-shell--petugas .button--danger {
+  border-color: #ebabc0;
+  background: #fff3f6;
+  color: #b73358;
+}
+
 .app-shell::before,
 .app-shell::after {
   content: '';
@@ -380,6 +440,20 @@
   color: #6a557f;
   font-size: 0.94rem;
   line-height: 1.55;
+}
+
+.auth-card__portal-note {
+  margin: 0.35rem 0 0;
+  color: #5d4b74;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.auth-card__portal-note a {
+  color: #c94080;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
 }
 
 .auth-form--stacked {
@@ -2580,6 +2654,10 @@ select.input.input--locked {
 
 .service-billing-overdue-list-card {
   margin-top: 1rem;
+}
+
+.service-section-collapse + .service-billing-overdue-list-card {
+  margin-top: 1.4rem;
 }
 
 .service-billing-controls {
@@ -4805,6 +4883,10 @@ select.input.input--locked {
 
   .service-billing-package-panel__head {
     flex-direction: column;
+  }
+
+  .service-section-collapse + .service-billing-overdue-list-card {
+    margin-top: 1rem;
   }
 
   .observation-point-group__head-row {

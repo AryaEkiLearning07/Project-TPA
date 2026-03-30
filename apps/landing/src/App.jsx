@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 const logoTpaSrc = `${import.meta.env.BASE_URL}logo_TPA.jpg`
-const heroPhotoSrc = `${import.meta.env.BASE_URL}hero2.png`
+const heroPhotoDesktopSrc = `${import.meta.env.BASE_URL}hero2-desktop.jpg`
+const heroPhotoMobileSrc = `${import.meta.env.BASE_URL}hero2-mobile.jpg`
 const headPhotoSrc = `${import.meta.env.BASE_URL}hero1.png`
 const activityPhotoSrc = logoTpaSrc
 const cookingEventPhotoSrc = `${import.meta.env.BASE_URL}event.jpg`
 
-const defaultWhatsAppNumber = '628155042120'
+const defaultWhatsAppNumber = '62818304608'
 const configuredWhatsAppNumber = import.meta.env.VITE_LANDING_WHATSAPP_NUMBER?.trim() || defaultWhatsAppNumber
 const normalizedWhatsAppNumber = configuredWhatsAppNumber.replace(/\D+/g, '')
 const whatsappUrl = normalizedWhatsAppNumber
@@ -227,7 +228,7 @@ const navSections = [
   { id: 'tentang-kami', label: 'Tentang Kami' },
   { id: 'fasilitas', label: 'Fasilitas' },
   { id: 'kegiatan', label: 'Kegiatan' },
-  { id: 'biaya-layanan', label: 'Biaya Layanan' },
+  { id: 'biaya-layanan', label: 'Paket Layanan' },
 ]
 
 const programItems = [
@@ -239,7 +240,7 @@ const programItems = [
   'Menyanyi dan stimulasi bahasa',
 ]
 
-const facilityItems = [
+const defaultFacilityItems = [
   {
     name: 'Ruangan Ber-AC',
     description: 'Ruang belajar dan bermain ber-AC untuk menjaga anak tetap nyaman selama kegiatan.',
@@ -300,11 +301,13 @@ const announcementCategoryLabelMap = {
   event: 'Event',
   dokumentasi: 'Dokumentasi',
   galeri: 'Galeri',
+  fasilitas: 'Fasilitas',
   promosi: 'Promosi',
   ucapan: 'Ucapan',
 }
 const eventCategorySet = new Set(['event'])
 const galleryCategorySet = new Set(['dokumentasi', 'galeri'])
+const fasilitasCategorySet = new Set(['fasilitas'])
 const kegiatanCategorySet = new Set([...eventCategorySet, ...galleryCategorySet])
 const promoHeroCategorySet = new Set(['promosi', 'ucapan'])
 
@@ -355,24 +358,16 @@ const fallbackLandingAnnouncements = [
   },
 ]
 
-const facilityLoopCopies = 4
-const galleryLoopCopies = 4
-const galleryLoopMinimumItems = 2
+const galleryLoopBaseCopies = 5
+const galleryLoopTargetCardCount = 30
+const galleryLoopMinimumItems = 1
+const galleryLoopRecenterThreshold = 0.35
 const createGalleryDragState = () => ({
   pointerId: null,
   isDragging: false,
   startClientX: 0,
   startScrollLeft: 0,
 })
-const facilityLoopItems = Array.from({ length: facilityLoopCopies }, (_, copy) =>
-  facilityItems.map((item, index) => ({
-    ...item,
-    originalIndex: index,
-    loopKey: `facility-${copy}-${index}-${item.name}`,
-  })),
-).flat()
-const defaultFacilityIndex = Math.floor(facilityItems.length / 2)
-
 const pricingPlans = [
   {
     title: 'Paket Harian',
@@ -530,7 +525,7 @@ export default function App() {
     return 'light'
   })
   const [isCompactViewport, setCompactViewport] = useState(() => window.innerWidth <= 760)
-  const [activeFacilityIndex, setActiveFacilityIndex] = useState(defaultFacilityIndex)
+  const [activeFacilityIndex, setActiveFacilityIndex] = useState(0)
   const [visibleSections, setVisibleSections] = useState(() =>
     allAnimatedSections.reduce((result, id) => ({ ...result, [id]: id === 'home' }), {}),
   )
@@ -602,7 +597,44 @@ export default function App() {
   const isParentPortalPage = currentPath === PARENT_PORTAL_PATH
   const isDarkMode = colorMode === 'dark'
   const platformLogoSrc = logoTpaSrc
-  const renderedFacilityItems = facilityLoopItems
+  const facilityItems = useMemo(() => {
+    const dynamicFacilityItems = landingAnnouncements
+      .filter((item) => fasilitasCategorySet.has(item.category || ''))
+      .map((item, index) => {
+        const title = (item.title || '').trim() || `Fasilitas ${index + 1}`
+        const shortDescription = (item.excerpt || '').trim()
+        const functionDescription = (item.content || '').trim()
+        return {
+          id: item.id || `fasilitas-${index + 1}`,
+          name: title,
+          description: shortDescription || 'Informasi fasilitas belum ditambahkan.',
+          detail: functionDescription
+            ? `Fungsi: ${functionDescription}`
+            : 'Fungsi: Informasi fungsi belum ditambahkan.',
+          image: item.coverImageDataUrl || activityPhotoSrc,
+        }
+      })
+
+    if (dynamicFacilityItems.length > 0) {
+      return dynamicFacilityItems
+    }
+
+    return defaultFacilityItems
+  }, [landingAnnouncements])
+  const defaultFacilityIndex = useMemo(
+    () => Math.floor(facilityItems.length / 2),
+    [facilityItems.length],
+  )
+  const canNavigateFacility = facilityItems.length > 1
+  const renderedFacilityItems = useMemo(
+    () =>
+      facilityItems.map((item, index) => ({
+        ...item,
+        originalIndex: index,
+        loopKey: `facility-${index}-${item.id || item.name}`,
+      })),
+    [facilityItems],
+  )
   const kegiatanItems = useMemo(() => {
     const dynamicItems = landingAnnouncements
       .filter((item) => kegiatanCategorySet.has(item.category || ''))
@@ -656,6 +688,17 @@ export default function App() {
   }, [directGalleryItems, kegiatanItems])
   const isGalleryUsingEventFallback = directGalleryItems.length === 0 && galleryItems.length > 0
   const isGalleryLoopEnabled = galleryItems.length >= galleryLoopMinimumItems
+  const galleryActiveLoopCopies = useMemo(() => {
+    if (!isGalleryLoopEnabled) {
+      return 1
+    }
+    const itemCount = Math.max(galleryItems.length, 1)
+    const requiredCopies = Math.max(
+      galleryLoopBaseCopies,
+      Math.ceil(galleryLoopTargetCardCount / itemCount),
+    )
+    return requiredCopies % 2 === 0 ? requiredCopies + 1 : requiredCopies
+  }, [galleryItems.length, isGalleryLoopEnabled])
   const galleryLoopItems = useMemo(() => {
     if (!galleryItems.length) {
       return []
@@ -668,13 +711,13 @@ export default function App() {
       }))
     }
 
-    return Array.from({ length: galleryLoopCopies }, (_, copy) =>
+    return Array.from({ length: galleryActiveLoopCopies }, (_, copy) =>
       galleryItems.map((item, index) => ({
         ...item,
         loopKey: `gallery-${copy}-${item.id || item.title}-${index}`,
       })),
     ).flat()
-  }, [galleryItems, isGalleryLoopEnabled])
+  }, [galleryActiveLoopCopies, galleryItems, isGalleryLoopEnabled])
   const heroAnnouncement = useMemo(
     () =>
       landingAnnouncements.find(
@@ -776,7 +819,7 @@ export default function App() {
     const loadLandingAnnouncements = async () => {
       setLoadingLandingAnnouncements(true)
       try {
-        const data = await apiRequest('/landing-announcements?limit=12')
+        const data = await apiRequest('/landing-announcements?limit=48')
         if (!isMounted) {
           return
         }
@@ -819,15 +862,16 @@ export default function App() {
   }
 
   const recenterInfiniteTrack = (track, copies, threshold = 0.45) => {
+    if (copies <= 1) return
     const segmentWidth = track.scrollWidth / copies
     if (!Number.isFinite(segmentWidth) || segmentWidth <= 0) return
 
     const maxScrollable = track.scrollWidth - track.clientWidth
     if (!Number.isFinite(maxScrollable) || maxScrollable <= 0) return
 
-    const minScroll = Math.min(segmentWidth * threshold, maxScrollable)
-    const maxScroll = Math.max(Math.min(segmentWidth * (copies - threshold), maxScrollable), minScroll)
-    if (maxScroll <= minScroll) return
+    const minScroll = Math.max(0, Math.min(segmentWidth * threshold, maxScrollable))
+    const maxScroll = Math.max(minScroll, maxScrollable - segmentWidth * threshold)
+    if (maxScroll - minScroll < 1) return
 
     let guard = 0
     while (track.scrollLeft < minScroll && guard <= copies + 1) {
@@ -852,9 +896,6 @@ export default function App() {
     clearFacilityInteractionTimeout()
     facilityInteractionTimeoutRef.current = window.setTimeout(() => {
       isFacilityInteractingRef.current = false
-      const track = facilityTrackRef.current
-      if (!track) return
-      recenterInfiniteTrack(track, facilityLoopCopies, 0.2)
     }, SCROLL_DEBOUNCE_TIMEOUT)
   }
 
@@ -875,7 +916,7 @@ export default function App() {
       const track = galleryTrackRef.current
       if (!track) return
       if (isGalleryLoopEnabled) {
-        recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+        recenterInfiniteTrack(track, galleryActiveLoopCopies, galleryLoopRecenterThreshold)
       }
     }, GALLERY_INTERACTION_DEBOUNCE_TIMEOUT)
   }
@@ -1135,16 +1176,24 @@ export default function App() {
   }, [activeSection])
 
   useEffect(() => {
+    setActiveFacilityIndex((previous) => {
+      if (!facilityItems.length) {
+        return 0
+      }
+      if (previous >= facilityItems.length) {
+        return 0
+      }
+      return previous
+    })
+  }, [facilityItems.length])
+
+  useEffect(() => {
+    if (!facilityItems.length) {
+      return undefined
+    }
+
     const initialIndex = isCompactViewport ? 0 : defaultFacilityIndex
     const timer = window.setTimeout(() => {
-      const track = facilityTrackRef.current
-      if (track) {
-        const segmentWidth = track.scrollWidth / facilityLoopCopies
-        if (!isCompactViewport && segmentWidth > 0) {
-          track.scrollLeft = segmentWidth
-        }
-      }
-
       if (!isCompactViewport) {
         scrollFacilityToIndex(initialIndex, 'auto')
       } else {
@@ -1153,7 +1202,7 @@ export default function App() {
     }, 120)
 
     return () => window.clearTimeout(timer)
-  }, [isCompactViewport])
+  }, [defaultFacilityIndex, facilityItems.length, isCompactViewport])
 
   useEffect(() => {
     const track = galleryTrackRef.current
@@ -1162,15 +1211,15 @@ export default function App() {
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const segmentWidth = track.scrollWidth / galleryLoopCopies
+      const segmentWidth = track.scrollWidth / galleryActiveLoopCopies
       if (!Number.isFinite(segmentWidth) || segmentWidth <= 0) {
         return
       }
-      track.scrollLeft = segmentWidth
+      track.scrollLeft = segmentWidth * Math.floor(galleryActiveLoopCopies / 2)
     })
 
     return () => window.cancelAnimationFrame(frameId)
-  }, [galleryItems.length, isGalleryLoopEnabled])
+  }, [galleryActiveLoopCopies, galleryItems.length, isGalleryLoopEnabled])
 
   useEffect(() => {
     const track = galleryTrackRef.current
@@ -1191,7 +1240,7 @@ export default function App() {
         const delta = now - lastFrameTime
         const speed = isCompactViewport ? 0.028 : 0.042
         activeTrack.scrollLeft += delta * speed
-        recenterInfiniteTrack(activeTrack, galleryLoopCopies, 0.18)
+        recenterInfiniteTrack(activeTrack, galleryActiveLoopCopies, galleryLoopRecenterThreshold)
       }
 
       lastFrameTime = now
@@ -1206,7 +1255,7 @@ export default function App() {
         galleryAutoScrollFrameRef.current = null
       }
     }
-  }, [galleryItems.length, isCompactViewport, isGalleryLoopEnabled])
+  }, [galleryActiveLoopCopies, galleryItems.length, isCompactViewport, isGalleryLoopEnabled])
 
   const scrollToSection = (id) => {
     const target = document.getElementById(id)
@@ -1224,32 +1273,11 @@ export default function App() {
     const total = facilityItems.length
     if (!total) return
 
-    const nextIndex = ((index % total) + total) % total
+    const nextIndex = Math.max(0, Math.min(index, total - 1))
     const track = facilityTrackRef.current
     if (!track) return
 
-    recenterInfiniteTrack(track, facilityLoopCopies, 0.2)
-
-    const trackCenter = track.scrollLeft + track.clientWidth / 2
-    const candidateLoopIndices = Array.from({ length: facilityLoopCopies }, (_, copy) => nextIndex + copy * total)
-
-    let nearestLoopIndex =
-      candidateLoopIndices[Math.min(Math.floor(facilityLoopCopies / 2), candidateLoopIndices.length - 1)]
-    let nearestDistance = Number.POSITIVE_INFINITY
-
-    candidateLoopIndices.forEach((loopIndex) => {
-      const card = facilityCardRefs.current[loopIndex]
-      if (!card) return
-
-      const cardCenter = card.offsetLeft + card.clientWidth / 2
-      const distance = Math.abs(cardCenter - trackCenter)
-      if (distance < nearestDistance) {
-        nearestDistance = distance
-        nearestLoopIndex = loopIndex
-      }
-    })
-
-    const targetCard = facilityCardRefs.current[nearestLoopIndex]
+    const targetCard = facilityCardRefs.current[nextIndex]
     if (!targetCard) return
 
     const targetLeft = targetCard.offsetLeft - (track.clientWidth - targetCard.clientWidth) / 2
@@ -1257,8 +1285,14 @@ export default function App() {
     setActiveFacilityIndex(nextIndex)
   }
 
-  const handleFacilityPrev = () => scrollFacilityToIndex(activeFacilityIndex - 1)
-  const handleFacilityNext = () => scrollFacilityToIndex(activeFacilityIndex + 1)
+  const handleFacilityPrev = () => {
+    if (!canNavigateFacility) return
+    scrollFacilityToIndex(activeFacilityIndex - 1)
+  }
+  const handleFacilityNext = () => {
+    if (!canNavigateFacility) return
+    scrollFacilityToIndex(activeFacilityIndex + 1)
+  }
 
   const handleFacilityTrackScroll = () => {
     const track = facilityTrackRef.current
@@ -1272,8 +1306,6 @@ export default function App() {
 
     if (isFacilityInteractingRef.current) {
       queueFacilityInteractionEnd()
-    } else {
-      recenterInfiniteTrack(track, facilityLoopCopies, 0.2)
     }
 
     if (isFacilityScrollingRef.current) {
@@ -1305,7 +1337,7 @@ export default function App() {
       })
 
       if (nearestLoopIndex >= 0) {
-        const nearestBaseIndex = nearestLoopIndex % facilityItems.length
+        const nearestBaseIndex = nearestLoopIndex
         if (nearestBaseIndex !== activeFacilityIndex) {
           setActiveFacilityIndex(nearestBaseIndex)
         }
@@ -1334,7 +1366,7 @@ export default function App() {
     }
 
     if (isGalleryLoopEnabled) {
-      recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+      recenterInfiniteTrack(track, galleryActiveLoopCopies, galleryLoopRecenterThreshold)
     }
   }
 
@@ -1342,6 +1374,10 @@ export default function App() {
     if (!galleryItems.length) return
     isGalleryInteractingRef.current = true
     clearGalleryInteractionTimeout()
+    const track = galleryTrackRef.current
+    if (track && isGalleryLoopEnabled) {
+      recenterInfiniteTrack(track, galleryActiveLoopCopies, galleryLoopRecenterThreshold)
+    }
   }
 
   const handleGalleryInteractionEnd = () => {
@@ -1397,7 +1433,7 @@ export default function App() {
     const deltaX = event.clientX - dragState.startClientX
     track.scrollLeft = dragState.startScrollLeft - deltaX
     if (isGalleryLoopEnabled) {
-      recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+      recenterInfiniteTrack(track, galleryActiveLoopCopies, galleryLoopRecenterThreshold)
     }
   }
 
@@ -1427,7 +1463,7 @@ export default function App() {
     clearGalleryInteractionTimeout()
     track.scrollLeft += horizontalDelta
     if (isGalleryLoopEnabled) {
-      recenterInfiniteTrack(track, galleryLoopCopies, 0.18)
+      recenterInfiniteTrack(track, galleryActiveLoopCopies, galleryLoopRecenterThreshold)
     }
     event.preventDefault()
     queueGalleryInteractionEnd()
@@ -1499,6 +1535,7 @@ export default function App() {
         body: JSON.stringify({
           email: parentLoginForm.email,
           password: parentLoginForm.password,
+          loginPreference: 'PARENT_FIRST',
         }),
       })
       if (session?.user?.role !== 'ORANG_TUA') {
@@ -1938,8 +1975,9 @@ export default function App() {
           id="home"
           className={`page-section home-hero ${visibleSections.home ? 'is-visible' : ''}`}
           style={{
-            '--home-bg-image': `url(${heroPhotoSrc})`,
-            backgroundImage: `url(${heroPhotoSrc})`,
+            '--home-bg-image': `url(${heroPhotoDesktopSrc})`,
+            '--home-bg-image-mobile': `url(${heroPhotoMobileSrc})`,
+            backgroundImage: `url(${heroPhotoDesktopSrc})`,
           }}
         >
           <div className="section-shell home-section">
@@ -1982,11 +2020,17 @@ export default function App() {
               ) : null}
 
               <div className="home-actions">
-                <button type="button" className="button button--secondary" onClick={() => openAuthModal('register')}>
+                <a href={whatsappUrl} target="_blank" rel="noreferrer" className="button button--cta-whatsapp">
+                  <span className="cta-action__icon" aria-hidden="true">
+                    <WhatsAppIcon />
+                  </span>
                   Daftar Sekarang
-                </button>
-                <a href={whatsappUrl} target="_blank" rel="noreferrer" className="button button--primary">
-                  Hubungi Kami
+                </a>
+                <a href={instagramUrl} target="_blank" rel="noreferrer" className="button button--cta-instagram">
+                  <span className="cta-action__icon" aria-hidden="true">
+                    <InstagramIcon />
+                  </span>
+                  Instagram
                 </a>
               </div>
             </div>
@@ -2061,6 +2105,7 @@ export default function App() {
                 className="facility-slider__nav facility-slider__nav--prev"
                 onClick={handleFacilityPrev}
                 aria-label="Fasilitas sebelumnya"
+                disabled={!canNavigateFacility || activeFacilityIndex <= 0}
               >
                 <span className="facility-slider__nav-icon" aria-hidden="true">
                   <ChevronLeftIcon />
@@ -2099,6 +2144,7 @@ export default function App() {
                 className="facility-slider__nav facility-slider__nav--next"
                 onClick={handleFacilityNext}
                 aria-label="Fasilitas berikutnya"
+                disabled={!canNavigateFacility || activeFacilityIndex >= facilityItems.length - 1}
               >
                 <span className="facility-slider__nav-icon" aria-hidden="true">
                   <ChevronRightIcon />
@@ -2177,7 +2223,7 @@ export default function App() {
                     <p>
                       {isGalleryUsingEventFallback
                         ? 'Dokumentasi diambil dari kegiatan yang sudah tersedia.'
-                        : 'Dokumentasi momen harian anak yang bergulir otomatis tanpa henti.'}
+                        : 'Dokumentasi moment anak TPA.'}
                     </p>
                   </div>
                   <div

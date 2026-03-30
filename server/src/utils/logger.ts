@@ -34,16 +34,16 @@ class Logger {
 
     switch (level) {
       case LogLevel.DEBUG:
-        console.debug(`[${timestamp}] [DEBUG] [${tag}]`, ...args);
+        console.debug(`[${timestamp}] [${levelTag}] [${tag}]`, ...args);
         break;
       case LogLevel.INFO:
-        console.log(`[${timestamp}] [INFO] [${tag}]`, message);
+        console.log(`[${timestamp}] [${levelTag}] [${tag}]`, message);
         break;
       case LogLevel.WARN:
-        console.warn(`[${timestamp}] [WARN] [${tag}]`, message);
+        console.warn(`[${timestamp}] [${levelTag}] [${tag}]`, message);
         break;
       case LogLevel.ERROR:
-        console.error(`[${timestamp}] [ERROR] [${tag}]`, ...args);
+        console.error(`[${timestamp}] [${levelTag}] [${tag}]`, ...args);
         break;
     }
   }
