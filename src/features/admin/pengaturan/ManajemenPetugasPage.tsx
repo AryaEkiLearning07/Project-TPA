@@ -27,6 +27,7 @@ interface ManajemenPetugasPageProps {
   calculateServiceLength: (tanggalMasuk: string) => string
   onStartEditStaff: (staff: StaffUser) => void
   onDeleteStaff: (staff: StaffUser) => Promise<void> | void
+  onToggleStaffStatus: (staff: StaffUser) => Promise<void> | void
   onApproveStaffRequest: (request: StaffRegistrationRequest) => Promise<void> | void
   onRejectStaffRequest: (request: StaffRegistrationRequest) => Promise<void> | void
 }
@@ -51,144 +52,100 @@ const ManajemenPetugasPage = ({
   calculateServiceLength,
   onStartEditStaff,
   onDeleteStaff,
+  onToggleStaffStatus,
   onApproveStaffRequest,
   onRejectStaffRequest,
 }: ManajemenPetugasPageProps) => {
   return (
     <section className="page">
-      <div className="card">
-        <h2>{editingStaffId ? 'Edit Akun Petugas' : 'Tambah Akun Petugas'}</h2>
-        <p className="card__description">{staffCountLabel} terdaftar</p>
+      {editingStaffId ? (
+        <div
+          className="app-confirm-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              onResetStaffForm()
+            }
+          }}
+        >
+          <div className="card" style={{ width: 'min(94vw, 560px)', margin: 0 }}>
+            <h2>Edit Akun Petugas</h2>
+            <p className="card__description">Nama dan email hanya bisa dilihat. Yang bisa diubah: tanggal masuk dan password.</p>
 
-        <form onSubmit={onSubmitStaff}>
-          <div className="form-grid form-grid--3">
-            <div className="field-group">
-              <label className="label" htmlFor="staffFullName">
-                Nama Lengkap
-              </label>
-              <input
-                id="staffFullName"
-                className="input"
-                value={staffForm.fullName}
-                onChange={(event) =>
-                  setStaffForm((previous) => ({
-                    ...previous,
-                    fullName: event.target.value,
-                  }))
-                }
-              />
-            </div>
+            <form onSubmit={onSubmitStaff}>
+              <div className="form-grid form-grid--2">
+                <div className="field-group">
+                  <label className="label">Nama Lengkap</label>
+                  <p>{staffForm.fullName || '-'}</p>
+                </div>
+                <div className="field-group">
+                  <label className="label">Email</label>
+                  <p>{staffForm.email || '-'}</p>
+                </div>
+              </div>
 
-            <div className="field-group">
-              <label className="label" htmlFor="staffEmail">
-                Email
-              </label>
-              <input
-                id="staffEmail"
-                className="input"
-                type="email"
-                value={staffForm.email}
-                onChange={(event) =>
-                  setStaffForm((previous) => ({
-                    ...previous,
-                    email: event.target.value,
-                  }))
-                }
-              />
-            </div>
+              <div className="form-grid form-grid--2">
+                <div className="field-group">
+                  <label className="label" htmlFor="staffTanggalMasuk">
+                    Tanggal Masuk
+                  </label>
+                  <AppDatePickerField
+                    id="staffTanggalMasuk"
+                    value={staffForm.tanggalMasuk}
+                    max={todayIso}
+                    onChange={(value) =>
+                      setStaffForm((previous) => ({
+                        ...previous,
+                        tanggalMasuk: value,
+                      }))
+                    }
+                  />
+                </div>
 
-            <div className="field-group">
-              <label className="label" htmlFor="staffPassword">
-                {editingStaffId ? 'Password Baru (Opsional)' : 'Password'}
-              </label>
-              <div className="input-with-action">
-                <input
-                  id="staffPassword"
-                  className="input"
-                  type={showStaffPassword ? 'text' : 'password'}
-                  value={staffForm.password}
-                  onChange={(event) =>
-                    setStaffForm((previous) => ({
-                      ...previous,
-                      password: event.target.value,
-                    }))
-                  }
-                />
+                <div className="field-group">
+                  <label className="label" htmlFor="staffPassword">
+                    Password Baru (Opsional)
+                  </label>
+                  <div className="input-with-action">
+                    <input
+                      id="staffPassword"
+                      className="input"
+                      type={showStaffPassword ? 'text' : 'password'}
+                      value={staffForm.password}
+                      onChange={(event) =>
+                        setStaffForm((previous) => ({
+                          ...previous,
+                          password: event.target.value,
+                        }))
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => setShowStaffPassword((previous) => !previous)}
+                      aria-label={showStaffPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                    >
+                      {showStaffPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="button">
+                  Update Petugas
+                </button>
                 <button
                   type="button"
-                  className="icon-button"
-                  onClick={() => setShowStaffPassword((previous) => !previous)}
-                  aria-label={showStaffPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  className="button button--ghost"
+                  onClick={onResetStaffForm}
                 >
-                  {showStaffPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  Batal
                 </button>
               </div>
-            </div>
+            </form>
           </div>
-
-          <div className="form-grid form-grid--2">
-            <div className="field-group">
-              <label className="label" htmlFor="staffTanggalMasuk">
-                Tanggal Masuk
-              </label>
-              <AppDatePickerField
-                id="staffTanggalMasuk"
-                value={staffForm.tanggalMasuk}
-                max={todayIso}
-                disabled={Boolean(editingStaffId)}
-                onChange={(value) =>
-                  setStaffForm((previous) => ({
-                    ...previous,
-                    tanggalMasuk: value,
-                  }))
-                }
-              />
-              {editingStaffId ? (
-                <p className="field-hint">Tanggal masuk tidak dapat diubah saat edit data petugas.</p>
-              ) : null}
-            </div>
-
-            <div className="field-group field-group--small">
-              <label className="label" htmlFor="staffStatus">
-                Status Akun
-              </label>
-              <button
-                id="staffStatus"
-                type="button"
-                role="switch"
-                aria-checked={staffForm.isActive}
-                className={`admin-status-toggle ${staffForm.isActive ? 'is-active' : 'is-inactive'}`}
-                onClick={() =>
-                  setStaffForm((previous) => ({
-                    ...previous,
-                    isActive: !previous.isActive,
-                  }))
-                }
-              >
-                <span className="admin-status-toggle__thumb" />
-                <span className="admin-status-toggle__label">
-                  {staffForm.isActive ? 'Aktif' : 'Non-aktif'}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <div className="form-actions">
-            <button type="submit" className="button">
-              {editingStaffId ? 'Update Petugas' : 'Simpan Petugas'}
-            </button>
-            {editingStaffId ? (
-              <button
-                type="button"
-                className="button button--ghost"
-                onClick={onResetStaffForm}
-              >
-                Batal Edit
-              </button>
-            ) : null}
-          </div>
-        </form>
-      </div>
+        </div>
+      ) : null}
 
       <div className="card">
         <h3>Permintaan Petugas</h3>
@@ -258,6 +215,7 @@ const ManajemenPetugasPage = ({
 
       <div className="card">
         <h3>Daftar Petugas</h3>
+        <p className="card__description">{staffCountLabel} terdaftar</p>
         <div className="table-wrap">
           <table className="table">
             <thead>
@@ -288,7 +246,11 @@ const ManajemenPetugasPage = ({
                   <tr key={staff.id}>
                     <td>{staff.fullName}</td>
                     <td>{staff.email}</td>
-                    <td>{staff.isActive ? 'Aktif' : 'Nonaktif'}</td>
+                    <td>
+                      <span className={`staff-status-pill ${staff.isActive ? 'staff-status-pill--active' : 'staff-status-pill--inactive'}`}>
+                        {staff.isActive ? 'Aktif' : 'Nonaktif'}
+                      </span>
+                    </td>
                     <td>{formatDateOnly(staff.tanggalMasuk)}</td>
                     <td>{calculateServiceLength(staff.tanggalMasuk)}</td>
                     <td>
@@ -299,6 +261,13 @@ const ManajemenPetugasPage = ({
                           onClick={() => onStartEditStaff(staff)}
                         >
                           Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={`button button--tiny ${staff.isActive ? 'button--danger' : 'button--success'}`}
+                          onClick={() => void onToggleStaffStatus(staff)}
+                        >
+                          {staff.isActive ? 'Nonaktifkan' : 'Aktifkan'}
                         </button>
                         <button
                           type="button"

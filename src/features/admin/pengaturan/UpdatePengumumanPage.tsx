@@ -4,6 +4,7 @@ import type {
   FormEvent,
   SetStateAction,
 } from 'react'
+import { useEffect, useRef } from 'react'
 import type {
   LandingAnnouncement,
   LandingAnnouncementCategory,
@@ -128,14 +129,26 @@ const UpdatePengumumanPage = ({
   formatDateOnly,
   formatDateTime,
 }: UpdatePengumumanPageProps) => {
+  const editCardRef = useRef<HTMLDivElement | null>(null)
   const activeFunction = mapCategoryToFunction(form.category)
   const filteredAnnouncements = announcements.filter((announcement) =>
     matchesFunction(announcement, activeFunction),
   )
+  const shouldScrollAnnouncementList = filteredAnnouncements.length > 5
   const isGalleryMode = activeFunction === 'galeri'
   const isDocumentationMode = activeFunction === 'dokumentasi'
   const isFacilityMode = activeFunction === 'fasilitas'
   const isPosterMode = activeFunction === 'poster'
+
+  useEffect(() => {
+    if (!editingAnnouncementId) {
+      return
+    }
+    editCardRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }, [editingAnnouncementId])
 
   const handleFunctionChange = (nextFunction: AnnouncementFunction) => {
     onResetForm()
@@ -232,7 +245,14 @@ const UpdatePengumumanPage = ({
           Menampilkan seluruh riwayat {functionLabelMap[activeFunction].toLowerCase()} yang pernah diupload.
         </p>
 
-        <div className="table-wrap">
+        <div
+          className="table-wrap"
+          style={
+            shouldScrollAnnouncementList
+              ? { maxHeight: '460px', overflowY: 'auto' }
+              : undefined
+          }
+        >
           <table className="table">
             <thead>
               {isGalleryMode ? (
@@ -425,7 +445,7 @@ const UpdatePengumumanPage = ({
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" ref={editCardRef}>
         <h3>{editingAnnouncementId ? 'Edit Data' : 'Tambah Data Baru'}</h3>
         <p className="card__description">
           Form input menyesuaikan fungsi {functionLabelMap[activeFunction].toLowerCase()}.

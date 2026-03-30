@@ -1851,6 +1851,30 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
   }
 
+  const handleToggleStaffStatus = async (staff: StaffUser) => {
+    setErrorMessage(null)
+    setMessage(null)
+
+    const nextIsActive = !staff.isActive
+    try {
+      await adminApi.updateStaffUser(staff.id, {
+        fullName: staff.fullName,
+        email: staff.email,
+        password: '',
+        isActive: nextIsActive,
+        tanggalMasuk: staff.tanggalMasuk,
+      })
+      setMessage(
+        `Status ${staff.fullName} berhasil diubah menjadi ${nextIsActive ? 'Aktif' : 'Nonaktif'}.`,
+      )
+      await Promise.all([loadStaff(), loadLogs(searchLogs), loadStaffAttendanceRecap()])
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Gagal mengubah status petugas.'
+      setErrorMessage(message)
+    }
+  }
+
   const handleApproveStaffRequest = async (request: StaffRegistrationRequest) => {
     setErrorMessage(null)
     setMessage(null)
@@ -3794,6 +3818,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             calculateServiceLength={calculateServiceLength}
             onStartEditStaff={startEditStaff}
             onDeleteStaff={handleDeleteStaff}
+            onToggleStaffStatus={handleToggleStaffStatus}
             onApproveStaffRequest={handleApproveStaffRequest}
             onRejectStaffRequest={handleRejectStaffRequest}
           />
