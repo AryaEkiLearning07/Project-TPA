@@ -2854,3 +2854,504 @@
     border-radius: 0 0 1rem 1rem;
   }
 }
+
+/* Final parent theme: mature solid pink */
+.parent-solid {
+  --parent-bg: #f2cbdd;
+  --parent-surface: #f9ddea;
+  --parent-surface-strong: #f4d0e0;
+  --parent-border: #d889ab;
+  --parent-border-strong: #c66090;
+  --parent-primary: #e8318f;
+  --parent-primary-strong: #b91a6a;
+  --parent-primary-dark: #7a1249;
+  --parent-button-text: #ffffff;
+  --parent-text: #3b1426;
+  --parent-muted: #6f3550;
+  --parent-arrival: #e9f8ef;
+  --parent-arrival-border: #5ebf7c;
+  --parent-departure: #fdeced;
+  --parent-departure-border: #e05353;
+  --parent-empty-bg: #edbcd2;
+}
+
+.parent-solid-header,
+.parent-solid-page-head,
+.parent-solid-card,
+.parent-solid-message-box,
+.parent-solid-report-item,
+.parent-solid-finance-disclosure,
+.parent-solid-item-card {
+  opacity: 1;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.parent-solid-activity-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.72rem;
+}
+
+.parent-solid-activity-gallery__item {
+  border: 1px solid var(--parent-border);
+  background: var(--parent-surface-strong);
+  border-radius: 0.9rem;
+  padding: 0.58rem;
+  display: grid;
+  gap: 0.46rem;
+}
+
+.parent-solid-activity-gallery__item img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-radius: 0.7rem;
+  border: 1px solid var(--parent-border);
+}
+
+.parent-solid-activity-gallery__item p {
+  margin: 0;
+  color: var(--parent-muted);
+  font-size: 0.8rem;
+  min-height: 2.2em;
+}
+
+/* Force solid attendance colors (including empty state) */
+.parent-solid-status-card.parent-solid-status-card--arrival,
+.parent-solid-status-card.parent-solid-status-card--arrival.is-empty {
+  background: #2ea44f;
+  border-color: #2a9447;
+  color: #ffffff;
+}
+
+.parent-solid-status-card.parent-solid-status-card--departure,
+.parent-solid-status-card.parent-solid-status-card--departure.is-empty {
+  background: #d93b3b;
+  border-color: #c73232;
+  color: #ffffff;
+}
+
+.parent-solid-status-card.parent-solid-status-card--arrival span,
+.parent-solid-status-card.parent-solid-status-card--arrival strong,
+.parent-solid-status-card.parent-solid-status-card--departure span,
+.parent-solid-status-card.parent-solid-status-card--departure strong {
+  color: #ffffff;
+}
+
+.parent-solid-status-card.parent-solid-status-card--arrival .parent-solid-status-card__divider,
+.parent-solid-status-card.parent-solid-status-card--departure .parent-solid-status-card__divider {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* White clean treatment for parent message and carried-items cards */
+.parent-solid-card--message-clean,
+.parent-solid-card--carried-clean {
+  background: #ffffff;
+  border-color: #e8c4d5;
+}
+
+.parent-solid-card--message-clean .parent-solid-message-box,
+.parent-solid-card--message-clean .parent-solid-textarea,
+.parent-solid-card--carried-clean .parent-solid-carried-hero,
+.parent-solid-card--carried-clean .parent-solid-carried-wrap,
+.parent-solid-card--carried-clean .parent-solid-carried-photo,
+.parent-solid-card--carried-clean .parent-solid-carried-list li {
+  background: #ffffff;
+  border-color: #e8c4d5;
+}
+
+.parent-solid-card--carried-clean .parent-solid-carried-photo__placeholder,
+.parent-solid-card--carried-clean .parent-solid-carried-hero__placeholder {
+  background: #ffffff;
+  border-color: #e8c4d5;
+}
+
+/* Global white clean cards for parent pages */
+.parent-solid-card,
+.parent-solid-card--nested,
+.parent-solid-report-item,
+.parent-solid-message-box,
+.parent-solid-detail-grid > div,
+.parent-solid-inventory-shop-card,
+.parent-solid-finance-disclosure,
+.parent-solid-finance-disclosure__meta > div,
+.parent-solid-finance-amount,
+.parent-solid-item-card,
+.parent-solid-carried-hero,
+.parent-solid-carried-wrap,
+.parent-solid-carried-photo,
+.parent-solid-activity-gallery__item {
+  background: #ffffff;
+  border-color: #e8c4d5;
+}
+
+.parent-solid-textarea,
+.parent-solid-carried-photo__placeholder,
+.parent-solid-carried-hero__placeholder {
+  background: #ffffff;
+  border-color: #e8c4d5;
+}
+
+/* Attendance colors remain fixed on dashboard and report detail */
+.parent-solid-status-card.parent-solid-status-card--arrival,
+.parent-solid-status-card.parent-solid-status-card--arrival.is-empty {
+  background: #2ea44f;
+  border-color: #2a9447;
+  color: #ffffff;
+}
+
+.parent-solid-status-card.parent-solid-status-card--departure,
+.parent-solid-status-card.parent-solid-status-card--departure.is-empty {
+  background: #d93b3b;
+  border-color: #c73232;
+  color: #ffffff;
+}
+
+.parent-solid-report-item__summary-arrival {
+  background: #2ea44f;
+  color: #ffffff;
+}
+
+.parent-solid-report-item__summary-departure {
+  background: #d93b3b;
+  color: #ffffff;
+}
+
+/* Finance color coding */
+.parent-solid-card--arrears {
+  background: #fdeced;
+  border-color: #d93b3b;
+}
+
+.parent-solid-card--paid {
+  background: #e9f8ef;
+  border-color: #2ea44f;
+}
+
+/* Navbar white clean */
+.parent-solid-header,
+.parent-solid-mobile-nav {
+  background: #ffffff;
+  border-color: #e8c4d5;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.parent-solid-brand__logo,
+.parent-solid-desktop-nav button,
+.parent-solid-mobile-nav button,
+.parent-solid-theme-toggle {
+  background: #ffffff;
+  border-color: #e8c4d5;
+}
+
+.parent-solid-desktop-nav button.is-active,
+.parent-solid-mobile-nav button.is-active {
+  background: #ffffff;
+  border-color: var(--parent-primary);
+  color: var(--parent-primary-dark);
+}
+
+/* Restore dark mode styling (do not keep white cards/navbar in dark mode) */
+.parent-solid[data-theme='dark'] .parent-solid-header,
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav {
+  background: var(--parent-surface);
+  border-color: var(--parent-border);
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-brand__logo,
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav button,
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav button,
+.parent-solid[data-theme='dark'] .parent-solid-theme-toggle {
+  background: var(--parent-surface-strong);
+  border-color: var(--parent-border);
+  color: var(--parent-muted);
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav button.is-active,
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav button.is-active {
+  background: #3a2230;
+  border-color: var(--parent-primary);
+  color: #ffffff;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-card:not(.parent-solid-card--arrears):not(.parent-solid-card--paid),
+.parent-solid[data-theme='dark'] .parent-solid-card--nested,
+.parent-solid[data-theme='dark'] .parent-solid-report-item,
+.parent-solid[data-theme='dark'] .parent-solid-inventory-shop-card,
+.parent-solid[data-theme='dark'] .parent-solid-finance-disclosure,
+.parent-solid[data-theme='dark'] .parent-solid-finance-disclosure__meta > div,
+.parent-solid[data-theme='dark'] .parent-solid-finance-amount,
+.parent-solid[data-theme='dark'] .parent-solid-item-card,
+.parent-solid[data-theme='dark'] .parent-solid-activity-gallery__item {
+  background: var(--parent-surface);
+  border-color: var(--parent-border);
+  color: var(--parent-text);
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-message-box,
+.parent-solid[data-theme='dark'] .parent-solid-detail-grid > div,
+.parent-solid[data-theme='dark'] .parent-solid-textarea,
+.parent-solid[data-theme='dark'] .parent-solid-carried-hero,
+.parent-solid[data-theme='dark'] .parent-solid-carried-wrap,
+.parent-solid[data-theme='dark'] .parent-solid-carried-photo,
+.parent-solid[data-theme='dark'] .parent-solid-carried-photo__placeholder,
+.parent-solid[data-theme='dark'] .parent-solid-carried-hero__placeholder {
+  background: var(--parent-surface-strong);
+  border-color: var(--parent-border);
+  color: var(--parent-text);
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-activity-gallery__item p,
+.parent-solid[data-theme='dark'] .parent-solid-message-box label,
+.parent-solid[data-theme='dark'] .parent-solid-card__lead {
+  color: var(--parent-muted);
+}
+
+/* Final force for dark mode (prevent white cards/navbar) */
+.parent-solid[data-theme='dark'] .parent-solid-header,
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav,
+.parent-solid[data-theme='dark'] .parent-solid-brand__logo,
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav button,
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav button,
+.parent-solid[data-theme='dark'] .parent-solid-theme-toggle {
+  background: #2b1823 !important;
+  border-color: #6c4256 !important;
+  color: #d7b6c6 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav button.is-active,
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav button.is-active {
+  background: #3a2230 !important;
+  border-color: #f06aa8 !important;
+  color: #ffffff !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-card:not(.parent-solid-card--arrears):not(.parent-solid-card--paid),
+.parent-solid[data-theme='dark'] .parent-solid-card--nested,
+.parent-solid[data-theme='dark'] .parent-solid-report-item,
+.parent-solid[data-theme='dark'] .parent-solid-message-box,
+.parent-solid[data-theme='dark'] .parent-solid-detail-grid > div,
+.parent-solid[data-theme='dark'] .parent-solid-inventory-shop-card,
+.parent-solid[data-theme='dark'] .parent-solid-finance-disclosure,
+.parent-solid[data-theme='dark'] .parent-solid-finance-disclosure__meta > div,
+.parent-solid[data-theme='dark'] .parent-solid-finance-amount,
+.parent-solid[data-theme='dark'] .parent-solid-item-card,
+.parent-solid[data-theme='dark'] .parent-solid-carried-hero,
+.parent-solid[data-theme='dark'] .parent-solid-carried-wrap,
+.parent-solid[data-theme='dark'] .parent-solid-carried-photo,
+.parent-solid[data-theme='dark'] .parent-solid-activity-gallery__item {
+  background: #2b1823 !important;
+  border-color: #6c4256 !important;
+  color: #fdeef5 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-textarea,
+.parent-solid[data-theme='dark'] .parent-solid-carried-photo__placeholder,
+.parent-solid[data-theme='dark'] .parent-solid-carried-hero__placeholder {
+  background: #331f2b !important;
+  border-color: #6c4256 !important;
+  color: #fdeef5 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-card__lead,
+.parent-solid[data-theme='dark'] .parent-solid-message-box label,
+.parent-solid[data-theme='dark'] .parent-solid-activity-gallery__item p {
+  color: #d7b6c6 !important;
+}
+
+/* Parent navbar redesign: boxed, wrapped buttons, sliding indicator */
+.parent-solid-header {
+  border-radius: 0.86rem !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: #e8c4d5 !important;
+}
+
+.parent-solid-desktop-nav--slider {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.28rem;
+  padding: 0.28rem;
+  border: 1px solid #e8c4d5;
+  border-radius: 0.78rem;
+  background: #fff6fa;
+  min-width: 480px;
+}
+
+.parent-solid-desktop-nav--slider .parent-solid-nav-slider {
+  position: absolute;
+  top: 0.28rem;
+  left: 0.28rem;
+  width: calc((100% - 0.56rem - 0.84rem) / 4);
+  height: calc(100% - 0.56rem);
+  border: 1px solid #efbfd2;
+  border-radius: 0.56rem;
+  background: #ffffff;
+  box-shadow: 0 8px 18px -14px rgba(122, 18, 73, 0.5);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+}
+
+.parent-solid-desktop-nav--slider.active-0 .parent-solid-nav-slider {
+  transform: translateX(0);
+}
+
+.parent-solid-desktop-nav--slider.active-1 .parent-solid-nav-slider {
+  transform: translateX(calc(100% + 0.28rem));
+}
+
+.parent-solid-desktop-nav--slider.active-2 .parent-solid-nav-slider {
+  transform: translateX(calc((100% + 0.28rem) * 2));
+}
+
+.parent-solid-desktop-nav--slider.active-3 .parent-solid-nav-slider {
+  transform: translateX(calc((100% + 0.28rem) * 3));
+}
+
+.parent-solid-desktop-nav--slider button {
+  position: relative;
+  z-index: 1;
+  border: 1px solid transparent !important;
+  border-radius: 0.56rem !important;
+  background: transparent !important;
+  padding: 0.5rem 0.66rem !important;
+  min-height: 2.2rem;
+}
+
+.parent-solid-desktop-nav--slider button.is-active {
+  color: var(--parent-primary-dark) !important;
+}
+
+.parent-solid-theme-toggle {
+  border-radius: 0.76rem !important;
+  border-color: #e8c4d5 !important;
+  background: #fff6fa !important;
+}
+
+.parent-solid-mobile-nav--slider {
+  position: fixed;
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: 0.72rem;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.2rem;
+  padding: 0.22rem;
+  border: 1px solid #e8c4d5 !important;
+  border-radius: 0.78rem;
+  background: #ffffff !important;
+  box-shadow: 0 14px 28px -16px rgba(70, 30, 50, 0.45);
+}
+
+.parent-solid-mobile-nav--slider .parent-solid-nav-slider {
+  position: absolute;
+  top: 0.22rem;
+  left: 0.22rem;
+  width: calc((100% - 0.44rem - 0.6rem) / 4);
+  height: calc(100% - 0.44rem);
+  border: 1px solid #efbfd2;
+  border-radius: 0.5rem;
+  background: #fff6fa;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+}
+
+.parent-solid-mobile-nav--slider.active-0 .parent-solid-nav-slider {
+  transform: translateX(0);
+}
+
+.parent-solid-mobile-nav--slider.active-1 .parent-solid-nav-slider {
+  transform: translateX(calc(100% + 0.2rem));
+}
+
+.parent-solid-mobile-nav--slider.active-2 .parent-solid-nav-slider {
+  transform: translateX(calc((100% + 0.2rem) * 2));
+}
+
+.parent-solid-mobile-nav--slider.active-3 .parent-solid-nav-slider {
+  transform: translateX(calc((100% + 0.2rem) * 3));
+}
+
+.parent-solid-mobile-nav--slider button {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.5rem !important;
+}
+
+.parent-solid-mobile-nav--slider button.is-active {
+  color: var(--parent-primary-dark) !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-header {
+  background: rgba(28, 14, 23, 0.95) !important;
+  border-color: #6c4256 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav--slider {
+  background: #2b1823;
+  border-color: #6c4256;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav--slider .parent-solid-nav-slider {
+  background: #3a2230;
+  border-color: #814a66;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-desktop-nav--slider button.is-active {
+  color: #ffffff !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-theme-toggle {
+  background: #2b1823 !important;
+  border-color: #6c4256 !important;
+  color: #fdeef5 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav--slider {
+  background: #2b1823 !important;
+  border-color: #6c4256 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav--slider .parent-solid-nav-slider {
+  background: #3a2230;
+  border-color: #814a66;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav--slider button {
+  color: #d7b6c6 !important;
+}
+
+.parent-solid[data-theme='dark'] .parent-solid-mobile-nav--slider button.is-active {
+  color: #ffffff !important;
+}
+
+@media (max-width: 1080px) {
+  .parent-solid-desktop-nav--slider {
+    min-width: 420px;
+  }
+}
+
+/* Ensure bottom navbar only appears on mobile */
+@media (min-width: 921px) {
+  .parent-solid-mobile-nav,
+  .parent-solid-mobile-nav--slider {
+    display: none !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .parent-solid-desktop-nav,
+  .parent-solid-desktop-nav--slider {
+    display: none !important;
+  }
+
+  .parent-solid-mobile-nav,
+  .parent-solid-mobile-nav--slider {
+    display: grid !important;
+  }
+}
