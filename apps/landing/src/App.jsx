@@ -224,7 +224,7 @@ const apiRequest = async (path, options = {}) => {
 }
 
 const navSections = [
-  { id: 'home', label: 'Home' },
+  { id: 'home', label: 'Beranda' },
   { id: 'tentang-kami', label: 'Tentang Kami' },
   { id: 'fasilitas', label: 'Fasilitas' },
   { id: 'kegiatan', label: 'Kegiatan' },
