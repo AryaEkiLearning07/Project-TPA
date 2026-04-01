@@ -4265,16 +4265,38 @@ select.input.input--locked {
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
 }
 
 .ktp-card__allergy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  max-width: 100%;
   font-size: 0.76rem;
-  font-weight: 600;
-  color: #c0392b;
-  background: #fff5f0;
-  border: 1px solid #ffc8a8;
-  padding: 0.2rem 0.5rem;
+  font-weight: 700;
+  color: #8f001c;
+  background: #ffe3e9;
+  border: 1px solid #d90429;
+  padding: 0.2rem 0.54rem 0.2rem 0.4rem;
   border-radius: 0.4rem;
+}
+
+.ktp-card__allergy-icon {
+  flex-shrink: 0;
+  color: #d90429;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.ktp-card__allergy-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ktp-card__no-allergy {
@@ -4286,6 +4308,8 @@ select.input.input--locked {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  margin-left: auto;
+  flex-shrink: 0;
   font-size: 0.76rem;
   font-weight: 600;
   color: #25d366;

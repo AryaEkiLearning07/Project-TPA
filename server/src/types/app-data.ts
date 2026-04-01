@@ -63,6 +63,7 @@ export interface ChildProfile {
   whatsappNumber: string
   allergy: string
   servicePackage: string
+  serviceStartDate: string
   arrivalTime: string
   departureTime: string
   pickupPersons: string[]

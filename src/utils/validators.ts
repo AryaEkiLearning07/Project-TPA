@@ -37,6 +37,11 @@ export const validateChildProfileInput = (
   if (!input.servicePackage) {
     errors.servicePackage = 'Paket layanan wajib dipilih'
   }
+  if (!input.serviceStartDate.trim()) {
+    errors.serviceStartDate = 'Tanggal mulai masuk wajib diisi'
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(input.serviceStartDate.trim())) {
+    errors.serviceStartDate = 'Format tanggal mulai masuk harus YYYY-MM-DD'
+  }
 
   if (input.arrivalTime && input.departureTime) {
     const arrivalMinutes = timeToMinutes(input.arrivalTime)

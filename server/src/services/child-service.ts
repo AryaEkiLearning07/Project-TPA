@@ -22,6 +22,42 @@ export { ServiceError }
 
 const nowIso = (): string => new Date().toISOString()
 
+const toDateOnly = (value: unknown): string => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().slice(0, 10)
+    }
+    return toDbDate(value)
+}
+
+const hasChildrenColumn = async (
+    executor: SqlExecutor,
+    columnName: string,
+): Promise<boolean> => {
+    const [rows] = (await executor.execute(
+        `SELECT 1
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'children'
+          AND COLUMN_NAME = ?
+        LIMIT 1`,
+        [columnName],
+    )) as [RowDataPacket[], unknown]
+
+    return rows.length > 0
+}
+
+const ensureChildrenServiceStartDateColumn = async (
+    executor: SqlExecutor,
+): Promise<void> => {
+    const hasServiceStartDate = await hasChildrenColumn(executor, 'service_start_date')
+    if (!hasServiceStartDate) {
+        await executor.execute(
+            `ALTER TABLE children
+             ADD COLUMN service_start_date DATE NULL AFTER service_package`,
+        )
+    }
+}
+
 const normalizeAssetUrl = (value: string): string => {
     const normalized = toText(value).trim()
     if (!normalized) return ''
@@ -125,7 +161,7 @@ const mapChildRow = (row: RowDataPacket): ChildProfile => ({
     gender: row.gender === 'FEMALE' ? 'P' : 'L',
     photoDataUrl: normalizeAssetUrl(toText(row.photo_path)),
     birthPlace: toText(row.birth_place),
-    birthDate: toDbDate(row.birth_date),
+    birthDate: toDateOnly(row.birth_date),
     childOrder: toText(row.child_order),
     religion: toChildReligion(row.religion),
     outsideActivities: toText(row.outside_activities),
@@ -140,6 +176,7 @@ const mapChildRow = (row: RowDataPacket): ChildProfile => ({
     whatsappNumber: toText(row.profile_whatsapp_number),
     allergy: toText(row.allergy),
     servicePackage: row.service_package === 'DAILY' ? 'harian' : row.service_package === 'BIWEEKLY' ? '2-mingguan' : 'bulanan',
+    serviceStartDate: toDateOnly(row.service_start_date ?? row.created_at),
     arrivalTime: toText(row.planned_arrival_time),
     departureTime: toText(row.planned_departure_time),
     pickupPersons: parseStringArrayJson(row.pickup_persons_json),
@@ -177,6 +214,7 @@ export const ensureChildrenTable = async (executor: SqlExecutor): Promise<void> 
             outside_activities TEXT NULL,
             allergy TEXT NULL,
             service_package ENUM('DAILY', 'BIWEEKLY', 'MONTHLY') NOT NULL DEFAULT 'MONTHLY',
+            service_start_date DATE NULL,
             planned_arrival_time VARCHAR(10) NULL,
             planned_departure_time VARCHAR(10) NULL,
             deposit_purpose TEXT NULL,
@@ -203,6 +241,7 @@ export const ensureChildrenTable = async (executor: SqlExecutor): Promise<void> 
             INDEX idx_children_active (is_active)
         )`,
     )
+    await ensureChildrenServiceStartDateColumn(executor)
 }
 
 const childWithParentProfileQuery = `
@@ -261,8 +300,12 @@ export const getChildrenByParentProfileId = async (
 
 export const createChild = async (input: ChildProfileInput): Promise<ChildProfile> => {
     const connection = await dbPool.getConnection()
+    let transactionStarted = false
     try {
+        await ensureChildrenTable(connection)
+        await ensureParentRelationshipSchema(connection)
         await connection.beginTransaction()
+        transactionStarted = true
 
         const parentProfileId = await resolveParentProfileId(connection, {
             fatherName: input.fatherName,
@@ -281,7 +324,7 @@ export const createChild = async (input: ChildProfileInput): Promise<ChildProfil
         const [result] = await connection.execute<ResultSetHeader>(
             `INSERT INTO children (
         full_name, nick_name, gender, photo_path, birth_place, birth_date,
-        child_order, religion, outside_activities, allergy, service_package,
+        child_order, religion, outside_activities, allergy, service_package, service_start_date,
         planned_arrival_time, planned_departure_time, deposit_purpose,
         prenatal_period, partus_period, post_natal_period,
         motor_skill, language_skill, health_history,
@@ -303,6 +346,7 @@ export const createChild = async (input: ChildProfileInput): Promise<ChildProfil
                 toText(input.outsideActivities).trim(),
                 toText(input.allergy).trim(),
                 toDbServicePackage(input.servicePackage),
+                toDbDate(input.serviceStartDate),
                 toText(input.arrivalTime).trim() || null,
                 toText(input.departureTime).trim() || null,
                 toText(input.depositPurpose).trim(),
@@ -335,7 +379,9 @@ export const createChild = async (input: ChildProfileInput): Promise<ChildProfil
         if (!child) throw new ServiceError(500, 'Gagal membaca child setelah insert')
         return child
     } catch (e) {
-        await connection.rollback()
+        if (transactionStarted) {
+            await connection.rollback()
+        }
         throw e
     } finally {
         connection.release()
@@ -344,11 +390,15 @@ export const createChild = async (input: ChildProfileInput): Promise<ChildProfil
 
 export const updateChild = async (id: string, input: ChildProfileInput): Promise<ChildProfile> => {
     const connection = await dbPool.getConnection()
+    let transactionStarted = false
     try {
         const recordIdInt = parseInt(id, 10)
         if (isNaN(recordIdInt)) throw new ServiceError(400, 'ID Anak tidak valid.')
 
+        await ensureChildrenTable(connection)
+        await ensureParentRelationshipSchema(connection)
         await connection.beginTransaction()
+        transactionStarted = true
 
         const parentProfileId = await resolveParentProfileId(connection, {
             fatherName: input.fatherName,
@@ -367,7 +417,7 @@ export const updateChild = async (id: string, input: ChildProfileInput): Promise
         await connection.execute(
             `UPDATE children SET
         full_name=?, nick_name=?, gender=?, photo_path=?, birth_place=?, birth_date=?,
-        child_order=?, religion=?, outside_activities=?, allergy=?, service_package=?,
+        child_order=?, religion=?, outside_activities=?, allergy=?, service_package=?, service_start_date=?,
         planned_arrival_time=?, planned_departure_time=?, deposit_purpose=?,
         prenatal_period=?, partus_period=?, post_natal_period=?,
         motor_skill=?, language_skill=?, health_history=?,
@@ -389,6 +439,7 @@ export const updateChild = async (id: string, input: ChildProfileInput): Promise
                 toText(input.outsideActivities).trim(),
                 toText(input.allergy).trim(),
                 toDbServicePackage(input.servicePackage),
+                toDbDate(input.serviceStartDate),
                 toText(input.arrivalTime).trim() || null,
                 toText(input.departureTime).trim() || null,
                 toText(input.depositPurpose).trim(),
@@ -421,7 +472,9 @@ export const updateChild = async (id: string, input: ChildProfileInput): Promise
         if (!updated) throw new ServiceError(404, 'Data anak tidak ditemukan setelah pembaruan.')
         return updated
     } catch (e) {
-        await connection.rollback()
+        if (transactionStarted) {
+            await connection.rollback()
+        }
         throw e
     } finally {
         connection.release()

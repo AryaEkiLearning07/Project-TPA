@@ -6,6 +6,7 @@ import {
   getServicePackageRates,
   type ServicePackageRates,
 } from './service-rate-service.js'
+import { ensureChildrenTable } from './child-service.js'
 import { saveBase64ToDisk } from '../utils/base64-storage.js'
 
 type SqlExecutor = Pick<Pool, 'execute'> | Pick<PoolConnection, 'execute'>
@@ -30,6 +31,7 @@ interface ChildRow extends RowDataPacket {
   id: number
   full_name: string
   service_package: string
+  service_start_date?: string | null
 }
 
 interface AttendanceRow extends RowDataPacket {
@@ -1255,6 +1257,22 @@ const assertChildExists = async (
   }
 }
 
+const resolveChildServiceStartDate = async (
+  executor: SqlExecutor,
+  childId: number,
+): Promise<string | null> => {
+  const [rows] = (await executor.execute(
+    `SELECT service_start_date
+    FROM children
+    WHERE id = ?
+    LIMIT 1`,
+    [childId],
+  )) as [RowDataPacket[], unknown]
+
+  const rawValue = rows[0]?.service_start_date
+  return normalizeOptionalDateKey(rawValue)
+}
+
 const assertNoPeriodOverlap = async (
   executor: SqlExecutor,
   input: {
@@ -1459,18 +1477,23 @@ export const createServiceBillingPeriod = async (
     throw new ServiceBillingError(400, 'Paket layanan tidak valid.')
   }
 
-  const startDate = normalizeOptionalDateKey(input.startDate) ?? toDateKey(new Date())
-  const durationDays = getBillingPeriodDurationDays(packageKey)
-  const endDate = addDays(startDate, Math.max(0, durationDays - 1))
+  const requestedStartDate = normalizeOptionalDateKey(input.startDate)
   const amount = toSafeAmount(input.amount)
   const notes = toText(input.notes).trim()
 
   const connection = await dbPool.getConnection()
+  let transactionStarted = false
 
   try {
-    await connection.beginTransaction()
+    await ensureChildrenTable(connection)
     await ensureServiceBillingSchema(connection)
+    await connection.beginTransaction()
+    transactionStarted = true
     await assertChildExists(connection, childId)
+    const childServiceStartDate = await resolveChildServiceStartDate(connection, childId)
+    const startDate = requestedStartDate ?? childServiceStartDate ?? toDateKey(new Date())
+    const durationDays = getBillingPeriodDurationDays(packageKey)
+    const endDate = addDays(startDate, Math.max(0, durationDays - 1))
     await assertNoPeriodOverlap(connection, {
       childId,
       startDate,
@@ -1513,7 +1536,9 @@ export const createServiceBillingPeriod = async (
 
     await connection.commit()
   } catch (error) {
-    await connection.rollback()
+    if (transactionStarted) {
+      await connection.rollback()
+    }
     throw error
   } finally {
     connection.release()

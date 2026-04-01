@@ -150,6 +150,14 @@ const clampOptionalDateKeyToToday = (value: string, todayDate?: string): string 
   return clampDateKeyToToday(normalized, todayDate)
 }
 
+const normalizeOptionalDateKey = (value: string): string => {
+  const normalized = value.trim()
+  if (!normalized) {
+    return ''
+  }
+  return isIsoDateKey(normalized) ? normalized : ''
+}
+
 const getMonthDateBounds = (monthKey: string, todayDate: string): { min: string; max: string } => {
   if (!/^\d{4}-\d{2}$/.test(monthKey)) {
     return {
@@ -272,7 +280,7 @@ const initialLandingAnnouncementForm: LandingAnnouncementEditorForm = {
 
 const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const [activeSidebar, setActiveSidebar] = useState<AdminSidebarKey>('monitoring')
-  const [monitoringTab, setMonitoringTab] = useState<MonitoringSubTab>('kehadiran-anak')
+  const [monitoringTab, setMonitoringTab] = useState<MonitoringSubTab>('kehadiran-petugas')
   const [settingsTab, setSettingsTab] = useState<SettingsSubTab>('petugas')
   const [isSidebarOpen, setSidebarOpen] = useState(false)
   const [staffUsers, setStaffUsers] = useState<StaffUser[]>([])
@@ -381,6 +389,13 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const todayIso = serverDateContext.todayDate
   const todayMonthKey = serverDateContext.todayMonth
   const todayYearKey = serverDateContext.todayYear
+  const getChildServiceStartDate = useCallback((childId: string): string => {
+    if (!childId) {
+      return ''
+    }
+    const child = appData.children.find((item) => item.id === childId)
+    return normalizeOptionalDateKey(child?.serviceStartDate ?? '')
+  }, [appData.children])
   const [isSyncingAppData] = useState(false)
   const [observationPdfNotice, setObservationPdfNotice] = useState<{
     type: DownloadNoticeType
@@ -1336,6 +1351,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         const selectedSummary =
           summary.rows.find((row) => row.childId === nextChildId) ?? null
         const childChanged = previous !== nextChildId
+        const childServiceStartDate = getChildServiceStartDate(nextChildId)
         const suggestedPaymentAmount = Math.max(
           0,
           Math.round(selectedSummary?.totalOutstanding ?? 0),
@@ -1346,6 +1362,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           childId: nextChildId,
           packageKey:
             selectedSummary?.currentServicePackage ?? previousPeriodForm.packageKey,
+          startDate: childChanged
+            ? childServiceStartDate || todayIso
+            : previousPeriodForm.startDate || childServiceStartDate || todayIso,
         }))
         setServiceBillingPaymentForm((previousPaymentForm) => ({
           ...previousPaymentForm,
@@ -1394,7 +1413,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         setLoadingServiceBilling(false)
       }
     }
-  }, [])
+  }, [getChildServiceStartDate, todayIso])
 
   const loadServiceBillingHistory = useCallback(async (
     childId: string,
@@ -2058,6 +2077,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 
     const selectedRow =
       serviceBillingSummary?.rows.find((row) => row.childId === childId) ?? null
+    const childServiceStartDate = getChildServiceStartDate(childId)
     const suggestedPaymentAmount = Math.max(
       0,
       Math.round(selectedRow?.totalOutstanding ?? 0),
@@ -2068,6 +2088,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       ...previous,
       childId,
       packageKey: selectedRow?.currentServicePackage ?? previous.packageKey,
+      startDate: childServiceStartDate || todayIso,
     }))
     setServiceBillingPaymentForm((previous) => ({
       ...previous,
@@ -2082,7 +2103,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       childId,
       periodId: selectedRow?.activePeriod?.id || '',
     }))
-  }, [serviceBillingSummary?.rows])
+  }, [getChildServiceStartDate, serviceBillingSummary?.rows, todayIso])
 
   const handleQuickServicePayment = async () => {
     setErrorMessage(null)

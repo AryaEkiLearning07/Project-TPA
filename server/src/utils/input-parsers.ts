@@ -246,6 +246,7 @@ export const parseChildProfileInput = (value: unknown): ChildProfileInput => {
     whatsappNumber: toText(value.whatsappNumber),
     allergy: toText(value.allergy),
     servicePackage: toText(value.servicePackage),
+    serviceStartDate: toText(value.serviceStartDate),
     arrivalTime: toText(value.arrivalTime),
     departureTime: toText(value.departureTime),
     pickupPersons: toStringArray(value.pickupPersons),

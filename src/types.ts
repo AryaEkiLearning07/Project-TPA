@@ -85,6 +85,7 @@ export interface ChildProfile extends MetadataFields {
   whatsappNumber: string
   allergy: string
   servicePackage: ServicePackage
+  serviceStartDate: string
   arrivalTime: string
   departureTime: string
   pickupPersons: string[]

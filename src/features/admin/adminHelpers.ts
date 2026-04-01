@@ -113,6 +113,12 @@ export const adminMenus: SidebarMenuItem[] = [
 
 export const monitoringSubTabs = [
     {
+        key: 'kehadiran-petugas',
+        label: 'Kehadiran Petugas',
+        description: 'Rekap kehadiran harian petugas',
+        icon: UsersRound,
+    },
+    {
         key: 'kehadiran-anak',
         label: 'Kehadiran Anak',
         description: 'Rekap bulanan kehadiran anak',
@@ -129,12 +135,6 @@ export const monitoringSubTabs = [
         label: 'Berita Acara',
         description: 'Ringkasan berita acara per anak',
         icon: FileText,
-    },
-    {
-        key: 'kehadiran-petugas',
-        label: 'Kehadiran Petugas',
-        description: 'Rekap kehadiran harian petugas',
-        icon: UsersRound,
     },
     {
         key: 'layanan',
