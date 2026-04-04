@@ -43,6 +43,18 @@ Catatan:
 powershell -ExecutionPolicy Bypass -File .\ops\status-tpa-prod.ps1
 ```
 
+## Recovery Cloudflare Tunnel (jika muncul Error 1033 / 530)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\ensure-cloudflare-tunnel.ps1
+```
+
+Atau via npm script:
+
+```powershell
+npm run runtime:prod:tunnel:ensure
+```
+
 ## Restart runtime production
 
 ```powershell

@@ -617,6 +617,10 @@ export const createLandingAnnouncement = async (
     const coverImageDataUrl = await saveBase64ToDisk(
       payload.coverImageDataUrl,
       'landing_announcement',
+      {
+        quality: 72,
+        maxDimension: 1280,
+      },
     )
 
     const [result] = await connection.execute<ResultSetHeader>(
@@ -702,6 +706,10 @@ export const updateLandingAnnouncement = async (
     const coverImageDataUrl = await saveBase64ToDisk(
       payload.coverImageDataUrl,
       'landing_announcement',
+      {
+        quality: 72,
+        maxDimension: 1280,
+      },
     )
 
     await connection.execute(

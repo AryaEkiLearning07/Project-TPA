@@ -1455,10 +1455,23 @@
   gap: 1rem;
 }
 
+.staff-attendance-hero--locked {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+  gap: 0.92rem;
+}
+
 .staff-attendance-hero__badge-block {
   display: grid;
   justify-items: center;
   gap: 0.52rem;
+}
+
+.staff-attendance-hero--locked .staff-attendance-hero__badge-block {
+  width: 100%;
+  place-items: center;
+  gap: 0.58rem;
 }
 
 .staff-attendance-hero__badge {
@@ -1483,12 +1496,35 @@
   filter: drop-shadow(0 10px 16px rgba(120, 40, 60, 0.18));
 }
 
+.staff-attendance-hero--locked .staff-attendance-hero__badge {
+  width: 110px;
+  height: 110px;
+  margin-inline: auto;
+  padding: 0.18rem;
+}
+
+.staff-attendance-hero--locked .staff-attendance-hero__logo {
+  width: 88px;
+  height: 88px;
+  object-position: center;
+  display: block;
+}
+
 .staff-attendance-hero__badge-block p {
   margin: 0;
   font-size: 0.64rem;
   letter-spacing: 0.14em;
   font-weight: 900;
   color: #8c4560;
+}
+
+.staff-attendance-hero--locked .staff-attendance-hero__badge-block p {
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+}
+
+.staff-attendance-hero--locked .staff-attendance-hero__content {
+  max-width: 760px;
 }
 
 .staff-attendance-hero__content h2 {
@@ -1520,6 +1556,12 @@
   font-weight: 900;
   letter-spacing: 0.045em;
   color: #4d2035;
+}
+
+.staff-attendance-hero--locked .staff-attendance-gate__header {
+  width: 100%;
+  align-items: center;
+  justify-content: center;
 }
 
 .staff-attendance-clock {
@@ -1611,6 +1653,37 @@
 .staff-attendance-gate__actions {
   margin-top: 1.16rem;
   justify-content: flex-start;
+}
+
+.staff-attendance-hero--locked .staff-attendance-gate__actions {
+  width: 100%;
+  justify-content: center;
+}
+
+.staff-attendance-hero--locked .staff-attendance-gate__actions .button {
+  min-width: 140px;
+}
+
+.app-shell--attendance-gate .staff-attendance-gate__actions .button--success {
+  border-color: #1f944b;
+  background: #20ad56;
+  color: #ffffff;
+}
+
+.app-shell--attendance-gate .staff-attendance-gate__actions .button--success:hover {
+  background: #1c994b;
+  filter: none;
+}
+
+.app-shell--attendance-gate .staff-attendance-gate__actions .button--danger {
+  border-color: #b61b3d;
+  background: #d82149;
+  color: #ffffff;
+}
+
+.app-shell--attendance-gate .staff-attendance-gate__actions .button--danger:hover {
+  background: #c11c42;
+  filter: none;
 }
 
 .staff-attendance-meta {
@@ -4901,6 +4974,15 @@ select.input.input--locked {
 
   .staff-attendance-hero__badge-block {
     justify-items: start;
+  }
+
+  .staff-attendance-hero--locked {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .staff-attendance-hero--locked .staff-attendance-hero__badge-block {
+    justify-items: center;
   }
 
   .staff-attendance-meta {

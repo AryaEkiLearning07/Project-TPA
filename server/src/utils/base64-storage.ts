@@ -21,7 +21,11 @@ export const isBase64Image = (value: unknown): value is string => {
  */
 export const saveBase64ToDisk = async (
     base64Data: string,
-    prefix: string = 'img'
+    prefix: string = 'img',
+    options?: {
+        quality?: number
+        maxDimension?: number
+    }
 ): Promise<string> => {
     if (!isBase64Image(base64Data)) {
         return base64Data // Jika sudah berupa path, return apa adanya
@@ -40,7 +44,7 @@ export const saveBase64ToDisk = async (
     await fs.mkdir(outputDir, { recursive: true })
 
     // Kompres gambar menggunakan utility yang sudah ada
-    const result = await compressImage(buffer)
+    const result = await compressImage(buffer, options)
 
     // Nama file unik
     const uniqueId = crypto.randomBytes(6).toString('hex')

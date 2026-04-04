@@ -92,6 +92,11 @@ if ($backendReady -and (-not $adminFrontendReady -or -not $landingFrontendReady 
 }
 
 if ($adminFrontendReady -and $landingFrontendReady -and $parentFrontendReady -and $backendReady) {
+  try {
+    & (Join-Path $PSScriptRoot 'ensure-cloudflare-tunnel.ps1') -Quiet | Out-Null
+  } catch {
+    Write-Warning "Gagal menjalankan auto-recovery Cloudflare Tunnel: $($_.Exception.Message)"
+  }
   Write-Output "TPA runtime production sudah berjalan (port $backendPortNumber aktif)."
   exit 0
 }
@@ -137,6 +142,12 @@ $parentFrontendReady = Test-FrontendHostReady -Port $backendPortNumber -HostHead
 
 if (-not ($adminFrontendReady -and $landingFrontendReady -and $parentFrontendReady -and $backendReady)) {
   Write-Error "Gagal menyalakan runtime production TPA. Cek $logFile."
+}
+
+try {
+  & (Join-Path $PSScriptRoot 'ensure-cloudflare-tunnel.ps1') -Quiet | Out-Null
+} catch {
+  Write-Warning "Gagal menjalankan auto-recovery Cloudflare Tunnel: $($_.Exception.Message)"
 }
 
 Write-Output "TPA runtime production berhasil dinyalakan (landing + app + api:$backendPortNumber)."

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 const logoTpaSrc = `${import.meta.env.BASE_URL}logo_TPA.jpg`
 const heroPhotoDesktopSrc = `${import.meta.env.BASE_URL}hero2-desktop.jpg`
@@ -344,6 +345,8 @@ const buildAnnouncementPeriodLabel = (item) => {
   return item.publishedAtLabel || ''
 }
 
+const clampNumber = (value, min, max) => Math.min(max, Math.max(min, value))
+
 const fallbackLandingAnnouncements = [
   {
     title: 'Cooking Class',
@@ -368,6 +371,68 @@ const createGalleryDragState = () => ({
   startClientX: 0,
   startScrollLeft: 0,
 })
+const createDeckDragState = () => ({
+  pointerId: null,
+  pointerType: '',
+  isDragging: false,
+  startClientX: 0,
+  startClientY: 0,
+  hasMoved: false,
+  lastClientX: 0,
+  lastTimestamp: 0,
+  velocityX: 0,
+})
+const eventDeckVisibleDepth = 3
+const galleryDeckPeekDepth = 2
+const deckClickMoveThreshold = 10
+const deckSwipeThreshold = 64
+const deckDragClamp = 170
+const deckDragElasticLimit = 34
+const deckDragResistance = 0.36
+const deckFlickVelocityThreshold = 0.42
+const deckThrowDurationMs = 180
+const deckThrowDistance = 84
+const applyDeckDragResistance = (value, min, max) => {
+  const elasticMin = min - deckDragElasticLimit
+  const elasticMax = max + deckDragElasticLimit
+  const elasticValue = clampNumber(value, elasticMin, elasticMax)
+  if (elasticValue < min) {
+    return min + (elasticValue - min) * deckDragResistance
+  }
+  if (elasticValue > max) {
+    return max + (elasticValue - max) * deckDragResistance
+  }
+  return elasticValue
+}
+const toLoopIndex = (index, total) => {
+  if (total <= 0) return 0
+  return ((index % total) + total) % total
+}
+const buildForwardStackIndices = (activeIndex, total, depth = 3) => {
+  if (total <= 0) return []
+  const normalizedActive = toLoopIndex(activeIndex, total)
+  const maxDepth = Math.min(Math.max(depth, 1), total)
+  return Array.from({ length: maxDepth }, (_, position) =>
+    toLoopIndex(normalizedActive + position, total),
+  )
+}
+const buildDynamicStackIndices = (activeIndex, total, depth = 3, dragDirection = 0) => {
+  // dragDirection > 0 = swipe right (showing previous cards)
+  // dragDirection <= 0 = swipe left (showing next cards)
+  if (total <= 0) return []
+  const normalizedActive = toLoopIndex(activeIndex, total)
+  const maxDepth = Math.min(Math.max(depth, 1), total)
+  return Array.from({ length: maxDepth }, (_, position) =>
+    toLoopIndex(
+      position === 0
+        ? normalizedActive
+        : dragDirection > 0
+          ? normalizedActive - position
+          : normalizedActive + position,
+      total,
+    ),
+  )
+}
 const pricingPlans = [
   {
     title: 'Paket Harian',
@@ -456,31 +521,6 @@ const InstagramIcon = () => (
   </svg>
 )
 
-const SunIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    <path
-      d="M12 2.8v2.2M12 19v2.2M4.4 4.4l1.6 1.6M18 18l1.6 1.6M2.8 12H5M19 12h2.2M4.4 19.6L6 18M18 6l1.6-1.6"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-)
-
-const MoonIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path
-      d="M20.2 14.5a8.3 8.3 0 0 1-10.7-10.7A8.8 8.8 0 1 0 20.2 14.5z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-
 const ChevronLeftIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path
@@ -510,21 +550,8 @@ const ChevronRightIcon = () => (
 export default function App() {
   const [activeSection, setActiveSection] = useState('home')
   const [currentPath, setCurrentPath] = useState(() => window.location.pathname || '/')
-  const [colorMode, setColorMode] = useState(() => {
-    try {
-      const storedTheme = window.localStorage.getItem('tpa-landing-theme')
-      if (storedTheme === 'dark' || storedTheme === 'light') {
-        return storedTheme
-      }
-    } catch {
-      // Ignore storage access issue and fallback to system preference.
-    }
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark'
-    }
-    return 'light'
-  })
   const [isCompactViewport, setCompactViewport] = useState(() => window.innerWidth <= 760)
+  const [isNarrowViewport, setNarrowViewport] = useState(() => window.innerWidth <= 480)
   const [activeFacilityIndex, setActiveFacilityIndex] = useState(0)
   const [visibleSections, setVisibleSections] = useState(() =>
     allAnimatedSections.reduce((result, id) => ({ ...result, [id]: id === 'home' }), {}),
@@ -563,6 +590,21 @@ export default function App() {
   const [landingAnnouncements, setLandingAnnouncements] = useState([])
   const [isLoadingLandingAnnouncements, setLoadingLandingAnnouncements] = useState(false)
   const [dismissedPopupAnnouncementId, setDismissedPopupAnnouncementId] = useState('')
+  const [activeEventSnapIndex, setActiveEventSnapIndex] = useState(0)
+  const [activeGallerySnapIndex, setActiveGallerySnapIndex] = useState(0)
+  const [eventSnapDragOffset, setEventSnapDragOffset] = useState(0)
+  const [gallerySnapDragOffset, setGallerySnapDragOffset] = useState(0)
+  const [isEventSnapDragging, setIsEventSnapDragging] = useState(false)
+  const [isGallerySnapDragging, setIsGallerySnapDragging] = useState(false)
+  const [activeEventDeckIndex, setActiveEventDeckIndex] = useState(0)
+  const [eventDeckDragOffset, setEventDeckDragOffset] = useState(0)
+  const [isEventDeckDragging, setEventDeckDragging] = useState(false)
+  const [isEventDeckThrowing, setEventDeckThrowing] = useState(false)
+  const [isEventDeckFlipped, setEventDeckFlipped] = useState(false)
+  const [activeGalleryDeckIndex, setActiveGalleryDeckIndex] = useState(0)
+  const [galleryDeckDragOffset, setGalleryDeckDragOffset] = useState(0)
+  const [isGalleryDeckDragging, setGalleryDeckDragging] = useState(false)
+  const [isGalleryDeckThrowing, setGalleryDeckThrowing] = useState(false)
   const menuRef = useRef(null)
   const navItemRefs = useRef({})
   const linkChildPanelRef = useRef(null)
@@ -570,6 +612,41 @@ export default function App() {
   const financePanelRef = useRef(null)
   const facilityTrackRef = useRef(null)
   const galleryTrackRef = useRef(null)
+  const eventSnapDragStateRef = useRef({
+    startX: 0,
+    currentX: 0,
+    isDragging: false,
+    pointerId: null,
+    lastX: 0,
+    lastTime: 0,
+    velocityX: 0,
+  })
+  const gallerySnapDragStateRef = useRef({
+    startX: 0,
+    currentX: 0,
+    isDragging: false,
+    pointerId: null,
+    lastX: 0,
+    lastTime: 0,
+    velocityX: 0,
+  })
+  const eventSnapContainerRef = useRef(null)
+  const gallerySnapContainerRef = useRef(null)
+  const eventDeckDragStateRef = useRef(createDeckDragState())
+  const galleryDeckDragStateRef = useRef(createDeckDragState())
+  const eventDeckThrowTimeoutRef = useRef(null)
+  const galleryDeckThrowTimeoutRef = useRef(null)
+  const activeEventDeckCardRef = useRef(null)
+  const activeGalleryDeckCardRef = useRef(null)
+  const eventDeckDragOffsetRef = useRef(0)
+  const galleryDeckDragOffsetRef = useRef(0)
+  const eventDeckPendingOffsetRef = useRef(0)
+  const galleryDeckPendingOffsetRef = useRef(0)
+  const eventDeckDragFrameRef = useRef(null)
+  const galleryDeckDragFrameRef = useRef(null)
+  const eventDeckReleaseFrameRef = useRef(null)
+  const galleryDeckReleaseFrameRef = useRef(null)
+  const eventDeckClickGuardRef = useRef(false)
   const facilityCardRefs = useRef([])
   const lastScrollTimeRef = useRef(Date.now())
   const isFacilityScrollingRef = useRef(false)
@@ -595,7 +672,6 @@ export default function App() {
     [],
   )
   const isParentPortalPage = currentPath === PARENT_PORTAL_PATH
-  const isDarkMode = colorMode === 'dark'
   const platformLogoSrc = logoTpaSrc
   const facilityItems = useMemo(() => {
     const dynamicFacilityItems = landingAnnouncements
@@ -686,6 +762,71 @@ export default function App() {
     }
     return kegiatanItems.filter((item) => Boolean(item.image))
   }, [directGalleryItems, kegiatanItems])
+  const eventDeckItems = useMemo(
+    () =>
+      eventItems.map((item, index) => ({
+        ...item,
+        deckKey: `event-${item.id || item.title}-${index}`,
+      })),
+    [eventItems],
+  )
+  const galleryDeckItems = useMemo(
+    () =>
+      galleryItems.map((item, index) => ({
+        ...item,
+        deckKey: `gallery-${item.id || item.title}-${index}`,
+      })),
+    [galleryItems],
+  )
+  const activeEventDeckItem = eventDeckItems[activeEventDeckIndex] || null
+  const activeGalleryDeckItem = galleryDeckItems[activeGalleryDeckIndex] || null
+  const visibleEventLeftDeckItems = useMemo(
+    () =>
+      eventDeckItems
+        .slice(Math.max(0, activeEventDeckIndex - (eventDeckVisibleDepth - 1)), activeEventDeckIndex)
+        .reverse()
+        .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
+    [activeEventDeckIndex, eventDeckItems],
+  )
+  const visibleEventRightDeckItems = useMemo(
+    () =>
+      eventDeckItems
+        .slice(activeEventDeckIndex + 1, activeEventDeckIndex + eventDeckVisibleDepth)
+        .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
+    [activeEventDeckIndex, eventDeckItems],
+  )
+  const visibleGalleryLeftDeckItems = useMemo(
+    () =>
+      galleryDeckItems
+        .slice(Math.max(0, activeGalleryDeckIndex - galleryDeckPeekDepth), activeGalleryDeckIndex)
+        .reverse()
+        .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
+    [activeGalleryDeckIndex, galleryDeckItems],
+  )
+  const visibleGalleryRightDeckItems = useMemo(
+    () =>
+      galleryDeckItems
+        .slice(activeGalleryDeckIndex + 1, activeGalleryDeckIndex + 1 + galleryDeckPeekDepth)
+        .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
+    [activeGalleryDeckIndex, galleryDeckItems],
+  )
+  const galleryDeckRenderDepth = Math.max(
+    visibleGalleryLeftDeckItems.length,
+    visibleGalleryRightDeckItems.length,
+    1,
+  )
+  const canShiftEventNext = activeEventDeckIndex < eventDeckItems.length - 1
+  const canShiftEventPrev = activeEventDeckIndex > 0
+  const canShiftGalleryNext = activeGalleryDeckIndex < galleryDeckItems.length - 1
+  const canShiftGalleryPrev = activeGalleryDeckIndex > 0
+  const eventDeckMotionToNextProgress = clampNumber(-eventDeckDragOffset / deckSwipeThreshold, 0, 1)
+  const eventDeckMotionToPrevProgress = clampNumber(eventDeckDragOffset / deckSwipeThreshold, 0, 1)
+  const galleryDeckMotionToNextProgress = clampNumber(-galleryDeckDragOffset / deckSwipeThreshold, 0, 1)
+  const galleryDeckMotionToPrevProgress = clampNumber(galleryDeckDragOffset / deckSwipeThreshold, 0, 1)
+  const isEventDeckTransitioning = isEventDeckThrowing
+  const isGalleryDeckTransitioning = isGalleryDeckThrowing
+  const snapNearOffsetPercent = isNarrowViewport ? 8 : isCompactViewport ? 12 : 18
+  const snapFarOffsetPercent = isNarrowViewport ? 14 : isCompactViewport ? 20 : 30
   const isGalleryUsingEventFallback = directGalleryItems.length === 0 && galleryItems.length > 0
   const isGalleryLoopEnabled = galleryItems.length >= galleryLoopMinimumItems
   const galleryActiveLoopCopies = useMemo(() => {
@@ -747,6 +888,45 @@ export default function App() {
   const popupAnnouncementLabel = popupAnnouncement
     ? announcementCategoryLabelMap[popupAnnouncement.category] || 'Info'
     : ''
+
+  useEffect(() => {
+    clearEventDeckTransitionTimers()
+    setActiveEventDeckIndex((previous) => {
+      if (!eventDeckItems.length) return 0
+      return Math.min(previous, eventDeckItems.length - 1)
+    })
+    setEventDeckDragOffsetImmediate(0)
+    setEventDeckDragging(false)
+    setEventDeckThrowing(false)
+    setEventDeckFlipped(false)
+    eventDeckClickGuardRef.current = false
+    eventDeckDragStateRef.current = createDeckDragState()
+  }, [eventDeckItems.length])
+
+  useEffect(() => {
+    setActiveEventSnapIndex((previous) => toLoopIndex(previous, eventDeckItems.length))
+  }, [eventDeckItems.length])
+
+  useEffect(() => {
+    setEventDeckFlipped(false)
+    eventDeckClickGuardRef.current = false
+  }, [activeEventDeckIndex])
+
+  useEffect(() => {
+    clearGalleryDeckTransitionTimers()
+    setActiveGalleryDeckIndex((previous) => {
+      if (!galleryDeckItems.length) return 0
+      return Math.min(previous, galleryDeckItems.length - 1)
+    })
+    setGalleryDeckDragOffsetImmediate(0)
+    setGalleryDeckDragging(false)
+    setGalleryDeckThrowing(false)
+    galleryDeckDragStateRef.current = createDeckDragState()
+  }, [galleryDeckItems.length])
+
+  useEffect(() => {
+    setActiveGallerySnapIndex((previous) => toLoopIndex(previous, galleryDeckItems.length))
+  }, [galleryDeckItems.length])
 
   const navigateToPath = (path) => {
     if (window.location.pathname !== path) {
@@ -905,6 +1085,130 @@ export default function App() {
     galleryInteractionTimeoutRef.current = null
   }
 
+  const clearEventDeckTransitionTimers = () => {
+    if (eventDeckThrowTimeoutRef.current) {
+      window.clearTimeout(eventDeckThrowTimeoutRef.current)
+      eventDeckThrowTimeoutRef.current = null
+    }
+  }
+
+  const clearGalleryDeckTransitionTimers = () => {
+    if (galleryDeckThrowTimeoutRef.current) {
+      window.clearTimeout(galleryDeckThrowTimeoutRef.current)
+      galleryDeckThrowTimeoutRef.current = null
+    }
+  }
+
+  const cancelEventDeckDragFrame = () => {
+    if (eventDeckDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(eventDeckDragFrameRef.current)
+      eventDeckDragFrameRef.current = null
+    }
+  }
+
+  const cancelGalleryDeckDragFrame = () => {
+    if (galleryDeckDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(galleryDeckDragFrameRef.current)
+      galleryDeckDragFrameRef.current = null
+    }
+  }
+
+  const cancelEventDeckReleaseFrame = () => {
+    if (eventDeckReleaseFrameRef.current !== null) {
+      window.cancelAnimationFrame(eventDeckReleaseFrameRef.current)
+      eventDeckReleaseFrameRef.current = null
+    }
+  }
+
+  const cancelGalleryDeckReleaseFrame = () => {
+    if (galleryDeckReleaseFrameRef.current !== null) {
+      window.cancelAnimationFrame(galleryDeckReleaseFrameRef.current)
+      galleryDeckReleaseFrameRef.current = null
+    }
+  }
+
+  const syncEventDeckDragVisual = (nextOffset) => {
+    eventDeckDragOffsetRef.current = nextOffset
+    const activeCard = activeEventDeckCardRef.current
+    if (!activeCard) return
+    activeCard.style.setProperty('--event-stack-drag-x', `${nextOffset}px`)
+    activeCard.style.setProperty(
+      '--event-stack-drag-rotate',
+      `${clampNumber(nextOffset * 0.02, -4, 4)}deg`,
+    )
+  }
+
+  const syncGalleryDeckDragVisual = (nextOffset) => {
+    galleryDeckDragOffsetRef.current = nextOffset
+    const activeCard = activeGalleryDeckCardRef.current
+    if (!activeCard) return
+    activeCard.style.setProperty('--gallery-stack-drag-x', `${nextOffset}px`)
+    activeCard.style.setProperty(
+      '--gallery-stack-drag-rotate',
+      `${clampNumber(nextOffset * 0.02, -4, 4)}deg`,
+    )
+  }
+
+  const setEventDeckDragOffsetImmediate = (nextOffset) => {
+    cancelEventDeckDragFrame()
+    eventDeckPendingOffsetRef.current = nextOffset
+    syncEventDeckDragVisual(nextOffset)
+    setEventDeckDragOffset(nextOffset)
+  }
+
+  const setGalleryDeckDragOffsetImmediate = (nextOffset) => {
+    cancelGalleryDeckDragFrame()
+    galleryDeckPendingOffsetRef.current = nextOffset
+    syncGalleryDeckDragVisual(nextOffset)
+    setGalleryDeckDragOffset(nextOffset)
+  }
+
+  const queueEventDeckDragOffset = (nextOffset) => {
+    eventDeckPendingOffsetRef.current = nextOffset
+    if (eventDeckDragFrameRef.current !== null) return
+    eventDeckDragFrameRef.current = window.requestAnimationFrame(() => {
+      eventDeckDragFrameRef.current = null
+      const flushedOffset = eventDeckPendingOffsetRef.current
+      if (Math.abs(flushedOffset - eventDeckDragOffsetRef.current) < 0.05) {
+        return
+      }
+      syncEventDeckDragVisual(flushedOffset)
+    })
+  }
+
+  const queueGalleryDeckDragOffset = (nextOffset) => {
+    galleryDeckPendingOffsetRef.current = nextOffset
+    if (galleryDeckDragFrameRef.current !== null) return
+    galleryDeckDragFrameRef.current = window.requestAnimationFrame(() => {
+      galleryDeckDragFrameRef.current = null
+      const flushedOffset = galleryDeckPendingOffsetRef.current
+      if (Math.abs(flushedOffset - galleryDeckDragOffsetRef.current) < 0.05) {
+        return
+      }
+      syncGalleryDeckDragVisual(flushedOffset)
+    })
+  }
+
+  const flushEventDeckDragOffset = () => {
+    if (eventDeckDragFrameRef.current !== null) {
+      cancelEventDeckDragFrame()
+      const flushedOffset = eventDeckPendingOffsetRef.current
+      syncEventDeckDragVisual(flushedOffset)
+      return flushedOffset
+    }
+    return eventDeckDragOffsetRef.current
+  }
+
+  const flushGalleryDeckDragOffset = () => {
+    if (galleryDeckDragFrameRef.current !== null) {
+      cancelGalleryDeckDragFrame()
+      const flushedOffset = galleryDeckPendingOffsetRef.current
+      syncGalleryDeckDragVisual(flushedOffset)
+      return flushedOffset
+    }
+    return galleryDeckDragOffsetRef.current
+  }
+
   const resetGalleryDragState = () => {
     galleryDragStateRef.current = createGalleryDragState()
   }
@@ -1027,17 +1331,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const appliedTheme = isParentPortalPage ? 'light' : colorMode
-    document.documentElement.dataset.theme = appliedTheme
-
-    if (!isParentPortalPage) {
-      try {
-        window.localStorage.setItem('tpa-landing-theme', colorMode)
-      } catch {
-        // Ignore storage errors and keep theme in memory.
-      }
-    }
-  }, [colorMode, isParentPortalPage])
+    document.documentElement.dataset.theme = 'light'
+  }, [])
 
   // FIX: Force reset overflow and interactions on the parent portal
   useEffect(() => {
@@ -1055,6 +1350,7 @@ export default function App() {
         setMobileMenuOpen(false)
       }
       setCompactViewport(window.innerWidth <= 760)
+      setNarrowViewport(window.innerWidth <= 480)
     }
 
     window.addEventListener('resize', onResize)
@@ -1469,6 +1765,503 @@ export default function App() {
     queueGalleryInteractionEnd()
   }
 
+  const SNAP_SWIPE_THRESHOLD = 12
+  const SNAP_SWIPE_VELOCITY = 0.18
+
+  const handleEventSnapPointerDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    if (e.target instanceof HTMLElement && e.target.closest('a, button')) return
+    const dragState = eventSnapDragStateRef.current
+    const now = performance.now()
+    dragState.startX = e.clientX
+    dragState.currentX = e.clientX
+    dragState.lastX = e.clientX
+    dragState.lastTime = now
+    dragState.velocityX = 0
+    dragState.isDragging = true
+    dragState.pointerId = e.pointerId
+    setIsEventSnapDragging(true)
+    setEventSnapDragOffset(0)
+    if (typeof e.currentTarget.setPointerCapture === 'function') {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        // Ignore unsupported pointer capture edge cases.
+      }
+    }
+  }
+
+  const handleEventSnapPointerMove = (e) => {
+    const dragState = eventSnapDragStateRef.current
+    if (!dragState.isDragging || dragState.pointerId !== e.pointerId) return
+    const now = performance.now()
+    const deltaX = e.clientX - dragState.startX
+    const deltaTime = Math.max(now - dragState.lastTime, 1)
+    const instantVelocity = (e.clientX - dragState.lastX) / deltaTime
+    dragState.velocityX = dragState.velocityX * 0.6 + instantVelocity * 0.4
+    dragState.currentX = e.clientX
+    dragState.lastX = e.clientX
+    dragState.lastTime = now
+    setEventSnapDragOffset(deltaX)
+  }
+
+  const finishEventSnapPointerInteraction = (e) => {
+    const dragState = eventSnapDragStateRef.current
+    if (!dragState.isDragging || dragState.pointerId !== e.pointerId) return
+
+    const deltaX = dragState.currentX - dragState.startX
+    const velocityX = dragState.velocityX
+    const totalItems = eventDeckItems.length
+    if (totalItems <= 1) {
+      dragState.isDragging = false
+      dragState.pointerId = null
+      setIsEventSnapDragging(false)
+      setEventSnapDragOffset(0)
+      return
+    }
+    let nextIndex = activeEventSnapIndex
+
+    if (deltaX > SNAP_SWIPE_THRESHOLD || velocityX > SNAP_SWIPE_VELOCITY) {
+      // Swipe ke kanan: kartu aktif masuk paling belakang.
+      nextIndex = toLoopIndex(activeEventSnapIndex + 1, totalItems)
+    } else if (deltaX < -SNAP_SWIPE_THRESHOLD || velocityX < -SNAP_SWIPE_VELOCITY) {
+      // Swipe ke kiri: rotasi kebalikan.
+      nextIndex = toLoopIndex(activeEventSnapIndex - 1, totalItems)
+    }
+
+    if (
+      typeof e.currentTarget.hasPointerCapture === 'function' &&
+      e.currentTarget.hasPointerCapture(e.pointerId)
+    ) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+
+    dragState.isDragging = false
+    dragState.pointerId = null
+    flushSync(() => {
+      if (nextIndex !== activeEventSnapIndex) {
+        setActiveEventSnapIndex(nextIndex)
+      }
+      setIsEventSnapDragging(false)
+      setEventSnapDragOffset(0)
+    })
+  }
+
+  const handleEventSnapPointerUp = (e) => {
+    finishEventSnapPointerInteraction(e)
+  }
+
+  const handleEventSnapPointerCancel = (e) => {
+    finishEventSnapPointerInteraction(e)
+  }
+
+  const handleEventSnapPointerCaptureLost = (e) => {
+    finishEventSnapPointerInteraction(e)
+  }
+
+  const handleGallerySnapPointerDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    if (e.target instanceof HTMLElement && e.target.closest('a, button')) return
+    const dragState = gallerySnapDragStateRef.current
+    const now = performance.now()
+    dragState.startX = e.clientX
+    dragState.currentX = e.clientX
+    dragState.lastX = e.clientX
+    dragState.lastTime = now
+    dragState.velocityX = 0
+    dragState.isDragging = true
+    dragState.pointerId = e.pointerId
+    setIsGallerySnapDragging(true)
+    setGallerySnapDragOffset(0)
+    if (typeof e.currentTarget.setPointerCapture === 'function') {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        // Ignore unsupported pointer capture edge cases.
+      }
+    }
+  }
+
+  const handleGallerySnapPointerMove = (e) => {
+    const dragState = gallerySnapDragStateRef.current
+    if (!dragState.isDragging || dragState.pointerId !== e.pointerId) return
+    const now = performance.now()
+    const deltaX = e.clientX - dragState.startX
+    const deltaTime = Math.max(now - dragState.lastTime, 1)
+    const instantVelocity = (e.clientX - dragState.lastX) / deltaTime
+    dragState.velocityX = dragState.velocityX * 0.6 + instantVelocity * 0.4
+    dragState.currentX = e.clientX
+    dragState.lastX = e.clientX
+    dragState.lastTime = now
+    setGallerySnapDragOffset(deltaX)
+  }
+
+  const finishGallerySnapPointerInteraction = (e) => {
+    const dragState = gallerySnapDragStateRef.current
+    if (!dragState.isDragging || dragState.pointerId !== e.pointerId) return
+
+    const deltaX = dragState.currentX - dragState.startX
+    const velocityX = dragState.velocityX
+    const totalItems = galleryDeckItems.length
+    if (totalItems <= 1) {
+      dragState.isDragging = false
+      dragState.pointerId = null
+      setIsGallerySnapDragging(false)
+      setGallerySnapDragOffset(0)
+      return
+    }
+    let nextIndex = activeGallerySnapIndex
+
+    if (deltaX > SNAP_SWIPE_THRESHOLD || velocityX > SNAP_SWIPE_VELOCITY) {
+      // Swipe ke kanan: kartu aktif masuk paling belakang.
+      nextIndex = toLoopIndex(activeGallerySnapIndex + 1, totalItems)
+    } else if (deltaX < -SNAP_SWIPE_THRESHOLD || velocityX < -SNAP_SWIPE_VELOCITY) {
+      // Swipe ke kiri: rotasi kebalikan.
+      nextIndex = toLoopIndex(activeGallerySnapIndex - 1, totalItems)
+    }
+
+    if (
+      typeof e.currentTarget.hasPointerCapture === 'function' &&
+      e.currentTarget.hasPointerCapture(e.pointerId)
+    ) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+
+    dragState.isDragging = false
+    dragState.pointerId = null
+    flushSync(() => {
+      if (nextIndex !== activeGallerySnapIndex) {
+        setActiveGallerySnapIndex(nextIndex)
+      }
+      setIsGallerySnapDragging(false)
+      setGallerySnapDragOffset(0)
+    })
+  }
+
+  const handleGallerySnapPointerUp = (e) => {
+    finishGallerySnapPointerInteraction(e)
+  }
+
+  const handleGallerySnapPointerCancel = (e) => {
+    finishGallerySnapPointerInteraction(e)
+  }
+
+  const handleGallerySnapPointerCaptureLost = (e) => {
+    finishGallerySnapPointerInteraction(e)
+  }
+
+  const finishEventDeckPointerInteraction = (pointerId = null) => {
+    const dragState = eventDeckDragStateRef.current
+    if (!dragState.isDragging) return
+    if (pointerId !== null && dragState.pointerId !== pointerId) return
+
+    const currentOffset = flushEventDeckDragOffset()
+    const releaseVelocityX = dragState.velocityX
+    const currentIndex = activeEventDeckIndex
+    const hasMoved = dragState.hasMoved
+    eventDeckClickGuardRef.current = hasMoved
+    eventDeckDragStateRef.current = createDeckDragState()
+    setEventDeckDragging(false)
+    const canShiftNext = currentIndex < eventDeckItems.length - 1
+    const canShiftPrev = currentIndex > 0
+
+    let direction = null
+    let nextIndex = currentIndex
+    if (currentOffset <= -deckSwipeThreshold && canShiftNext) {
+      direction = 'next'
+      nextIndex = Math.min(currentIndex + 1, Math.max(eventDeckItems.length - 1, 0))
+    } else if (currentOffset >= deckSwipeThreshold && canShiftPrev) {
+      direction = 'prev'
+      nextIndex = Math.max(currentIndex - 1, 0)
+    } else if (releaseVelocityX <= -deckFlickVelocityThreshold && canShiftNext) {
+      direction = 'next'
+      nextIndex = Math.min(currentIndex + 1, Math.max(eventDeckItems.length - 1, 0))
+    } else if (releaseVelocityX >= deckFlickVelocityThreshold && canShiftPrev) {
+      direction = 'prev'
+      nextIndex = Math.max(currentIndex - 1, 0)
+    }
+
+    clearEventDeckTransitionTimers()
+    cancelEventDeckReleaseFrame()
+
+    if (!direction) {
+      setEventDeckThrowing(true)
+      eventDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
+        eventDeckReleaseFrameRef.current = null
+        setEventDeckDragOffsetImmediate(0)
+      })
+      eventDeckThrowTimeoutRef.current = window.setTimeout(() => {
+        eventDeckThrowTimeoutRef.current = null
+        setEventDeckThrowing(false)
+      }, deckThrowDurationMs)
+      return
+    }
+
+    setEventDeckThrowing(true)
+    const throwDistance = deckThrowDistance
+    eventDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
+      eventDeckReleaseFrameRef.current = null
+      setEventDeckDragOffsetImmediate(direction === 'next' ? -throwDistance : throwDistance)
+    })
+    eventDeckThrowTimeoutRef.current = window.setTimeout(() => {
+      eventDeckThrowTimeoutRef.current = null
+      setActiveEventDeckIndex(nextIndex)
+      setEventDeckDragOffsetImmediate(0)
+      setEventDeckThrowing(false)
+    }, deckThrowDurationMs)
+  }
+
+  const handleEventDeckPointerDown = (event) => {
+    if (!activeEventDeckItem || eventDeckItems.length <= 1 || isEventDeckTransitioning) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (event.target instanceof HTMLElement && event.target.closest('a, button')) {
+      return
+    }
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+
+    eventDeckDragStateRef.current = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      isDragging: true,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      hasMoved: false,
+      lastClientX: event.clientX,
+      lastTimestamp: performance.now(),
+      velocityX: 0,
+    }
+    eventDeckClickGuardRef.current = false
+    setEventDeckDragging(true)
+
+    if (typeof event.currentTarget.setPointerCapture === 'function') {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        // Ignore browsers that reject pointer capture for some pointer types.
+      }
+    }
+  }
+
+  const handleEventDeckPointerMove = (event) => {
+    const dragState = eventDeckDragStateRef.current
+    if (!dragState.isDragging || dragState.pointerId !== event.pointerId) return
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+
+    const deltaX = event.clientX - dragState.startClientX
+    const deltaY = event.clientY - dragState.startClientY
+    const now = performance.now()
+    const deltaTime = Math.max(now - dragState.lastTimestamp, 1)
+    const instantVelocity = (event.clientX - dragState.lastClientX) / deltaTime
+    dragState.velocityX = dragState.velocityX * 0.62 + instantVelocity * 0.38
+    dragState.lastClientX = event.clientX
+    dragState.lastTimestamp = now
+    if (Math.abs(deltaX) > deckClickMoveThreshold || Math.abs(deltaY) > deckClickMoveThreshold) {
+      dragState.hasMoved = true
+    }
+    if (
+      dragState.pointerType === 'touch' &&
+      Math.abs(deltaY) > Math.abs(deltaX) &&
+      Math.abs(deltaY) > 10
+    ) {
+      releaseEventDeckPointerCapture(event)
+      eventDeckDragStateRef.current = createDeckDragState()
+      eventDeckClickGuardRef.current = true
+      setEventDeckDragging(false)
+      setEventDeckDragOffsetImmediate(0)
+      return
+    }
+
+    const minDragOffset = canShiftEventNext ? -deckDragClamp : 0
+    const maxDragOffset = canShiftEventPrev ? deckDragClamp : 0
+    const constrainedDeltaX = applyDeckDragResistance(deltaX, minDragOffset, maxDragOffset)
+    queueEventDeckDragOffset(constrainedDeltaX)
+  }
+
+  const releaseEventDeckPointerCapture = (event) => {
+    if (
+      typeof event.currentTarget.hasPointerCapture === 'function' &&
+      event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  const handleEventDeckPointerUp = (event) => {
+    releaseEventDeckPointerCapture(event)
+    finishEventDeckPointerInteraction(event.pointerId)
+  }
+
+  const handleEventDeckPointerCancel = (event) => {
+    releaseEventDeckPointerCapture(event)
+    finishEventDeckPointerInteraction(event.pointerId)
+  }
+
+  const handleEventDeckPointerCaptureLost = (event) => {
+    finishEventDeckPointerInteraction(event.pointerId)
+  }
+
+  const handleEventDeckCardClick = (event) => {
+    if (!activeEventDeckItem || isEventDeckTransitioning) return
+    if (event.target instanceof HTMLElement && event.target.closest('a, button')) {
+      return
+    }
+    if (eventDeckClickGuardRef.current) {
+      eventDeckClickGuardRef.current = false
+      return
+    }
+    setEventDeckFlipped((previous) => !previous)
+  }
+
+  const finishGalleryDeckPointerInteraction = (pointerId = null) => {
+    const dragState = galleryDeckDragStateRef.current
+    if (!dragState.isDragging) return
+    if (pointerId !== null && dragState.pointerId !== pointerId) return
+
+    const currentOffset = flushGalleryDeckDragOffset()
+    const releaseVelocityX = dragState.velocityX
+    const currentIndex = activeGalleryDeckIndex
+    galleryDeckDragStateRef.current = createDeckDragState()
+    setGalleryDeckDragging(false)
+    const canShiftNext = currentIndex < galleryDeckItems.length - 1
+    const canShiftPrev = currentIndex > 0
+
+    let direction = null
+    let nextIndex = currentIndex
+    if (currentOffset <= -deckSwipeThreshold && canShiftNext) {
+      direction = 'next'
+      nextIndex = Math.min(currentIndex + 1, Math.max(galleryDeckItems.length - 1, 0))
+    } else if (currentOffset >= deckSwipeThreshold && canShiftPrev) {
+      direction = 'prev'
+      nextIndex = Math.max(currentIndex - 1, 0)
+    } else if (releaseVelocityX <= -deckFlickVelocityThreshold && canShiftNext) {
+      direction = 'next'
+      nextIndex = Math.min(currentIndex + 1, Math.max(galleryDeckItems.length - 1, 0))
+    } else if (releaseVelocityX >= deckFlickVelocityThreshold && canShiftPrev) {
+      direction = 'prev'
+      nextIndex = Math.max(currentIndex - 1, 0)
+    }
+
+    clearGalleryDeckTransitionTimers()
+    cancelGalleryDeckReleaseFrame()
+
+    if (!direction) {
+      setGalleryDeckThrowing(true)
+      galleryDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
+        galleryDeckReleaseFrameRef.current = null
+        setGalleryDeckDragOffsetImmediate(0)
+      })
+      galleryDeckThrowTimeoutRef.current = window.setTimeout(() => {
+        galleryDeckThrowTimeoutRef.current = null
+        setGalleryDeckThrowing(false)
+      }, deckThrowDurationMs)
+      return
+    }
+
+    setGalleryDeckThrowing(true)
+    const throwDistance = deckThrowDistance
+    galleryDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
+      galleryDeckReleaseFrameRef.current = null
+      setGalleryDeckDragOffsetImmediate(direction === 'next' ? -throwDistance : throwDistance)
+    })
+    galleryDeckThrowTimeoutRef.current = window.setTimeout(() => {
+      galleryDeckThrowTimeoutRef.current = null
+      setActiveGalleryDeckIndex(nextIndex)
+      setGalleryDeckDragOffsetImmediate(0)
+      setGalleryDeckThrowing(false)
+    }, deckThrowDurationMs)
+  }
+
+  const handleGalleryDeckPointerDown = (event) => {
+    if (!activeGalleryDeckItem || galleryDeckItems.length <= 1 || isGalleryDeckTransitioning) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (event.target instanceof HTMLElement && event.target.closest('a, button')) {
+      return
+    }
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+
+    galleryDeckDragStateRef.current = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      isDragging: true,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      lastClientX: event.clientX,
+      lastTimestamp: performance.now(),
+      velocityX: 0,
+    }
+    setGalleryDeckDragging(true)
+
+    if (typeof event.currentTarget.setPointerCapture === 'function') {
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      } catch {
+        // Ignore browsers that reject pointer capture for some pointer types.
+      }
+    }
+  }
+
+  const handleGalleryDeckPointerMove = (event) => {
+    const dragState = galleryDeckDragStateRef.current
+    if (!dragState.isDragging || dragState.pointerId !== event.pointerId) return
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+
+    const deltaX = event.clientX - dragState.startClientX
+    const deltaY = event.clientY - dragState.startClientY
+    const now = performance.now()
+    const deltaTime = Math.max(now - dragState.lastTimestamp, 1)
+    const instantVelocity = (event.clientX - dragState.lastClientX) / deltaTime
+    dragState.velocityX = dragState.velocityX * 0.62 + instantVelocity * 0.38
+    dragState.lastClientX = event.clientX
+    dragState.lastTimestamp = now
+    if (
+      dragState.pointerType === 'touch' &&
+      Math.abs(deltaY) > Math.abs(deltaX) &&
+      Math.abs(deltaY) > 10
+    ) {
+      releaseGalleryDeckPointerCapture(event)
+      galleryDeckDragStateRef.current = createDeckDragState()
+      setGalleryDeckDragging(false)
+      setGalleryDeckDragOffsetImmediate(0)
+      return
+    }
+
+    const minDragOffset = canShiftGalleryNext ? -deckDragClamp : 0
+    const maxDragOffset = canShiftGalleryPrev ? deckDragClamp : 0
+    const constrainedDeltaX = applyDeckDragResistance(deltaX, minDragOffset, maxDragOffset)
+    queueGalleryDeckDragOffset(constrainedDeltaX)
+  }
+
+  const releaseGalleryDeckPointerCapture = (event) => {
+    if (
+      typeof event.currentTarget.hasPointerCapture === 'function' &&
+      event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  const handleGalleryDeckPointerUp = (event) => {
+    releaseGalleryDeckPointerCapture(event)
+    finishGalleryDeckPointerInteraction(event.pointerId)
+  }
+
+  const handleGalleryDeckPointerCancel = (event) => {
+    releaseGalleryDeckPointerCapture(event)
+    finishGalleryDeckPointerInteraction(event.pointerId)
+  }
+
+  const handleGalleryDeckPointerCaptureLost = (event) => {
+    finishGalleryDeckPointerInteraction(event.pointerId)
+  }
+
   useEffect(() => {
     const onResize = () => {
       if (!isCompactViewport) {
@@ -1483,6 +2276,12 @@ export default function App() {
     () => () => {
       clearFacilityInteractionTimeout()
       clearGalleryInteractionTimeout()
+      clearEventDeckTransitionTimers()
+      clearGalleryDeckTransitionTimers()
+      cancelEventDeckDragFrame()
+      cancelGalleryDeckDragFrame()
+      cancelEventDeckReleaseFrame()
+      cancelGalleryDeckReleaseFrame()
       galleryTrackRef.current?.classList.remove('is-dragging')
       resetGalleryDragState()
       if (facilityScrollFrameRef.current !== null) {
@@ -1494,10 +2293,6 @@ export default function App() {
     },
     [],
   )
-
-  const toggleColorMode = () => {
-    setColorMode((previous) => (previous === 'dark' ? 'light' : 'dark'))
-  }
 
   const openAuthModal = (mode = 'login') => {
     setMobileMenuOpen(false)
@@ -1903,21 +2698,6 @@ export default function App() {
 
             <button
               type="button"
-              className="theme-toggle"
-              onClick={toggleColorMode}
-              aria-label={isDarkMode ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
-              title={isDarkMode ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
-            >
-              <span className="theme-toggle__icon" aria-hidden="true">
-                {isDarkMode ? <SunIcon /> : <MoonIcon />}
-              </span>
-              <span className="theme-toggle__label">
-                {isDarkMode ? 'Mode Gelap' : 'Mode Terang'}
-              </span>
-            </button>
-
-            <button
-              type="button"
               className={`topbar__burger ${mobileMenuOpen ? 'is-open' : ''}`}
               onClick={() => setMobileMenuOpen((previous) => !previous)}
               aria-controls="topbar-mobile-panel"
@@ -2178,41 +2958,92 @@ export default function App() {
                   <h3>Event</h3>
                   <p>Agenda kegiatan terjadwal yang bisa diikuti anak.</p>
                 </div>
-                <div className="kegiatan-event-scroll" role="region" aria-label="Daftar event yang bisa digeser">
-                  <div className="kegiatan-event-track">
-                    {eventItems.length === 0 ? (
-                      <article className="operational-grid__item kegiatan-event-card">
-                        <h4>Belum ada event aktif</h4>
-                        <p className="kegiatan-event__description">
-                          Tambahkan data event melalui panel admin agar tampil di halaman ini.
-                        </p>
-                      </article>
-                    ) : (
-                      eventItems.map((item) => (
-                        <article
-                          key={`${item.id || item.title}-${item.category}-${item.publishStartDate || item.period}`}
-                          className="operational-grid__item kegiatan-event-card"
-                        >
-                          <img src={item.image} alt={item.title} className="kegiatan-event__image" />
-                          <h4>{item.title}</h4>
-                          <p className="kegiatan-event__period">{item.period}</p>
-                          {item.excerpt ? (
-                            <p className="kegiatan-event__description">{item.excerpt}</p>
-                          ) : null}
-                          {item.ctaLabel && item.ctaUrl ? (
-                            <a
-                              href={item.ctaUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="button button--ghost kegiatan-event__cta"
-                            >
-                              {item.ctaLabel}
-                            </a>
-                          ) : null}
-                        </article>
-                      ))
-                    )}
-                  </div>
+                <div
+                  className="kegiatan-snap kegiatan-snap--event"
+                  role="region"
+                  aria-label="Event kegiatan. Geser kiri atau kanan untuk melihat event lainnya."
+                >
+                  {eventDeckItems.length === 0 ? (
+                    <article className="operational-grid__item kegiatan-event-stack__empty">
+                      <h4>Belum ada event aktif</h4>
+                      <p className="kegiatan-event__description">
+                        Tambahkan data event melalui panel admin agar tampil di halaman ini.
+                      </p>
+                    </article>
+                  ) : (
+                    <div
+                      ref={eventSnapContainerRef}
+                      className="kegiatan-snap__container"
+                      onPointerDown={handleEventSnapPointerDown}
+                      onPointerMove={handleEventSnapPointerMove}
+                      onPointerUp={handleEventSnapPointerUp}
+                      onPointerCancel={handleEventSnapPointerCancel}
+                      onLostPointerCapture={handleEventSnapPointerCaptureLost}
+                      aria-live="polite"
+                    >
+                      {Array.from({ length: 3 }).map((_, stackPosition) => {
+                        const containerWidth = Math.max(eventSnapContainerRef.current?.clientWidth || 1, 1)
+                        const dragOffsetPercent =
+                          stackPosition === 0 && isEventSnapDragging
+                            ? (eventSnapDragOffset / containerWidth) * 100
+                            : 0
+                        const baseOffsetPercent =
+                          stackPosition === 0 ? 0 : stackPosition === 1 ? snapNearOffsetPercent : snapFarOffsetPercent
+                        const cardOffset = baseOffsetPercent + dragOffsetPercent
+                        const proximityClass = stackPosition === 0 ? 'is-active' : stackPosition === 1 ? 'is-near' : 'is-far'
+                        const sideClass =
+                          stackPosition === 0 ? 'is-center' : dragOffsetPercent > 0 ? 'is-left' : 'is-right'
+                        const itemIndex = toLoopIndex(
+                          stackPosition === 0
+                            ? activeEventSnapIndex
+                            : dragOffsetPercent > 0
+                              ? activeEventSnapIndex - stackPosition
+                              : activeEventSnapIndex + stackPosition,
+                          eventDeckItems.length,
+                        )
+                        const item = eventDeckItems[itemIndex]
+                        if (!item) return null
+
+                        return (
+                          <article
+                            key={`${item.deckKey}-stack-${stackPosition}`}
+                            className={`kegiatan-snap__card kegiatan-snap__card--event ${proximityClass} ${sideClass}`}
+                            style={{
+                              '--card-offset': `${cardOffset}%`,
+                              transition: stackPosition === 0 && isEventSnapDragging
+                                ? 'none'
+                                : 'transform 80ms cubic-bezier(0.2, 1, 0.3, 1)',
+                            }}
+                          >
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="kegiatan-snap__image"
+                              draggable={false}
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <div className="kegiatan-snap__scrim" />
+                            <p className="kegiatan-snap__badge">
+                              {announcementCategoryLabelMap[item.category] || 'Info'}
+                            </p>
+                            <div className="kegiatan-snap__content">
+                              <h4>{item.title || 'Event Kegiatan'}</h4>
+                              <p className="kegiatan-snap__meta">{item.period || 'Jadwal akan diumumkan'}</p>
+                              <p className="kegiatan-snap__desc">
+                                {item.excerpt || 'Informasi detail event akan diperbarui oleh admin.'}
+                              </p>
+                              {item.ctaLabel && item.ctaUrl ? (
+                                <a href={item.ctaUrl} target="_blank" rel="noreferrer" className="kegiatan-snap__cta">
+                                  {item.ctaLabel}
+                                </a>
+                              ) : null}
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               </article>
 
@@ -2227,32 +3058,70 @@ export default function App() {
                     </p>
                   </div>
                   <div
-                    ref={galleryTrackRef}
-                    className="kegiatan-gallery-scroll"
+                    className="kegiatan-snap kegiatan-snap--gallery"
                     role="region"
-                    aria-label="Galeri kegiatan yang bergulir otomatis dan bisa digeser manual"
-                    onScroll={handleGalleryTrackScroll}
-                    onWheel={handleGalleryWheel}
-                    onMouseEnter={handleGalleryInteractionStart}
-                    onMouseLeave={handleGalleryInteractionEnd}
-                    onPointerDown={handleGalleryPointerDown}
-                    onPointerMove={handleGalleryPointerMove}
-                    onPointerUp={handleGalleryPointerUp}
-                    onPointerCancel={handleGalleryPointerCancel}
-                    onLostPointerCapture={handleGalleryPointerCaptureLost}
+                    aria-label="Galeri kegiatan. Geser kiri atau kanan untuk berpindah foto."
                   >
-                    <div className="kegiatan-gallery-track">
-                      {galleryLoopItems.map((item) => (
-                        <article key={item.loopKey} className="gallery-card kegiatan-gallery-card">
-                          <img
-                            src={item.image}
-                            alt={item.title}
-                            className="gallery-card__image kegiatan-gallery__image"
-                            draggable={false}
-                          />
-                          <p>{item.title}</p>
-                        </article>
-                      ))}
+                    <div
+                      ref={gallerySnapContainerRef}
+                      className="kegiatan-snap__container"
+                      onPointerDown={handleGallerySnapPointerDown}
+                      onPointerMove={handleGallerySnapPointerMove}
+                      onPointerUp={handleGallerySnapPointerUp}
+                      onPointerCancel={handleGallerySnapPointerCancel}
+                      onLostPointerCapture={handleGallerySnapPointerCaptureLost}
+                      aria-live="polite"
+                    >
+                      {Array.from({ length: 3 }).map((_, stackPosition) => {
+                        const containerWidth = Math.max(gallerySnapContainerRef.current?.clientWidth || 1, 1)
+                        const dragOffsetPercent =
+                          stackPosition === 0 && isGallerySnapDragging
+                            ? (gallerySnapDragOffset / containerWidth) * 100
+                            : 0
+                        const baseOffsetPercent =
+                          stackPosition === 0 ? 0 : stackPosition === 1 ? snapNearOffsetPercent : snapFarOffsetPercent
+                        const cardOffset = baseOffsetPercent + dragOffsetPercent
+                        const proximityClass = stackPosition === 0 ? 'is-active' : stackPosition === 1 ? 'is-near' : 'is-far'
+                        const sideClass =
+                          stackPosition === 0 ? 'is-center' : dragOffsetPercent > 0 ? 'is-left' : 'is-right'
+                        const itemIndex = toLoopIndex(
+                          stackPosition === 0
+                            ? activeGallerySnapIndex
+                            : dragOffsetPercent > 0
+                              ? activeGallerySnapIndex - stackPosition
+                              : activeGallerySnapIndex + stackPosition,
+                          galleryDeckItems.length,
+                        )
+                        const item = galleryDeckItems[itemIndex]
+                        if (!item) return null
+
+                        return (
+                          <article
+                            key={`${item.deckKey}-stack-${stackPosition}`}
+                            className={`kegiatan-snap__card kegiatan-snap__card--gallery ${proximityClass} ${sideClass}`}
+                            style={{
+                              '--card-offset': `${cardOffset}%`,
+                              transition: stackPosition === 0 && isGallerySnapDragging
+                                ? 'none'
+                                : 'transform 80ms cubic-bezier(0.2, 1, 0.3, 1)',
+                            }}
+                          >
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              className="kegiatan-snap__image"
+                              draggable={false}
+                              loading="lazy"
+                              decoding="async"
+                            />
+                            <div className="kegiatan-snap__scrim" />
+                            <div className="kegiatan-snap__content">
+                              <h4>{item.title || 'Dokumentasi Kegiatan'}</h4>
+                              <p className="kegiatan-snap__meta">{item.period || 'Dokumentasi kegiatan'}</p>
+                            </div>
+                          </article>
+                        )
+                      })}
                     </div>
                   </div>
                 </article>

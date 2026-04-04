@@ -1,11 +1,8 @@
 import {
   CheckCircle2,
   Clock3,
-  LogOut,
   Menu,
   RefreshCw,
-  ShieldAlert,
-  UserCheck,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
@@ -666,52 +663,6 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
     setCheckOutPopupVisible(false)
     setCheckOutPopupStorageKey(null)
   }
-  const attendanceDateLabel = useMemo(() => {
-    const dateKey = staffAttendanceStatus?.attendanceDate ?? new Date().toISOString().slice(0, 10)
-    const parsed = new Date(`${dateKey}T00:00:00`)
-    if (Number.isNaN(parsed.getTime())) {
-      return dateKey
-    }
-    return parsed.toLocaleDateString('id-ID', {
-      weekday: 'long',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    })
-  }, [staffAttendanceStatus?.attendanceDate])
-
-  const checkInTimeLabel = useMemo(() => {
-    const raw = staffAttendanceStatus?.checkInAt ?? ''
-    if (!raw) {
-      return 'Belum tercatat'
-    }
-    const parsed = new Date(raw)
-    if (Number.isNaN(parsed.getTime())) {
-      return 'Sudah tercatat'
-    }
-    return `Sudah tercatat (${parsed.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })})`
-  }, [staffAttendanceStatus?.checkInAt])
-
-  const checkOutTimeLabel = useMemo(() => {
-    const raw = staffAttendanceStatus?.checkOutAt ?? ''
-    if (!raw) {
-      return 'Belum tercatat'
-    }
-    const parsed = new Date(raw)
-    if (Number.isNaN(parsed.getTime())) {
-      return 'Sudah tercatat'
-    }
-    return `Sudah tercatat (${parsed.toLocaleTimeString('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })})`
-  }, [staffAttendanceStatus?.checkOutAt])
-
   const hasCheckedOutToday = Boolean(staffAttendanceStatus?.hasCheckedOut)
 
   if (isAttendanceStatusLoading && !staffAttendanceStatus) {
@@ -744,7 +695,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
         <div className="app-main">
           <main className="app-content app-content--attendance-gate">
             <section className="page page--attendance-gate">
-              <article className="card staff-attendance-hero">
+              <article className="card staff-attendance-hero staff-attendance-hero--locked">
                 <div className="staff-attendance-hero__badge-block">
                   <div className="staff-attendance-hero__badge">
                     <img
@@ -753,56 +704,26 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
                       className="staff-attendance-hero__logo"
                     />
                   </div>
-                  <p>DASHBOARD OPERASIONAL</p>
+                  <p>DASHBOARD MONITORING</p>
                 </div>
                 <div className="staff-attendance-hero__content">
                   <h2>{isLockedAfterCheckout ? 'Akses petugas telah terkunci' : 'Akses petugas masih terkunci'}</h2>
                   {isLockedAfterCheckout ? (
                     <p>
-                      Anda sudah tercatat absensi pulang. Silahkan tunggu esok hari untuk dapat masuk Dashboard Operasional.
+                      Absensi pulang Anda sudah tercatat. Silakan tunggu esok hari untuk masuk Dashboard Monitoring.
                     </p>
                   ) : (
                     <p>
-                      Anda belum tercatat absen masuk hari ini. Silakan datang langsung ke admin untuk verifikasi kehadiran.
+                      Anda belum tercatat absen masuk hari ini. Silakan ke admin untuk verifikasi kehadiran agar dashboard terbuka.
                     </p>
                   )}
                 </div>
-              </article>
-
-              <article className="card staff-attendance-gate">
                 <div className="staff-attendance-gate__header">
-                  <h3>Status Absensi Hari Ini</h3>
+                  <h3>Status absensi petugas</h3>
                   <span className="staff-attendance-clock">
                     <Clock3 size={14} />
                     {attendanceClockLabel}
                   </span>
-                </div>
-
-                <div className="staff-attendance-meta">
-                  <div className="staff-attendance-module staff-attendance-module--date">
-                    <span className="staff-attendance-module__label">
-                      <Clock3 size={14} />
-                      Tanggal Kerja
-                    </span>
-                    <strong>{attendanceDateLabel}</strong>
-                  </div>
-                  <div className="staff-attendance-module">
-                    <span className="staff-attendance-module__label">
-                      <UserCheck size={14} />
-                      Absen Masuk
-                    </span>
-                    <strong>{checkInTimeLabel}</strong>
-                  </div>
-                  <div className="staff-attendance-module">
-                    <span className="staff-attendance-module__label">
-                      <LogOut size={14} />
-                      Absen Pulang
-                    </span>
-                    <strong>{checkOutTimeLabel}</strong>
-                    <span className="staff-attendance-module__security">
-                      <ShieldAlert size={13} />
-                    </span>
-                  </div>
                 </div>
 
                 {attendanceStatusError ? (
