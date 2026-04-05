@@ -14,6 +14,7 @@ const LANDING_ANNOUNCEMENT_CATEGORIES = [
   'dokumentasi',
   'galeri',
   'fasilitas',
+  'tim',
   'promosi',
   'ucapan',
 ] as const
@@ -468,7 +469,7 @@ export const ensureLandingAnnouncementSchema = async (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
       slug VARCHAR(180) NOT NULL,
       title VARCHAR(180) NOT NULL,
-      category ENUM('event', 'dokumentasi', 'galeri', 'fasilitas', 'promosi', 'ucapan') NOT NULL DEFAULT 'event',
+      category ENUM('event', 'dokumentasi', 'galeri', 'fasilitas', 'tim', 'promosi', 'ucapan') NOT NULL DEFAULT 'event',
       display_mode ENUM('section', 'hero', 'popup') NOT NULL DEFAULT 'section',
       excerpt VARCHAR(320) NULL,
       content LONGTEXT NULL,
@@ -493,7 +494,7 @@ export const ensureLandingAnnouncementSchema = async (
 
   await executor.execute(
     `ALTER TABLE landing_announcements
-    MODIFY COLUMN category ENUM('event', 'dokumentasi', 'galeri', 'fasilitas', 'promosi', 'ucapan') NOT NULL DEFAULT 'event'`,
+    MODIFY COLUMN category ENUM('event', 'dokumentasi', 'galeri', 'fasilitas', 'tim', 'promosi', 'ucapan') NOT NULL DEFAULT 'event'`,
   )
 
   const displayModeExists = await hasDisplayModeColumn(executor)

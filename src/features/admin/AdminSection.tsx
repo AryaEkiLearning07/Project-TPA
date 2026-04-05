@@ -264,7 +264,7 @@ const createFallbackServerDateContext = () => {
 const initialLandingAnnouncementForm: LandingAnnouncementEditorForm = {
   title: '',
   slug: '',
-  category: 'galeri',
+  category: 'event',
   displayMode: 'section',
   excerpt: '',
   content: '',
@@ -676,9 +676,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const toLandingAnnouncementInput = useCallback((
     form: LandingAnnouncementEditorForm,
   ): LandingAnnouncementInput => {
-    const isGallery = form.category === 'galeri'
     const isDocumentation = form.category === 'event' || form.category === 'dokumentasi'
     const isFacility = form.category === 'fasilitas'
+    const isTeam = form.category === 'tim'
     const isPoster = form.category === 'promosi' || form.category === 'ucapan'
     const normalizedTitle = form.title.trim() || (
       isPoster
@@ -692,12 +692,12 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       category: form.category,
       displayMode: isPoster ? 'popup' : 'section',
       excerpt: isDocumentation || isFacility ? form.excerpt.trim() : '',
-      content: isFacility ? form.content.trim() : '',
+      content: isFacility || isTeam ? form.content.trim() : '',
       coverImageDataUrl: form.coverImageDataUrl,
       coverImageName: form.coverImageName,
       ctaLabel: '',
       ctaUrl: '',
-      publishStartDate: isGallery || isFacility ? '' : form.publishStartDate,
+      publishStartDate: isFacility || isTeam ? '' : form.publishStartDate,
       publishEndDate: isPoster ? form.publishEndDate : '',
       status: isPoster ? 'published' : form.status,
       isPinned: false,
@@ -735,6 +735,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       landingAnnouncementForm.category === 'event' ||
       landingAnnouncementForm.category === 'dokumentasi'
     const isFacilityMode = landingAnnouncementForm.category === 'fasilitas'
+    const isTeamMode = landingAnnouncementForm.category === 'tim'
     const isPosterMode =
       landingAnnouncementForm.category === 'promosi' ||
       landingAnnouncementForm.category === 'ucapan'
@@ -764,6 +765,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 
     if (isFacilityMode && !landingAnnouncementForm.content.trim()) {
       setErrorMessage('Fungsi fasilitas wajib diisi.')
+      return
+    }
+
+    if (isTeamMode && !landingAnnouncementForm.content.trim()) {
+      setErrorMessage('Keterangan lengkap tim wajib diisi.')
       return
     }
 
@@ -870,10 +876,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
 
     try {
+      const aspectRatio = landingAnnouncementForm.category === 'tim' ? 3 / 4 : 16 / 9
       const compressed = await compressImageToDataUrl(file, {
         maxDimension: 1600,
         quality: 0.8,
-        aspectRatio: 16 / 9,
+        aspectRatio,
       })
       setLandingAnnouncementForm((previous) => ({
         ...previous,

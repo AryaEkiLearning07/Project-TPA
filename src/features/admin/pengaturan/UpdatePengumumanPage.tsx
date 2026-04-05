@@ -30,7 +30,7 @@ export interface LandingAnnouncementEditorForm {
   isPinned: boolean
 }
 
-type AnnouncementFunction = 'galeri' | 'dokumentasi' | 'fasilitas' | 'poster'
+type AnnouncementFunction = 'dokumentasi' | 'fasilitas' | 'tim' | 'poster'
 
 interface UpdatePengumumanPageProps {
   announcements: LandingAnnouncement[]
@@ -57,21 +57,21 @@ const statusLabelMap: Record<LandingAnnouncementStatus, string> = {
 }
 
 const functionLabelMap: Record<AnnouncementFunction, string> = {
-  galeri: 'Galeri',
   dokumentasi: 'Dokumentasi',
   fasilitas: 'Fasilitas',
+  tim: 'Tim Kami',
   poster: 'Poster',
 }
 
 const mapCategoryToFunction = (category: LandingAnnouncementCategory): AnnouncementFunction => {
-  if (category === 'galeri') {
-    return 'galeri'
-  }
   if (category === 'event' || category === 'dokumentasi') {
     return 'dokumentasi'
   }
   if (category === 'fasilitas') {
     return 'fasilitas'
+  }
+  if (category === 'tim') {
+    return 'tim'
   }
   return 'poster'
 }
@@ -80,14 +80,14 @@ const matchesFunction = (
   announcement: LandingAnnouncement,
   currentFunction: AnnouncementFunction,
 ): boolean => {
-  if (currentFunction === 'galeri') {
-    return announcement.category === 'galeri'
-  }
   if (currentFunction === 'dokumentasi') {
     return announcement.category === 'event' || announcement.category === 'dokumentasi'
   }
   if (currentFunction === 'fasilitas') {
     return announcement.category === 'fasilitas'
+  }
+  if (currentFunction === 'tim') {
+    return announcement.category === 'tim'
   }
   return announcement.category === 'promosi' || announcement.category === 'ucapan'
 }
@@ -135,10 +135,11 @@ const UpdatePengumumanPage = ({
     matchesFunction(announcement, activeFunction),
   )
   const shouldScrollAnnouncementList = filteredAnnouncements.length > 5
-  const isGalleryMode = activeFunction === 'galeri'
   const isDocumentationMode = activeFunction === 'dokumentasi'
   const isFacilityMode = activeFunction === 'fasilitas'
+  const isTeamMode = activeFunction === 'tim'
   const isPosterMode = activeFunction === 'poster'
+  const tableColumnCount = isPosterMode || isTeamMode ? 6 : 7
 
   useEffect(() => {
     if (!editingAnnouncementId) {
@@ -153,20 +154,6 @@ const UpdatePengumumanPage = ({
   const handleFunctionChange = (nextFunction: AnnouncementFunction) => {
     onResetForm()
     setForm((previous) => {
-      if (nextFunction === 'galeri') {
-        return {
-          ...previous,
-          category: 'galeri',
-          displayMode: 'section',
-          excerpt: '',
-          content: '',
-          ctaLabel: '',
-          ctaUrl: '',
-          publishStartDate: '',
-          publishEndDate: '',
-        }
-      }
-
       if (nextFunction === 'dokumentasi') {
         return {
           ...previous,
@@ -191,6 +178,22 @@ const UpdatePengumumanPage = ({
           excerpt: '',
           content: '',
           status: 'published',
+        }
+      }
+
+      if (nextFunction === 'tim') {
+        return {
+          ...previous,
+          category: 'tim',
+          displayMode: 'section',
+          publishStartDate: '',
+          publishEndDate: '',
+          excerpt: '',
+          content: '',
+          ctaLabel: '',
+          ctaUrl: '',
+          status: 'published',
+          isPinned: false,
         }
       }
 
@@ -231,9 +234,9 @@ const UpdatePengumumanPage = ({
               handleFunctionChange(event.target.value as AnnouncementFunction)
             }
           >
-            <option value="galeri">Update Galeri</option>
             <option value="dokumentasi">Update Dokumentasi</option>
             <option value="fasilitas">Update Fasilitas TPA</option>
+            <option value="tim">Update Tim Kami</option>
             <option value="poster">Update Poster</option>
           </select>
         </div>
@@ -255,15 +258,6 @@ const UpdatePengumumanPage = ({
         >
           <table className="table">
             <thead>
-              {isGalleryMode ? (
-                <tr>
-                  <th>Foto</th>
-                  <th>Judul</th>
-                  <th>Status</th>
-                  <th>Update</th>
-                  <th>Aksi</th>
-                </tr>
-              ) : null}
               {isDocumentationMode ? (
                 <tr>
                   <th>Foto</th>
@@ -296,53 +290,32 @@ const UpdatePengumumanPage = ({
                   <th>Aksi</th>
                 </tr>
               ) : null}
+              {isTeamMode ? (
+                <tr>
+                  <th>Foto</th>
+                  <th>Nama</th>
+                  <th>Keterangan Lengkap</th>
+                  <th>Status</th>
+                  <th>Update</th>
+                  <th>Aksi</th>
+                </tr>
+              ) : null}
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={isPosterMode ? 6 : isDocumentationMode || isFacilityMode ? 7 : 5} className="table__empty">
+                  <td colSpan={tableColumnCount} className="table__empty">
                     Memuat daftar update...
                   </td>
                 </tr>
               ) : filteredAnnouncements.length === 0 ? (
                 <tr>
-                  <td colSpan={isPosterMode ? 6 : isDocumentationMode || isFacilityMode ? 7 : 5} className="table__empty">
+                  <td colSpan={tableColumnCount} className="table__empty">
                     Tidak ada data {functionLabelMap[activeFunction].toLowerCase()}.
                   </td>
                 </tr>
               ) : (
                 filteredAnnouncements.map((announcement) => {
-                  if (isGalleryMode) {
-                    return (
-                      <tr key={announcement.id}>
-                        <td>{renderImageCell(announcement)}</td>
-                        <td><strong>{announcement.title}</strong></td>
-                        <td>{statusLabelMap[announcement.status]}</td>
-                        <td>{formatDateTime(announcement.updatedAt)}</td>
-                        <td>
-                          <div className="table-actions">
-                            <button
-                              type="button"
-                              className="button button--tiny button--ghost"
-                              onClick={() => onSelectAnnouncement(announcement)}
-                              disabled={isSaving}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="button button--tiny button--danger"
-                              onClick={() => void onDeleteAnnouncement(announcement)}
-                              disabled={deletingAnnouncementId === announcement.id}
-                            >
-                              {deletingAnnouncementId === announcement.id ? 'Menghapus...' : 'Hapus'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  }
-
                   if (isDocumentationMode) {
                     return (
                       <tr key={announcement.id}>
@@ -382,6 +355,38 @@ const UpdatePengumumanPage = ({
                         <td>{renderImageCell(announcement)}</td>
                         <td><strong>{announcement.title}</strong></td>
                         <td>{announcement.excerpt || '-'}</td>
+                        <td>{announcement.content || '-'}</td>
+                        <td>{statusLabelMap[announcement.status]}</td>
+                        <td>{formatDateTime(announcement.updatedAt)}</td>
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              type="button"
+                              className="button button--tiny button--ghost"
+                              onClick={() => onSelectAnnouncement(announcement)}
+                              disabled={isSaving}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="button button--tiny button--danger"
+                              onClick={() => void onDeleteAnnouncement(announcement)}
+                              disabled={deletingAnnouncementId === announcement.id}
+                            >
+                              {deletingAnnouncementId === announcement.id ? 'Menghapus...' : 'Hapus'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  if (isTeamMode) {
+                    return (
+                      <tr key={announcement.id}>
+                        <td>{renderImageCell(announcement)}</td>
+                        <td><strong>{announcement.title}</strong></td>
                         <td>{announcement.content || '-'}</td>
                         <td>{statusLabelMap[announcement.status]}</td>
                         <td>{formatDateTime(announcement.updatedAt)}</td>
@@ -455,7 +460,7 @@ const UpdatePengumumanPage = ({
           {!isPosterMode ? (
             <div className="field-group">
               <label className="label" htmlFor="announcementTitle">
-                Judul
+                {isTeamMode ? 'Nama Tim' : 'Judul'}
               </label>
               <input
                 id="announcementTitle"
@@ -468,10 +473,10 @@ const UpdatePengumumanPage = ({
                   }))
                 }
                 placeholder={
-                  isGalleryMode
-                    ? 'Contoh: Bermain Sensorik'
-                    : isFacilityMode
-                      ? 'Contoh: Area Indoor (Soft Play)'
+                  isFacilityMode
+                    ? 'Contoh: Area Indoor (Soft Play)'
+                    : isTeamMode
+                      ? 'Contoh: Kak Aisyah Putri'
                       : 'Contoh: Dokumentasi kegiatan motorik halus'
                 }
               />
@@ -540,29 +545,6 @@ const UpdatePengumumanPage = ({
             </>
           ) : null}
 
-          {isGalleryMode ? (
-            <div className="field-group field-group--small">
-              <label className="label" htmlFor="announcementStatusGallery">
-                Status
-              </label>
-              <select
-                id="announcementStatusGallery"
-                className="input"
-                value={form.status}
-                onChange={(event) =>
-                  setForm((previous) => ({
-                    ...previous,
-                    status: event.target.value as LandingAnnouncementStatus,
-                  }))
-                }
-              >
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="archived">Archived</option>
-              </select>
-            </div>
-          ) : null}
-
           {isFacilityMode ? (
             <>
               <div className="field-group field-group--small">
@@ -626,6 +608,54 @@ const UpdatePengumumanPage = ({
             </>
           ) : null}
 
+          {isTeamMode ? (
+            <>
+              <div className="field-group field-group--small">
+                <label className="label" htmlFor="announcementStatusTeam">
+                  Status
+                </label>
+                <select
+                  id="announcementStatusTeam"
+                  className="input"
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      status: event.target.value as LandingAnnouncementStatus,
+                    }))
+                  }
+                >
+                  <option value="draft">Draft</option>
+                  <option value="published">Published</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="teamFullDescription">
+                  Keterangan Lengkap
+                </label>
+                <textarea
+                  id="teamFullDescription"
+                  className="textarea"
+                  rows={5}
+                  value={form.content}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      content: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: Pengalaman 8 tahun menangani anak usia dini, sertifikat pendampingan anak, dan jam terbang harian di kelas toddler."
+                />
+              </div>
+
+              <p className="field-hint" style={{ marginTop: '-0.25rem' }}>
+                Sisi depan kartu menampilkan foto dan nama, sisi belakang menampilkan keterangan lengkap.
+              </p>
+            </>
+          ) : null}
+
           {isPosterMode ? (
             <>
               <div className="form-grid form-grid--2">
@@ -669,7 +699,7 @@ const UpdatePengumumanPage = ({
 
           <div className="field-group">
             <label className="label" htmlFor="announcementImage">
-              {isFacilityMode ? 'Gambar Fasilitas' : 'Foto'}
+              {isFacilityMode ? 'Gambar Fasilitas' : isTeamMode ? 'Foto Tim' : 'Foto'}
             </label>
             <input
               id="announcementImage"

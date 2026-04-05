@@ -277,8 +277,8 @@ export interface StaffRegistrationInput {
 export type LandingAnnouncementCategory =
   | 'event'
   | 'dokumentasi'
-  | 'galeri'
   | 'fasilitas'
+  | 'tim'
   | 'promosi'
   | 'ucapan'
 export type LandingAnnouncementStatus = 'draft' | 'published' | 'archived'
