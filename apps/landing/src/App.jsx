@@ -225,7 +225,7 @@ const apiRequest = async (path, options = {}) => {
 }
 
 const navSections = [
-  { id: 'home', label: 'Home' },
+  { id: 'home', label: 'Beranda' },
   { id: 'tentang-kami', label: 'Tentang Kami' },
   { id: 'fasilitas', label: 'Fasilitas' },
   { id: 'kegiatan', label: 'Kegiatan' },
@@ -300,16 +300,15 @@ const defaultFacilityItems = [
 
 const announcementCategoryLabelMap = {
   event: 'Event',
-  dokumentasi: 'Dokumentasi',
-  galeri: 'Galeri',
   fasilitas: 'Fasilitas',
+  tim: 'Tim Kami',
   promosi: 'Promosi',
   ucapan: 'Ucapan',
 }
 const eventCategorySet = new Set(['event'])
-const galleryCategorySet = new Set(['dokumentasi', 'galeri'])
 const fasilitasCategorySet = new Set(['fasilitas'])
-const kegiatanCategorySet = new Set([...eventCategorySet, ...galleryCategorySet])
+const teamCategorySet = new Set(['tim'])
+const kegiatanCategorySet = new Set([...eventCategorySet])
 const promoHeroCategorySet = new Set(['promosi', 'ucapan'])
 
 const formatAnnouncementDateLabel = (value) => {
@@ -383,14 +382,13 @@ const createDeckDragState = () => ({
   velocityX: 0,
 })
 const eventDeckVisibleDepth = 3
-const galleryDeckPeekDepth = 2
 const deckClickMoveThreshold = 10
 const deckSwipeThreshold = 64
 const deckDragClamp = 170
 const deckDragElasticLimit = 34
 const deckDragResistance = 0.36
 const deckFlickVelocityThreshold = 0.42
-const deckThrowDurationMs = 180
+const deckThrowDurationMs = 220
 const deckThrowDistance = 84
 const applyDeckDragResistance = (value, min, max) => {
   const elasticMin = min - deckDragElasticLimit
@@ -488,7 +486,7 @@ const testimonialItems = [
   },
 ]
 
-const allAnimatedSections = ['home', 'tentang-kami', 'fasilitas', 'kegiatan', 'biaya-layanan', 'testimoni', 'cta']
+const allAnimatedSections = ['home', 'tentang-kami', 'tim-kami', 'fasilitas', 'kegiatan', 'biaya-layanan', 'testimoni', 'cta']
 
 const WhatsAppIcon = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -597,14 +595,15 @@ export default function App() {
   const [isEventSnapDragging, setIsEventSnapDragging] = useState(false)
   const [isGallerySnapDragging, setIsGallerySnapDragging] = useState(false)
   const [activeEventDeckIndex, setActiveEventDeckIndex] = useState(0)
-  const [eventDeckDragOffset, setEventDeckDragOffset] = useState(0)
+  const [, setEventDeckDragOffset] = useState(0)
   const [isEventDeckDragging, setEventDeckDragging] = useState(false)
   const [isEventDeckThrowing, setEventDeckThrowing] = useState(false)
   const [isEventDeckFlipped, setEventDeckFlipped] = useState(false)
   const [activeGalleryDeckIndex, setActiveGalleryDeckIndex] = useState(0)
-  const [galleryDeckDragOffset, setGalleryDeckDragOffset] = useState(0)
+  const [, setGalleryDeckDragOffset] = useState(0)
   const [isGalleryDeckDragging, setGalleryDeckDragging] = useState(false)
   const [isGalleryDeckThrowing, setGalleryDeckThrowing] = useState(false)
+  const [isGalleryDeckFlipped, setGalleryDeckFlipped] = useState(false)
   const menuRef = useRef(null)
   const navItemRefs = useRef({})
   const linkChildPanelRef = useRef(null)
@@ -638,6 +637,8 @@ export default function App() {
   const galleryDeckThrowTimeoutRef = useRef(null)
   const activeEventDeckCardRef = useRef(null)
   const activeGalleryDeckCardRef = useRef(null)
+  const eventDeckStageRef = useRef(null)
+  const galleryDeckStageRef = useRef(null)
   const eventDeckDragOffsetRef = useRef(0)
   const galleryDeckDragOffsetRef = useRef(0)
   const eventDeckPendingOffsetRef = useRef(0)
@@ -646,7 +647,8 @@ export default function App() {
   const galleryDeckDragFrameRef = useRef(null)
   const eventDeckReleaseFrameRef = useRef(null)
   const galleryDeckReleaseFrameRef = useRef(null)
-  const eventDeckClickGuardRef = useRef(false)
+  const eventDeckMotionRef = useRef({ next: 0, prev: 0, stage: null })
+  const galleryDeckMotionRef = useRef({ next: 0, prev: 0, stage: null })
   const facilityCardRefs = useRef([])
   const lastScrollTimeRef = useRef(Date.now())
   const isFacilityScrollingRef = useRef(false)
@@ -752,16 +754,20 @@ export default function App() {
     () => kegiatanItems.filter((item) => eventCategorySet.has(item.category || '')),
     [kegiatanItems],
   )
-  const directGalleryItems = useMemo(
-    () => kegiatanItems.filter((item) => galleryCategorySet.has(item.category || '')),
-    [kegiatanItems],
+  const teamItems = useMemo(
+    () =>
+      landingAnnouncements
+        .filter((item) => teamCategorySet.has(item.category || ''))
+        .map((item, index) => ({
+          id: item.id || `tim-${index + 1}`,
+          title: (item.title || '').trim() || `Tim ${index + 1}`,
+          excerpt: (item.excerpt || '').trim(),
+          content: (item.content || '').trim(),
+          image: item.coverImageDataUrl || activityPhotoSrc,
+        })),
+    [landingAnnouncements],
   )
-  const galleryItems = useMemo(() => {
-    if (directGalleryItems.length) {
-      return directGalleryItems
-    }
-    return kegiatanItems.filter((item) => Boolean(item.image))
-  }, [directGalleryItems, kegiatanItems])
+  const galleryItems = useMemo(() => teamItems, [teamItems])
   const eventDeckItems = useMemo(
     () =>
       eventItems.map((item, index) => ({
@@ -774,60 +780,57 @@ export default function App() {
     () =>
       galleryItems.map((item, index) => ({
         ...item,
-        deckKey: `gallery-${item.id || item.title}-${index}`,
+        deckIndex: index,
+        deckKey: `gallery-${index}`,
       })),
     [galleryItems],
   )
   const activeEventDeckItem = eventDeckItems[activeEventDeckIndex] || null
   const activeGalleryDeckItem = galleryDeckItems[activeGalleryDeckIndex] || null
+  const eventDeckDepth = Math.max(eventDeckItems.length, 1)
+  const galleryDeckDepth = Math.max(galleryDeckItems.length, 1)
   const visibleEventLeftDeckItems = useMemo(
     () =>
       eventDeckItems
-        .slice(Math.max(0, activeEventDeckIndex - (eventDeckVisibleDepth - 1)), activeEventDeckIndex)
+        .slice(Math.max(0, activeEventDeckIndex - (eventDeckDepth - 1)), activeEventDeckIndex)
         .reverse()
         .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
-    [activeEventDeckIndex, eventDeckItems],
+    [activeEventDeckIndex, eventDeckDepth, eventDeckItems],
   )
   const visibleEventRightDeckItems = useMemo(
     () =>
       eventDeckItems
-        .slice(activeEventDeckIndex + 1, activeEventDeckIndex + eventDeckVisibleDepth)
+        .slice(activeEventDeckIndex + 1, activeEventDeckIndex + eventDeckDepth)
         .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
-    [activeEventDeckIndex, eventDeckItems],
+    [activeEventDeckIndex, eventDeckDepth, eventDeckItems],
   )
   const visibleGalleryLeftDeckItems = useMemo(
     () =>
       galleryDeckItems
-        .slice(Math.max(0, activeGalleryDeckIndex - galleryDeckPeekDepth), activeGalleryDeckIndex)
+        .slice(Math.max(0, activeGalleryDeckIndex - (galleryDeckDepth - 1)), activeGalleryDeckIndex)
         .reverse()
         .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
-    [activeGalleryDeckIndex, galleryDeckItems],
+    [activeGalleryDeckIndex, galleryDeckDepth, galleryDeckItems],
   )
   const visibleGalleryRightDeckItems = useMemo(
     () =>
       galleryDeckItems
-        .slice(activeGalleryDeckIndex + 1, activeGalleryDeckIndex + 1 + galleryDeckPeekDepth)
+        .slice(activeGalleryDeckIndex + 1, activeGalleryDeckIndex + galleryDeckDepth)
         .map((item, depth) => ({ ...item, stackDepth: depth + 1 })),
-    [activeGalleryDeckIndex, galleryDeckItems],
-  )
-  const galleryDeckRenderDepth = Math.max(
-    visibleGalleryLeftDeckItems.length,
-    visibleGalleryRightDeckItems.length,
-    1,
+    [activeGalleryDeckIndex, galleryDeckDepth, galleryDeckItems],
   )
   const canShiftEventNext = activeEventDeckIndex < eventDeckItems.length - 1
   const canShiftEventPrev = activeEventDeckIndex > 0
   const canShiftGalleryNext = activeGalleryDeckIndex < galleryDeckItems.length - 1
   const canShiftGalleryPrev = activeGalleryDeckIndex > 0
-  const eventDeckMotionToNextProgress = clampNumber(-eventDeckDragOffset / deckSwipeThreshold, 0, 1)
-  const eventDeckMotionToPrevProgress = clampNumber(eventDeckDragOffset / deckSwipeThreshold, 0, 1)
-  const galleryDeckMotionToNextProgress = clampNumber(-galleryDeckDragOffset / deckSwipeThreshold, 0, 1)
-  const galleryDeckMotionToPrevProgress = clampNumber(galleryDeckDragOffset / deckSwipeThreshold, 0, 1)
+  const activeDeckClickMoveThreshold = isCompactViewport ? 6 : deckClickMoveThreshold
+  const activeDeckSwipeThreshold = isCompactViewport ? 40 : deckSwipeThreshold
+  const activeDeckFlickVelocityThreshold = isCompactViewport ? 0.24 : deckFlickVelocityThreshold
+  const isKegiatanDeckUnified = true
   const isEventDeckTransitioning = isEventDeckThrowing
   const isGalleryDeckTransitioning = isGalleryDeckThrowing
   const snapNearOffsetPercent = isNarrowViewport ? 8 : isCompactViewport ? 12 : 18
   const snapFarOffsetPercent = isNarrowViewport ? 14 : isCompactViewport ? 20 : 30
-  const isGalleryUsingEventFallback = directGalleryItems.length === 0 && galleryItems.length > 0
   const isGalleryLoopEnabled = galleryItems.length >= galleryLoopMinimumItems
   const galleryActiveLoopCopies = useMemo(() => {
     if (!isGalleryLoopEnabled) {
@@ -899,7 +902,6 @@ export default function App() {
     setEventDeckDragging(false)
     setEventDeckThrowing(false)
     setEventDeckFlipped(false)
-    eventDeckClickGuardRef.current = false
     eventDeckDragStateRef.current = createDeckDragState()
   }, [eventDeckItems.length])
 
@@ -909,7 +911,6 @@ export default function App() {
 
   useEffect(() => {
     setEventDeckFlipped(false)
-    eventDeckClickGuardRef.current = false
   }, [activeEventDeckIndex])
 
   useEffect(() => {
@@ -921,12 +922,17 @@ export default function App() {
     setGalleryDeckDragOffsetImmediate(0)
     setGalleryDeckDragging(false)
     setGalleryDeckThrowing(false)
+    setGalleryDeckFlipped(false)
     galleryDeckDragStateRef.current = createDeckDragState()
   }, [galleryDeckItems.length])
 
   useEffect(() => {
     setActiveGallerySnapIndex((previous) => toLoopIndex(previous, galleryDeckItems.length))
   }, [galleryDeckItems.length])
+
+  useEffect(() => {
+    setGalleryDeckFlipped(false)
+  }, [activeGalleryDeckIndex])
 
   const navigateToPath = (path) => {
     if (window.location.pathname !== path) {
@@ -1127,26 +1133,64 @@ export default function App() {
     }
   }
 
+  const syncDeckStageMotion = (stage, motionRef, nextValue, prevValue) => {
+    if (!stage) return
+    if (motionRef.current.stage !== stage) {
+      motionRef.current.stage = stage
+      motionRef.current.next = Number.NaN
+      motionRef.current.prev = Number.NaN
+    }
+    if (motionRef.current.next !== nextValue) {
+      stage.style.setProperty('--deck-motion-next', `${nextValue}`)
+      motionRef.current.next = nextValue
+    }
+    if (motionRef.current.prev !== prevValue) {
+      stage.style.setProperty('--deck-motion-prev', `${prevValue}`)
+      motionRef.current.prev = prevValue
+    }
+  }
+
+  const syncDeckDragVisual = ({
+    nextOffset,
+    dragOffsetRef,
+    activeCardRef,
+    stageRef,
+    motionRef,
+  }) => {
+    dragOffsetRef.current = nextOffset
+    const activeCard = activeCardRef.current
+    if (activeCard) {
+      activeCard.style.setProperty('--deck-drag-x', `${nextOffset}px`)
+      activeCard.style.setProperty(
+        '--deck-drag-rotate',
+        `${clampNumber(nextOffset * 0.02, -4, 4)}deg`,
+      )
+    }
+
+    const stage = stageRef.current
+    const motionNext = isCompactViewport ? 0 : clampNumber(-nextOffset / activeDeckSwipeThreshold, 0, 1)
+    const motionPrev = isCompactViewport ? 0 : clampNumber(nextOffset / activeDeckSwipeThreshold, 0, 1)
+    syncDeckStageMotion(stage, motionRef, motionNext, motionPrev)
+  }
+
   const syncEventDeckDragVisual = (nextOffset) => {
-    eventDeckDragOffsetRef.current = nextOffset
-    const activeCard = activeEventDeckCardRef.current
-    if (!activeCard) return
-    activeCard.style.setProperty('--event-stack-drag-x', `${nextOffset}px`)
-    activeCard.style.setProperty(
-      '--event-stack-drag-rotate',
-      `${clampNumber(nextOffset * 0.02, -4, 4)}deg`,
-    )
+    syncDeckDragVisual({
+      nextOffset,
+      dragOffsetRef: eventDeckDragOffsetRef,
+      activeCardRef: activeEventDeckCardRef,
+      stageRef: eventDeckStageRef,
+      motionRef: eventDeckMotionRef,
+    })
   }
 
   const syncGalleryDeckDragVisual = (nextOffset) => {
-    galleryDeckDragOffsetRef.current = nextOffset
-    const activeCard = activeGalleryDeckCardRef.current
-    if (!activeCard) return
-    activeCard.style.setProperty('--gallery-stack-drag-x', `${nextOffset}px`)
-    activeCard.style.setProperty(
-      '--gallery-stack-drag-rotate',
-      `${clampNumber(nextOffset * 0.02, -4, 4)}deg`,
-    )
+    syncDeckDragVisual({
+      nextOffset,
+      dragOffsetRef: galleryDeckDragOffsetRef,
+      activeCardRef: activeGalleryDeckCardRef,
+      stageRef: galleryDeckStageRef,
+      motionRef: galleryDeckMotionRef,
+    })
   }
 
   const setEventDeckDragOffsetImmediate = (nextOffset) => {
@@ -1950,7 +1994,8 @@ export default function App() {
     finishGallerySnapPointerInteraction(e)
   }
 
-  const finishEventDeckPointerInteraction = (pointerId = null) => {
+  const finishEventDeckPointerInteraction = (pointerId = null, options = {}) => {
+    const { skipSnapBackAnimation = false } = options
     const dragState = eventDeckDragStateRef.current
     if (!dragState.isDragging) return
     if (pointerId !== null && dragState.pointerId !== pointerId) return
@@ -1959,7 +2004,6 @@ export default function App() {
     const releaseVelocityX = dragState.velocityX
     const currentIndex = activeEventDeckIndex
     const hasMoved = dragState.hasMoved
-    eventDeckClickGuardRef.current = hasMoved
     eventDeckDragStateRef.current = createDeckDragState()
     setEventDeckDragging(false)
     const canShiftNext = currentIndex < eventDeckItems.length - 1
@@ -1967,16 +2011,16 @@ export default function App() {
 
     let direction = null
     let nextIndex = currentIndex
-    if (currentOffset <= -deckSwipeThreshold && canShiftNext) {
+    if (currentOffset <= -activeDeckSwipeThreshold && canShiftNext) {
       direction = 'next'
       nextIndex = Math.min(currentIndex + 1, Math.max(eventDeckItems.length - 1, 0))
-    } else if (currentOffset >= deckSwipeThreshold && canShiftPrev) {
+    } else if (currentOffset >= activeDeckSwipeThreshold && canShiftPrev) {
       direction = 'prev'
       nextIndex = Math.max(currentIndex - 1, 0)
-    } else if (releaseVelocityX <= -deckFlickVelocityThreshold && canShiftNext) {
+    } else if (releaseVelocityX <= -activeDeckFlickVelocityThreshold && canShiftNext) {
       direction = 'next'
       nextIndex = Math.min(currentIndex + 1, Math.max(eventDeckItems.length - 1, 0))
-    } else if (releaseVelocityX >= deckFlickVelocityThreshold && canShiftPrev) {
+    } else if (releaseVelocityX >= activeDeckFlickVelocityThreshold && canShiftPrev) {
       direction = 'prev'
       nextIndex = Math.max(currentIndex - 1, 0)
     }
@@ -1985,6 +2029,11 @@ export default function App() {
     cancelEventDeckReleaseFrame()
 
     if (!direction) {
+      if (skipSnapBackAnimation || !hasMoved) {
+        setEventDeckDragOffsetImmediate(0)
+        setEventDeckThrowing(false)
+        return
+      }
       setEventDeckThrowing(true)
       eventDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
         eventDeckReleaseFrameRef.current = null
@@ -2032,7 +2081,6 @@ export default function App() {
       lastTimestamp: performance.now(),
       velocityX: 0,
     }
-    eventDeckClickGuardRef.current = false
     setEventDeckDragging(true)
 
     if (typeof event.currentTarget.setPointerCapture === 'function') {
@@ -2059,7 +2107,7 @@ export default function App() {
     dragState.velocityX = dragState.velocityX * 0.62 + instantVelocity * 0.38
     dragState.lastClientX = event.clientX
     dragState.lastTimestamp = now
-    if (Math.abs(deltaX) > deckClickMoveThreshold || Math.abs(deltaY) > deckClickMoveThreshold) {
+    if (Math.abs(deltaX) > activeDeckClickMoveThreshold || Math.abs(deltaY) > activeDeckClickMoveThreshold) {
       dragState.hasMoved = true
     }
     if (
@@ -2069,7 +2117,6 @@ export default function App() {
     ) {
       releaseEventDeckPointerCapture(event)
       eventDeckDragStateRef.current = createDeckDragState()
-      eventDeckClickGuardRef.current = true
       setEventDeckDragging(false)
       setEventDeckDragOffsetImmediate(0)
       return
@@ -2091,8 +2138,16 @@ export default function App() {
   }
 
   const handleEventDeckPointerUp = (event) => {
+    const dragState = eventDeckDragStateRef.current
+    const isTap =
+      dragState.isDragging &&
+      dragState.pointerId === event.pointerId &&
+      !dragState.hasMoved
     releaseEventDeckPointerCapture(event)
-    finishEventDeckPointerInteraction(event.pointerId)
+    finishEventDeckPointerInteraction(event.pointerId, { skipSnapBackAnimation: isTap })
+    if (isTap && activeEventDeckItem) {
+      setEventDeckFlipped((previous) => !previous)
+    }
   }
 
   const handleEventDeckPointerCancel = (event) => {
@@ -2104,19 +2159,15 @@ export default function App() {
     finishEventDeckPointerInteraction(event.pointerId)
   }
 
-  const handleEventDeckCardClick = (event) => {
-    if (!activeEventDeckItem || isEventDeckTransitioning) return
-    if (event.target instanceof HTMLElement && event.target.closest('a, button')) {
-      return
-    }
-    if (eventDeckClickGuardRef.current) {
-      eventDeckClickGuardRef.current = false
-      return
-    }
+  const handleEventDeckCardKeyDown = (event) => {
+    if (isEventDeckTransitioning || !activeEventDeckItem) return
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
     setEventDeckFlipped((previous) => !previous)
   }
 
-  const finishGalleryDeckPointerInteraction = (pointerId = null) => {
+  const finishGalleryDeckPointerInteraction = (pointerId = null, options = {}) => {
+    const { skipSnapBackAnimation = false } = options
     const dragState = galleryDeckDragStateRef.current
     if (!dragState.isDragging) return
     if (pointerId !== null && dragState.pointerId !== pointerId) return
@@ -2124,6 +2175,7 @@ export default function App() {
     const currentOffset = flushGalleryDeckDragOffset()
     const releaseVelocityX = dragState.velocityX
     const currentIndex = activeGalleryDeckIndex
+    const hasMoved = dragState.hasMoved
     galleryDeckDragStateRef.current = createDeckDragState()
     setGalleryDeckDragging(false)
     const canShiftNext = currentIndex < galleryDeckItems.length - 1
@@ -2131,16 +2183,16 @@ export default function App() {
 
     let direction = null
     let nextIndex = currentIndex
-    if (currentOffset <= -deckSwipeThreshold && canShiftNext) {
+    if (currentOffset <= -activeDeckSwipeThreshold && canShiftNext) {
       direction = 'next'
       nextIndex = Math.min(currentIndex + 1, Math.max(galleryDeckItems.length - 1, 0))
-    } else if (currentOffset >= deckSwipeThreshold && canShiftPrev) {
+    } else if (currentOffset >= activeDeckSwipeThreshold && canShiftPrev) {
       direction = 'prev'
       nextIndex = Math.max(currentIndex - 1, 0)
-    } else if (releaseVelocityX <= -deckFlickVelocityThreshold && canShiftNext) {
+    } else if (releaseVelocityX <= -activeDeckFlickVelocityThreshold && canShiftNext) {
       direction = 'next'
       nextIndex = Math.min(currentIndex + 1, Math.max(galleryDeckItems.length - 1, 0))
-    } else if (releaseVelocityX >= deckFlickVelocityThreshold && canShiftPrev) {
+    } else if (releaseVelocityX >= activeDeckFlickVelocityThreshold && canShiftPrev) {
       direction = 'prev'
       nextIndex = Math.max(currentIndex - 1, 0)
     }
@@ -2149,6 +2201,11 @@ export default function App() {
     cancelGalleryDeckReleaseFrame()
 
     if (!direction) {
+      if (skipSnapBackAnimation || !hasMoved) {
+        setGalleryDeckDragOffsetImmediate(0)
+        setGalleryDeckThrowing(false)
+        return
+      }
       setGalleryDeckThrowing(true)
       galleryDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
         galleryDeckReleaseFrameRef.current = null
@@ -2191,6 +2248,7 @@ export default function App() {
       isDragging: true,
       startClientX: event.clientX,
       startClientY: event.clientY,
+      hasMoved: false,
       lastClientX: event.clientX,
       lastTimestamp: performance.now(),
       velocityX: 0,
@@ -2221,6 +2279,9 @@ export default function App() {
     dragState.velocityX = dragState.velocityX * 0.62 + instantVelocity * 0.38
     dragState.lastClientX = event.clientX
     dragState.lastTimestamp = now
+    if (Math.abs(deltaX) > activeDeckClickMoveThreshold || Math.abs(deltaY) > activeDeckClickMoveThreshold) {
+      dragState.hasMoved = true
+    }
     if (
       dragState.pointerType === 'touch' &&
       Math.abs(deltaY) > Math.abs(deltaX) &&
@@ -2249,8 +2310,16 @@ export default function App() {
   }
 
   const handleGalleryDeckPointerUp = (event) => {
+    const dragState = galleryDeckDragStateRef.current
+    const isTap =
+      dragState.isDragging &&
+      dragState.pointerId === event.pointerId &&
+      !dragState.hasMoved
     releaseGalleryDeckPointerCapture(event)
-    finishGalleryDeckPointerInteraction(event.pointerId)
+    finishGalleryDeckPointerInteraction(event.pointerId, { skipSnapBackAnimation: isTap })
+    if (isTap && activeGalleryDeckItem) {
+      setGalleryDeckFlipped((previous) => !previous)
+    }
   }
 
   const handleGalleryDeckPointerCancel = (event) => {
@@ -2260,6 +2329,13 @@ export default function App() {
 
   const handleGalleryDeckPointerCaptureLost = (event) => {
     finishGalleryDeckPointerInteraction(event.pointerId)
+  }
+
+  const handleGalleryDeckCardKeyDown = (event) => {
+    if (isGalleryDeckTransitioning || !activeGalleryDeckItem) return
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    setGalleryDeckFlipped((previous) => !previous)
   }
 
   useEffect(() => {
@@ -2873,6 +2949,117 @@ export default function App() {
           </div>
         </section>
 
+        <section
+          id="tim-kami"
+          className={`page-section ${visibleSections['tim-kami'] ? 'is-visible' : ''}`}
+        >
+          <div className="section-shell tim-section">
+            <div className="section-head">
+              <h2>Tim Kami</h2>
+            </div>
+            <p className="tim-section__lead">
+              Geser kartu untuk melihat anggota tim lain. Klik kartu untuk melihat pengalaman, jam terbang, atau
+              sertifikat pada sisi belakang.
+            </p>
+
+            <div
+              className="kegiatan-deck tim-deck"
+              role="region"
+              aria-label="Deck tim. Geser kartu ke kiri atau kanan untuk melihat anggota tim lain."
+            >
+              {galleryDeckItems.length === 0 ? (
+                <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
+                  <h4>Data tim belum tersedia</h4>
+                  <p className="kegiatan-event__description">
+                    Tambahkan data tim melalui panel admin agar tampil di halaman ini.
+                  </p>
+                </article>
+              ) : (
+                <div
+                  ref={galleryDeckStageRef}
+                  className="kegiatan-deck__stage tim-deck__stage"
+                >
+                  {[...visibleGalleryLeftDeckItems].reverse().map((item) => (
+                    <article
+                      key={`${item.deckKey}-left-${item.stackDepth}`}
+                      className="kegiatan-deck-card kegiatan-deck-card--team is-back is-left"
+                      style={{ '--stack-depth': item.stackDepth }}
+                      aria-hidden="true"
+                    >
+                      <img
+                        src={item.image}
+                        alt=""
+                        className="kegiatan-deck-card__image"
+                        draggable={false}
+                      />
+                      <h4 className="kegiatan-deck-card__title">{item.title}</h4>
+                      <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
+                    </article>
+                  ))}
+
+                  {[...visibleGalleryRightDeckItems].reverse().map((item) => (
+                    <article
+                      key={`${item.deckKey}-right-${item.stackDepth}`}
+                      className="kegiatan-deck-card kegiatan-deck-card--team is-back is-right"
+                      style={{ '--stack-depth': item.stackDepth }}
+                      aria-hidden="true"
+                    >
+                      <img
+                        src={item.image}
+                        alt=""
+                        className="kegiatan-deck-card__image"
+                        draggable={false}
+                      />
+                      <h4 className="kegiatan-deck-card__title">{item.title}</h4>
+                      <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
+                    </article>
+                  ))}
+
+                  {activeGalleryDeckItem ? (
+                    <article
+                      key={`${activeGalleryDeckItem.deckKey}-active`}
+                      ref={activeGalleryDeckCardRef}
+                      className={`kegiatan-deck-card kegiatan-deck-card--team is-top ${isGalleryDeckFlipped ? 'is-flipped' : ''} ${isGalleryDeckDragging ? 'is-dragging' : ''} ${isGalleryDeckThrowing ? 'is-throwing' : ''}`}
+                      onPointerDown={handleGalleryDeckPointerDown}
+                      onPointerMove={handleGalleryDeckPointerMove}
+                      onPointerUp={handleGalleryDeckPointerUp}
+                      onPointerCancel={handleGalleryDeckPointerCancel}
+                      onLostPointerCapture={handleGalleryDeckPointerCaptureLost}
+                      onKeyDown={handleGalleryDeckCardKeyDown}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isGalleryDeckFlipped}
+                      aria-label={`Kartu profil ${activeGalleryDeckItem.title}. Klik untuk ${isGalleryDeckFlipped ? 'kembali ke sisi depan' : 'melihat keterangan lengkap'}.`}
+                    >
+                      <div className="kegiatan-deck-card__flip-inner">
+                        <div className="kegiatan-deck-card__face kegiatan-deck-card__face--front">
+                          <img
+                            src={activeGalleryDeckItem.image}
+                            alt={activeGalleryDeckItem.title}
+                            className="kegiatan-deck-card__image"
+                            draggable={false}
+                          />
+                          <h4 className="kegiatan-deck-card__title">{activeGalleryDeckItem.title}</h4>
+                          <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
+                        </div>
+                        <div className="kegiatan-deck-card__face kegiatan-deck-card__face--back tim-deck-card__face--back">
+                          <h4 className="kegiatan-deck-card__back-title">{activeGalleryDeckItem.title}</h4>
+                          <p className="kegiatan-deck-card__back-description tim-deck-card__back-description">
+                            {activeGalleryDeckItem.content || activeGalleryDeckItem.excerpt || 'Keterangan tim belum ditambahkan.'}
+                          </p>
+                          <p className="kegiatan-deck-card__flip-hint">
+                            Klik kartu untuk kembali ke sisi depan.
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
         <section id="fasilitas" className={`page-section ${visibleSections.fasilitas ? 'is-visible' : ''}`}>
           <div className="section-shell fasilitas-section">
             <div className="section-head">
@@ -2943,7 +3130,7 @@ export default function App() {
         </section>
 
         <section id="kegiatan" className={`page-section ${visibleSections.kegiatan ? 'is-visible' : ''}`}>
-          <div className="section-shell gallery-section">
+          <div className="section-shell kegiatan-section">
             <div className="section-head">
               <h2>Kegiatan</h2>
             </div>
@@ -2958,174 +3145,182 @@ export default function App() {
                   <h3>Event</h3>
                   <p>Agenda kegiatan terjadwal yang bisa diikuti anak.</p>
                 </div>
-                <div
-                  className="kegiatan-snap kegiatan-snap--event"
-                  role="region"
-                  aria-label="Event kegiatan. Geser kiri atau kanan untuk melihat event lainnya."
-                >
-                  {eventDeckItems.length === 0 ? (
-                    <article className="operational-grid__item kegiatan-event-stack__empty">
-                      <h4>Belum ada event aktif</h4>
-                      <p className="kegiatan-event__description">
-                        Tambahkan data event melalui panel admin agar tampil di halaman ini.
-                      </p>
-                    </article>
-                  ) : (
-                    <div
-                      ref={eventSnapContainerRef}
-                      className="kegiatan-snap__container"
-                      onPointerDown={handleEventSnapPointerDown}
-                      onPointerMove={handleEventSnapPointerMove}
-                      onPointerUp={handleEventSnapPointerUp}
-                      onPointerCancel={handleEventSnapPointerCancel}
-                      onLostPointerCapture={handleEventSnapPointerCaptureLost}
-                      aria-live="polite"
-                    >
-                      {Array.from({ length: 3 }).map((_, stackPosition) => {
-                        const containerWidth = Math.max(eventSnapContainerRef.current?.clientWidth || 1, 1)
-                        const dragOffsetPercent =
-                          stackPosition === 0 && isEventSnapDragging
-                            ? (eventSnapDragOffset / containerWidth) * 100
-                            : 0
-                        const baseOffsetPercent =
-                          stackPosition === 0 ? 0 : stackPosition === 1 ? snapNearOffsetPercent : snapFarOffsetPercent
-                        const cardOffset = baseOffsetPercent + dragOffsetPercent
-                        const proximityClass = stackPosition === 0 ? 'is-active' : stackPosition === 1 ? 'is-near' : 'is-far'
-                        const sideClass =
-                          stackPosition === 0 ? 'is-center' : dragOffsetPercent > 0 ? 'is-left' : 'is-right'
-                        const itemIndex = toLoopIndex(
-                          stackPosition === 0
-                            ? activeEventSnapIndex
-                            : dragOffsetPercent > 0
-                              ? activeEventSnapIndex - stackPosition
-                              : activeEventSnapIndex + stackPosition,
-                          eventDeckItems.length,
-                        )
-                        const item = eventDeckItems[itemIndex]
-                        if (!item) return null
+                {(isKegiatanDeckUnified || !isCompactViewport) ? (
+                  <div
+                    className="kegiatan-deck kegiatan-deck--event"
+                    role="region"
+                    aria-label="Deck event. Geser kartu ke kiri atau kanan untuk melihat event lain."
+                  >
+                    {eventDeckItems.length === 0 ? (
+                      <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
+                        <h4>Belum ada event aktif</h4>
+                        <p className="kegiatan-event__description">
+                          Tambahkan data event melalui panel admin agar tampil di halaman ini.
+                        </p>
+                      </article>
+                    ) : (
+                      <>
+                        <div
+                          ref={eventDeckStageRef}
+                          className="kegiatan-deck__stage kegiatan-deck__stage--event"
+                        >
+                          {[...visibleEventLeftDeckItems].reverse().map((item) => (
+                            <article
+                              key={`${item.deckKey}-left-${item.stackDepth}`}
+                              className="kegiatan-deck-card kegiatan-deck-card--event is-back is-left"
+                              style={{ '--stack-depth': item.stackDepth }}
+                              aria-hidden="true"
+                            >
+                              <img
+                                src={item.image}
+                                alt=""
+                                className="kegiatan-deck-card__image"
+                                draggable={false}
+                              />
+                              <h4 className="kegiatan-deck-card__title">{item.title}</h4>
+                              <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat selengkapnya</p>
+                              {item.period ? (
+                                <p className="kegiatan-deck-card__badge" title={item.period}>
+                                  {item.period}
+                                </p>
+                              ) : null}
+                            </article>
+                          ))}
 
-                        return (
+                          {[...visibleEventRightDeckItems].reverse().map((item) => (
+                            <article
+                              key={`${item.deckKey}-right-${item.stackDepth}`}
+                              className="kegiatan-deck-card kegiatan-deck-card--event is-back is-right"
+                              style={{ '--stack-depth': item.stackDepth }}
+                              aria-hidden="true"
+                            >
+                              <img
+                                src={item.image}
+                                alt=""
+                                className="kegiatan-deck-card__image"
+                                draggable={false}
+                              />
+                              <h4 className="kegiatan-deck-card__title">{item.title}</h4>
+                              <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat selengkapnya</p>
+                              {item.period ? (
+                                <p className="kegiatan-deck-card__badge" title={item.period}>
+                                  {item.period}
+                                </p>
+                              ) : null}
+                            </article>
+                          ))}
+
+                          {activeEventDeckItem ? (
+                            <article
+                              key={`${activeEventDeckItem.deckKey}-active`}
+                              ref={activeEventDeckCardRef}
+                              className={`kegiatan-deck-card kegiatan-deck-card--event is-top ${isEventDeckFlipped ? 'is-flipped' : ''} ${isEventDeckDragging ? 'is-dragging' : ''} ${isEventDeckThrowing ? 'is-throwing' : ''}`}
+                              onPointerDown={handleEventDeckPointerDown}
+                              onPointerMove={handleEventDeckPointerMove}
+                              onPointerUp={handleEventDeckPointerUp}
+                              onPointerCancel={handleEventDeckPointerCancel}
+                              onLostPointerCapture={handleEventDeckPointerCaptureLost}
+                              onKeyDown={handleEventDeckCardKeyDown}
+                              role="button"
+                              tabIndex={0}
+                              aria-pressed={isEventDeckFlipped}
+                              aria-label={`Kartu event ${activeEventDeckItem.title}. Klik untuk ${isEventDeckFlipped ? 'kembali ke sisi depan' : 'melihat keterangan lengkap'}.`}
+                            >
+                              <div className="kegiatan-deck-card__flip-inner">
+                                <div className="kegiatan-deck-card__face kegiatan-deck-card__face--front">
+                                  <img
+                                    src={activeEventDeckItem.image}
+                                    alt={activeEventDeckItem.title}
+                                    className="kegiatan-deck-card__image"
+                                    draggable={false}
+                                  />
+                                  <h4 className="kegiatan-deck-card__title">{activeEventDeckItem.title}</h4>
+                                  <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat selengkapnya</p>
+                                  {activeEventDeckItem.period ? (
+                                    <p className="kegiatan-deck-card__badge" title={activeEventDeckItem.period}>
+                                      {activeEventDeckItem.period}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div className="kegiatan-deck-card__face kegiatan-deck-card__face--back">
+                                  {activeEventDeckItem.period ? (
+                                    <p className="kegiatan-deck-card__back-period">{activeEventDeckItem.period}</p>
+                                  ) : null}
+                                  <h4 className="kegiatan-deck-card__back-title">{activeEventDeckItem.title}</h4>
+                                  <p className="kegiatan-deck-card__back-description">
+                                    {activeEventDeckItem.excerpt || 'Keterangan event belum tersedia.'}
+                                  </p>
+                                  {activeEventDeckItem.ctaLabel && activeEventDeckItem.ctaUrl ? (
+                                    <a
+                                      href={activeEventDeckItem.ctaUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="button button--ghost kegiatan-event__cta"
+                                    >
+                                      {activeEventDeckItem.ctaLabel}
+                                    </a>
+                                  ) : null}
+                                  <p className="kegiatan-deck-card__flip-hint">
+                                    Klik kartu untuk kembali ke sisi depan.
+                                  </p>
+                                </div>
+                              </div>
+                            </article>
+                          ) : null}
+                        </div>
+
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="kegiatan-event-scroll" role="region" aria-label="Daftar event yang bisa digeser">
+                    <div className="kegiatan-event-track">
+                      {eventItems.length === 0 ? (
+                        <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
+                          <h4>Belum ada event aktif</h4>
+                          <p className="kegiatan-event__description">
+                            Tambahkan data event melalui panel admin agar tampil di halaman ini.
+                          </p>
+                        </article>
+                      ) : (
+                        eventItems.map((item) => (
                           <article
-                            key={`${item.deckKey}-stack-${stackPosition}`}
-                            className={`kegiatan-snap__card kegiatan-snap__card--event ${proximityClass} ${sideClass}`}
-                            style={{
-                              '--card-offset': `${cardOffset}%`,
-                              transition: stackPosition === 0 && isEventSnapDragging
-                                ? 'none'
-                                : 'transform 80ms cubic-bezier(0.2, 1, 0.3, 1)',
-                            }}
+                            key={`${item.id || item.title}-${item.category}-${item.publishStartDate || item.period}`}
+                            className="operational-grid__item kegiatan-event-card"
                           >
-                            <img
-                              src={item.image}
-                              alt={item.title}
-                              className="kegiatan-snap__image"
-                              draggable={false}
-                              loading="lazy"
-                              decoding="async"
-                            />
-                            <div className="kegiatan-snap__scrim" />
-                            <p className="kegiatan-snap__badge">
-                              {announcementCategoryLabelMap[item.category] || 'Info'}
-                            </p>
-                            <div className="kegiatan-snap__content">
-                              <h4>{item.title || 'Event Kegiatan'}</h4>
-                              <p className="kegiatan-snap__meta">{item.period || 'Jadwal akan diumumkan'}</p>
-                              <p className="kegiatan-snap__desc">
-                                {item.excerpt || 'Informasi detail event akan diperbarui oleh admin.'}
-                              </p>
+                            <div className="kegiatan-card-stack">
+                              <img src={item.image} alt={item.title} className="kegiatan-event__image kegiatan-card-stack__image" />
+                              <h4 className="kegiatan-card-stack__title">{item.title}</h4>
+                              <p className="kegiatan-card-stack__hint">Klik untuk lihat selengkapnya</p>
+                              {item.period ? (
+                                <p className="kegiatan-card-stack__badge" title={item.period}>
+                                  {item.period}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="kegiatan-event-card__meta">
+                              <p className="kegiatan-event__period">{item.period}</p>
+                              {item.excerpt ? (
+                                <p className="kegiatan-event__description">{item.excerpt}</p>
+                              ) : null}
                               {item.ctaLabel && item.ctaUrl ? (
-                                <a href={item.ctaUrl} target="_blank" rel="noreferrer" className="kegiatan-snap__cta">
+                                <a
+                                  href={item.ctaUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="button button--ghost kegiatan-event__cta"
+                                >
                                   {item.ctaLabel}
                                 </a>
                               ) : null}
                             </div>
                           </article>
-                        )
-                      })}
+                        ))
+                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </article>
-
-              {galleryItems.length > 0 ? (
-                <article className="operational-card kegiatan-block">
-                  <div className="kegiatan-block__head">
-                    <h3>Galeri</h3>
-                    <p>
-                      {isGalleryUsingEventFallback
-                        ? 'Dokumentasi diambil dari kegiatan yang sudah tersedia.'
-                        : 'Dokumentasi moment anak TPA.'}
-                    </p>
-                  </div>
-                  <div
-                    className="kegiatan-snap kegiatan-snap--gallery"
-                    role="region"
-                    aria-label="Galeri kegiatan. Geser kiri atau kanan untuk berpindah foto."
-                  >
-                    <div
-                      ref={gallerySnapContainerRef}
-                      className="kegiatan-snap__container"
-                      onPointerDown={handleGallerySnapPointerDown}
-                      onPointerMove={handleGallerySnapPointerMove}
-                      onPointerUp={handleGallerySnapPointerUp}
-                      onPointerCancel={handleGallerySnapPointerCancel}
-                      onLostPointerCapture={handleGallerySnapPointerCaptureLost}
-                      aria-live="polite"
-                    >
-                      {Array.from({ length: 3 }).map((_, stackPosition) => {
-                        const containerWidth = Math.max(gallerySnapContainerRef.current?.clientWidth || 1, 1)
-                        const dragOffsetPercent =
-                          stackPosition === 0 && isGallerySnapDragging
-                            ? (gallerySnapDragOffset / containerWidth) * 100
-                            : 0
-                        const baseOffsetPercent =
-                          stackPosition === 0 ? 0 : stackPosition === 1 ? snapNearOffsetPercent : snapFarOffsetPercent
-                        const cardOffset = baseOffsetPercent + dragOffsetPercent
-                        const proximityClass = stackPosition === 0 ? 'is-active' : stackPosition === 1 ? 'is-near' : 'is-far'
-                        const sideClass =
-                          stackPosition === 0 ? 'is-center' : dragOffsetPercent > 0 ? 'is-left' : 'is-right'
-                        const itemIndex = toLoopIndex(
-                          stackPosition === 0
-                            ? activeGallerySnapIndex
-                            : dragOffsetPercent > 0
-                              ? activeGallerySnapIndex - stackPosition
-                              : activeGallerySnapIndex + stackPosition,
-                          galleryDeckItems.length,
-                        )
-                        const item = galleryDeckItems[itemIndex]
-                        if (!item) return null
-
-                        return (
-                          <article
-                            key={`${item.deckKey}-stack-${stackPosition}`}
-                            className={`kegiatan-snap__card kegiatan-snap__card--gallery ${proximityClass} ${sideClass}`}
-                            style={{
-                              '--card-offset': `${cardOffset}%`,
-                              transition: stackPosition === 0 && isGallerySnapDragging
-                                ? 'none'
-                                : 'transform 80ms cubic-bezier(0.2, 1, 0.3, 1)',
-                            }}
-                          >
-                            <img
-                              src={item.image}
-                              alt={item.title}
-                              className="kegiatan-snap__image"
-                              draggable={false}
-                              loading="lazy"
-                              decoding="async"
-                            />
-                            <div className="kegiatan-snap__scrim" />
-                            <div className="kegiatan-snap__content">
-                              <h4>{item.title || 'Dokumentasi Kegiatan'}</h4>
-                              <p className="kegiatan-snap__meta">{item.period || 'Dokumentasi kegiatan'}</p>
-                            </div>
-                          </article>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </article>
-              ) : null}
             </div>
           </div>
         </section>
@@ -3284,6 +3479,7 @@ export default function App() {
             <h4>Layanan</h4>
             <ul>
               <li><a href="#tentang-kami">Program Pendampingan</a></li>
+              <li><a href="#tim-kami">Tim Kami</a></li>
               <li><a href="#fasilitas">Fasilitas TPA</a></li>
               <li><a href="#kegiatan">Kegiatan</a></li>
               <li><a href="#biaya-layanan">Paket Biaya Layanan</a></li>
@@ -3294,6 +3490,7 @@ export default function App() {
             <h4>Informasi</h4>
             <ul>
               <li><a href="#tentang-kami">Tentang Kami</a></li>
+              <li><a href="#tim-kami">Profil Tim</a></li>
               <li><a href="#tentang-kami">Visi dan Program</a></li>
               <li><a href="/privacy-policy">Kebijakan Privasi</a></li>
               <li><a href="/terms-of-service">Syarat Layanan</a></li>
