@@ -302,12 +302,13 @@ const announcementCategoryLabelMap = {
   event: 'Event',
   fasilitas: 'Fasilitas',
   tim: 'Tim Kami',
+  petugas: 'Tim Kami',
   promosi: 'Promosi',
   ucapan: 'Ucapan',
 }
 const eventCategorySet = new Set(['event'])
 const fasilitasCategorySet = new Set(['fasilitas'])
-const teamCategorySet = new Set(['tim'])
+const teamCategorySet = new Set(['tim', 'petugas'])
 const kegiatanCategorySet = new Set([...eventCategorySet])
 const promoHeroCategorySet = new Set(['promosi', 'ucapan'])
 
@@ -604,6 +605,7 @@ export default function App() {
   const [isGalleryDeckDragging, setGalleryDeckDragging] = useState(false)
   const [isGalleryDeckThrowing, setGalleryDeckThrowing] = useState(false)
   const [isGalleryDeckFlipped, setGalleryDeckFlipped] = useState(false)
+  const [galleryDeckPhase, setGalleryDeckPhase] = useState('forward')
   const menuRef = useRef(null)
   const navItemRefs = useRef({})
   const linkChildPanelRef = useRef(null)
@@ -647,8 +649,8 @@ export default function App() {
   const galleryDeckDragFrameRef = useRef(null)
   const eventDeckReleaseFrameRef = useRef(null)
   const galleryDeckReleaseFrameRef = useRef(null)
-  const eventDeckMotionRef = useRef({ next: 0, prev: 0, stage: null })
-  const galleryDeckMotionRef = useRef({ next: 0, prev: 0, stage: null })
+  const eventDeckMotionRef = useRef({ next: 0, prev: 0, stage: null, motionFrame: null })
+  const galleryDeckMotionRef = useRef({ next: 0, prev: 0, stage: null, motionFrame: null })
   const facilityCardRefs = useRef([])
   const lastScrollTimeRef = useRef(Date.now())
   const isFacilityScrollingRef = useRef(false)
@@ -787,6 +789,7 @@ export default function App() {
   )
   const activeEventDeckItem = eventDeckItems[activeEventDeckIndex] || null
   const activeGalleryDeckItem = galleryDeckItems[activeGalleryDeckIndex] || null
+  const hasEventDeckContent = eventDeckItems.length > 0 && Boolean(activeEventDeckItem)
   const eventDeckDepth = Math.max(eventDeckItems.length, 1)
   const galleryDeckDepth = Math.max(galleryDeckItems.length, 1)
   const visibleEventLeftDeckItems = useMemo(
@@ -821,11 +824,17 @@ export default function App() {
   )
   const canShiftEventNext = activeEventDeckIndex < eventDeckItems.length - 1
   const canShiftEventPrev = activeEventDeckIndex > 0
-  const canShiftGalleryNext = activeGalleryDeckIndex < galleryDeckItems.length - 1
-  const canShiftGalleryPrev = activeGalleryDeckIndex > 0
+  const canShiftGalleryNext =
+    galleryDeckPhase === 'forward' && activeGalleryDeckIndex < galleryDeckItems.length - 1
+  const canShiftGalleryPrev =
+    galleryDeckPhase === 'backward' && activeGalleryDeckIndex > 0
   const activeDeckClickMoveThreshold = isCompactViewport ? 6 : deckClickMoveThreshold
   const activeDeckSwipeThreshold = isCompactViewport ? 40 : deckSwipeThreshold
   const activeDeckFlickVelocityThreshold = isCompactViewport ? 0.24 : deckFlickVelocityThreshold
+  const activeGalleryDeckSwipeThreshold = isCompactViewport ? 44 : 60
+  const activeGalleryDeckFlickVelocityThreshold = isCompactViewport ? 0.2 : 0.34
+  const activeGalleryDeckThrowDistance = isCompactViewport ? 154 : 178
+  const activeGalleryDeckThrowDurationMs = isCompactViewport ? 190 : 220
   const isKegiatanDeckUnified = true
   const isEventDeckTransitioning = isEventDeckThrowing
   const isGalleryDeckTransitioning = isGalleryDeckThrowing
@@ -923,6 +932,7 @@ export default function App() {
     setGalleryDeckDragging(false)
     setGalleryDeckThrowing(false)
     setGalleryDeckFlipped(false)
+    setGalleryDeckPhase('forward')
     galleryDeckDragStateRef.current = createDeckDragState()
   }, [galleryDeckItems.length])
 
@@ -933,6 +943,16 @@ export default function App() {
   useEffect(() => {
     setGalleryDeckFlipped(false)
   }, [activeGalleryDeckIndex])
+
+  useEffect(() => {
+    if (galleryDeckItems.length <= 1 || activeGalleryDeckIndex <= 0) {
+      setGalleryDeckPhase('forward')
+      return
+    }
+    if (activeGalleryDeckIndex >= galleryDeckItems.length - 1) {
+      setGalleryDeckPhase('backward')
+    }
+  }, [activeGalleryDeckIndex, galleryDeckItems.length])
 
   const navigateToPath = (path) => {
     if (window.location.pathname !== path) {
@@ -1150,12 +1170,55 @@ export default function App() {
     }
   }
 
+  const animateDeckMotion = ({
+    stageRef,
+    motionRef,
+    fromNext,
+    toNext,
+    fromPrev,
+    toPrev,
+    durationMs,
+    startTime,
+  }) => {
+    const stage = stageRef.current
+    if (!stage) return
+
+    const elapsed = performance.now() - startTime
+    const progress = Math.min(elapsed / durationMs, 1)
+
+    // Easing function for smooth motion (matches card throw easing)
+    const easedProgress = 1 - Math.pow(1 - progress, 3)
+
+    const currentNext = fromNext + (toNext - fromNext) * easedProgress
+    const currentPrev = fromPrev + (toPrev - fromPrev) * easedProgress
+
+    syncDeckStageMotion(stage, motionRef, currentNext, currentPrev)
+
+    if (progress < 1) {
+      motionRef.current.motionFrame = window.requestAnimationFrame(() =>
+        animateDeckMotion({
+          stageRef,
+          motionRef,
+          fromNext,
+          toNext,
+          fromPrev,
+          toPrev,
+          durationMs,
+          startTime,
+        }),
+      )
+    } else {
+      motionRef.current.motionFrame = null
+    }
+  }
+
   const syncDeckDragVisual = ({
     nextOffset,
     dragOffsetRef,
     activeCardRef,
     stageRef,
     motionRef,
+    swipeThreshold,
   }) => {
     dragOffsetRef.current = nextOffset
     const activeCard = activeCardRef.current
@@ -1168,8 +1231,9 @@ export default function App() {
     }
 
     const stage = stageRef.current
-    const motionNext = isCompactViewport ? 0 : clampNumber(-nextOffset / activeDeckSwipeThreshold, 0, 1)
-    const motionPrev = isCompactViewport ? 0 : clampNumber(nextOffset / activeDeckSwipeThreshold, 0, 1)
+    const safeSwipeThreshold = Math.max(swipeThreshold, 1)
+    const motionNext = isCompactViewport ? 0 : clampNumber(-nextOffset / safeSwipeThreshold, 0, 1)
+    const motionPrev = isCompactViewport ? 0 : clampNumber(nextOffset / safeSwipeThreshold, 0, 1)
     syncDeckStageMotion(stage, motionRef, motionNext, motionPrev)
   }
 
@@ -1180,6 +1244,7 @@ export default function App() {
       activeCardRef: activeEventDeckCardRef,
       stageRef: eventDeckStageRef,
       motionRef: eventDeckMotionRef,
+      swipeThreshold: activeDeckSwipeThreshold,
     })
   }
 
@@ -1190,6 +1255,7 @@ export default function App() {
       activeCardRef: activeGalleryDeckCardRef,
       stageRef: galleryDeckStageRef,
       motionRef: galleryDeckMotionRef,
+      swipeThreshold: activeGalleryDeckSwipeThreshold,
     })
   }
 
@@ -2028,13 +2094,32 @@ export default function App() {
     clearEventDeckTransitionTimers()
     cancelEventDeckReleaseFrame()
 
+    // Cancel any ongoing motion animation
+    if (eventDeckMotionRef.current.motionFrame) {
+      window.cancelAnimationFrame(eventDeckMotionRef.current.motionFrame)
+      eventDeckMotionRef.current.motionFrame = null
+    }
+
     if (!direction) {
       if (skipSnapBackAnimation || !hasMoved) {
         setEventDeckDragOffsetImmediate(0)
         setEventDeckThrowing(false)
+        // Reset motion to initial state
+        syncDeckStageMotion(eventDeckStageRef.current, eventDeckMotionRef, 0, 0)
         return
       }
       setEventDeckThrowing(true)
+      // Animate motion back to 0 for smooth snap-back
+      animateDeckMotion({
+        stageRef: eventDeckStageRef,
+        motionRef: eventDeckMotionRef,
+        fromNext: eventDeckMotionRef.current.next || 0,
+        toNext: 0,
+        fromPrev: eventDeckMotionRef.current.prev || 0,
+        toPrev: 0,
+        durationMs: deckThrowDurationMs,
+        startTime: performance.now(),
+      })
       eventDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
         eventDeckReleaseFrameRef.current = null
         setEventDeckDragOffsetImmediate(0)
@@ -2048,6 +2133,23 @@ export default function App() {
 
     setEventDeckThrowing(true)
     const throwDistance = deckThrowDistance
+    const currentNext = eventDeckMotionRef.current.next || 0
+    const currentPrev = eventDeckMotionRef.current.prev || 0
+    const targetNext = direction === 'next' ? 1 : 0
+    const targetPrev = direction === 'prev' ? 1 : 0
+
+    // Animate motion for smooth back card transition
+    animateDeckMotion({
+      stageRef: eventDeckStageRef,
+      motionRef: eventDeckMotionRef,
+      fromNext: currentNext,
+      toNext: targetNext,
+      fromPrev: currentPrev,
+      toPrev: targetPrev,
+      durationMs: deckThrowDurationMs,
+      startTime: performance.now(),
+    })
+
     eventDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
       eventDeckReleaseFrameRef.current = null
       setEventDeckDragOffsetImmediate(direction === 'next' ? -throwDistance : throwDistance)
@@ -2057,6 +2159,8 @@ export default function App() {
       setActiveEventDeckIndex(nextIndex)
       setEventDeckDragOffsetImmediate(0)
       setEventDeckThrowing(false)
+      // Reset motion to 0 after index change
+      syncDeckStageMotion(eventDeckStageRef.current, eventDeckMotionRef, 0, 0)
     }, deckThrowDurationMs)
   }
 
@@ -2178,21 +2282,22 @@ export default function App() {
     const hasMoved = dragState.hasMoved
     galleryDeckDragStateRef.current = createDeckDragState()
     setGalleryDeckDragging(false)
-    const canShiftNext = currentIndex < galleryDeckItems.length - 1
-    const canShiftPrev = currentIndex > 0
+    const canShiftNext =
+      galleryDeckPhase === 'forward' && currentIndex < galleryDeckItems.length - 1
+    const canShiftPrev = galleryDeckPhase === 'backward' && currentIndex > 0
 
     let direction = null
     let nextIndex = currentIndex
-    if (currentOffset <= -activeDeckSwipeThreshold && canShiftNext) {
+    if (currentOffset <= -activeGalleryDeckSwipeThreshold && canShiftNext) {
       direction = 'next'
       nextIndex = Math.min(currentIndex + 1, Math.max(galleryDeckItems.length - 1, 0))
-    } else if (currentOffset >= activeDeckSwipeThreshold && canShiftPrev) {
+    } else if (currentOffset >= activeGalleryDeckSwipeThreshold && canShiftPrev) {
       direction = 'prev'
       nextIndex = Math.max(currentIndex - 1, 0)
-    } else if (releaseVelocityX <= -activeDeckFlickVelocityThreshold && canShiftNext) {
+    } else if (releaseVelocityX <= -activeGalleryDeckFlickVelocityThreshold && canShiftNext) {
       direction = 'next'
       nextIndex = Math.min(currentIndex + 1, Math.max(galleryDeckItems.length - 1, 0))
-    } else if (releaseVelocityX >= activeDeckFlickVelocityThreshold && canShiftPrev) {
+    } else if (releaseVelocityX >= activeGalleryDeckFlickVelocityThreshold && canShiftPrev) {
       direction = 'prev'
       nextIndex = Math.max(currentIndex - 1, 0)
     }
@@ -2200,13 +2305,32 @@ export default function App() {
     clearGalleryDeckTransitionTimers()
     cancelGalleryDeckReleaseFrame()
 
+    // Cancel any ongoing motion animation
+    if (galleryDeckMotionRef.current.motionFrame) {
+      window.cancelAnimationFrame(galleryDeckMotionRef.current.motionFrame)
+      galleryDeckMotionRef.current.motionFrame = null
+    }
+
     if (!direction) {
       if (skipSnapBackAnimation || !hasMoved) {
         setGalleryDeckDragOffsetImmediate(0)
         setGalleryDeckThrowing(false)
+        // Reset motion to initial state
+        syncDeckStageMotion(galleryDeckStageRef.current, galleryDeckMotionRef, 0, 0)
         return
       }
       setGalleryDeckThrowing(true)
+      // Animate motion back to 0 for smooth snap-back
+      animateDeckMotion({
+        stageRef: galleryDeckStageRef,
+        motionRef: galleryDeckMotionRef,
+        fromNext: galleryDeckMotionRef.current.next || 0,
+        toNext: 0,
+        fromPrev: galleryDeckMotionRef.current.prev || 0,
+        toPrev: 0,
+        durationMs: activeGalleryDeckThrowDurationMs,
+        startTime: performance.now(),
+      })
       galleryDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
         galleryDeckReleaseFrameRef.current = null
         setGalleryDeckDragOffsetImmediate(0)
@@ -2214,22 +2338,48 @@ export default function App() {
       galleryDeckThrowTimeoutRef.current = window.setTimeout(() => {
         galleryDeckThrowTimeoutRef.current = null
         setGalleryDeckThrowing(false)
-      }, deckThrowDurationMs)
+      }, activeGalleryDeckThrowDurationMs)
       return
     }
 
     setGalleryDeckThrowing(true)
-    const throwDistance = deckThrowDistance
+    const throwDistance = activeGalleryDeckThrowDistance
+    const currentNext = galleryDeckMotionRef.current.next || 0
+    const currentPrev = galleryDeckMotionRef.current.prev || 0
+    const targetNext = direction === 'next' ? 1 : 0
+    const targetPrev = direction === 'prev' ? 1 : 0
+
+    // Animate motion for smooth back card transition
+    animateDeckMotion({
+      stageRef: galleryDeckStageRef,
+      motionRef: galleryDeckMotionRef,
+      fromNext: currentNext,
+      toNext: targetNext,
+      fromPrev: currentPrev,
+      toPrev: targetPrev,
+      durationMs: activeGalleryDeckThrowDurationMs,
+      startTime: performance.now(),
+    })
+
     galleryDeckReleaseFrameRef.current = window.requestAnimationFrame(() => {
       galleryDeckReleaseFrameRef.current = null
       setGalleryDeckDragOffsetImmediate(direction === 'next' ? -throwDistance : throwDistance)
     })
     galleryDeckThrowTimeoutRef.current = window.setTimeout(() => {
       galleryDeckThrowTimeoutRef.current = null
+      if (galleryDeckItems.length <= 1 || nextIndex <= 0) {
+        setGalleryDeckPhase('forward')
+      } else if (nextIndex >= galleryDeckItems.length - 1) {
+        setGalleryDeckPhase('backward')
+      } else {
+        setGalleryDeckPhase(direction === 'next' ? 'forward' : 'backward')
+      }
       setActiveGalleryDeckIndex(nextIndex)
       setGalleryDeckDragOffsetImmediate(0)
       setGalleryDeckThrowing(false)
-    }, deckThrowDurationMs)
+      // Reset motion to 0 after index change
+      syncDeckStageMotion(galleryDeckStageRef.current, galleryDeckMotionRef, 0, 0)
+    }, activeGalleryDeckThrowDurationMs)
   }
 
   const handleGalleryDeckPointerDown = (event) => {
@@ -2365,6 +2515,14 @@ export default function App() {
       }
       if (galleryAutoScrollFrameRef.current !== null) {
         window.cancelAnimationFrame(galleryAutoScrollFrameRef.current)
+      }
+      if (eventDeckMotionRef.current.motionFrame) {
+        window.cancelAnimationFrame(eventDeckMotionRef.current.motionFrame)
+        eventDeckMotionRef.current.motionFrame = null
+      }
+      if (galleryDeckMotionRef.current.motionFrame) {
+        window.cancelAnimationFrame(galleryDeckMotionRef.current.motionFrame)
+        galleryDeckMotionRef.current.motionFrame = null
       }
     },
     [],
@@ -2958,16 +3116,11 @@ export default function App() {
               <h2>Tim Kami</h2>
             </div>
             <p className="tim-section__lead">
-              Geser kartu untuk melihat anggota tim lain. Klik kartu untuk melihat pengalaman, jam terbang, atau
-              sertifikat pada sisi belakang.
+              Profil pendamping aktif di TPA Rumah Ceria UBAYA.
             </p>
 
-            <div
-              className="kegiatan-deck tim-deck"
-              role="region"
-              aria-label="Deck tim. Geser kartu ke kiri atau kanan untuk melihat anggota tim lain."
-            >
-              {galleryDeckItems.length === 0 ? (
+            <div className="team-card-shell" role="region" aria-label="Daftar profil tim pengasuh">
+              {teamItems.length === 0 ? (
                 <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
                   <h4>Data tim belum tersedia</h4>
                   <p className="kegiatan-event__description">
@@ -2976,84 +3129,115 @@ export default function App() {
                 </article>
               ) : (
                 <div
-                  ref={galleryDeckStageRef}
-                  className="kegiatan-deck__stage tim-deck__stage"
+                  className="kegiatan-deck tim-deck"
+                  aria-label="Deck profil tim. Geser ke kiri sampai kartu terakhir, lalu geser ke kanan untuk kembali."
                 >
-                  {[...visibleGalleryLeftDeckItems].reverse().map((item) => (
-                    <article
-                      key={`${item.deckKey}-left-${item.stackDepth}`}
-                      className="kegiatan-deck-card kegiatan-deck-card--team is-back is-left"
-                      style={{ '--stack-depth': item.stackDepth }}
-                      aria-hidden="true"
-                    >
-                      <img
-                        src={item.image}
-                        alt=""
-                        className="kegiatan-deck-card__image"
-                        draggable={false}
-                      />
-                      <h4 className="kegiatan-deck-card__title">{item.title}</h4>
-                      <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
-                    </article>
-                  ))}
+                  <div
+                    ref={galleryDeckStageRef}
+                    className="kegiatan-deck__stage kegiatan-deck__stage--gallery tim-deck__stage"
+                  >
+                    {[...visibleGalleryLeftDeckItems].reverse().map((item) => (
+                      <article
+                        key={`${item.deckKey}-left-${item.stackDepth}`}
+                        className="kegiatan-deck-card kegiatan-deck-card--team is-back is-left"
+                        style={{ '--stack-depth': item.stackDepth }}
+                        aria-hidden="true"
+                      >
+                        <img
+                          src={item.image}
+                          alt=""
+                          className="kegiatan-deck-card__image"
+                          draggable={false}
+                        />
+                        <p className="kegiatan-deck-card__index">
+                          {item.deckIndex + 1} / {galleryDeckItems.length}
+                        </p>
+                        <p className="kegiatan-deck-card__badge">Profil Tim</p>
+                        <h4 className="kegiatan-deck-card__title">{item.title}</h4>
+                        <p className="kegiatan-deck-card__tap-hint">Swipe kiri sampai urutan habis</p>
+                      </article>
+                    ))}
 
-                  {[...visibleGalleryRightDeckItems].reverse().map((item) => (
-                    <article
-                      key={`${item.deckKey}-right-${item.stackDepth}`}
-                      className="kegiatan-deck-card kegiatan-deck-card--team is-back is-right"
-                      style={{ '--stack-depth': item.stackDepth }}
-                      aria-hidden="true"
-                    >
-                      <img
-                        src={item.image}
-                        alt=""
-                        className="kegiatan-deck-card__image"
-                        draggable={false}
-                      />
-                      <h4 className="kegiatan-deck-card__title">{item.title}</h4>
-                      <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
-                    </article>
-                  ))}
+                    {[...visibleGalleryRightDeckItems].reverse().map((item) => (
+                      <article
+                        key={`${item.deckKey}-right-${item.stackDepth}`}
+                        className="kegiatan-deck-card kegiatan-deck-card--team is-back is-right"
+                        style={{ '--stack-depth': item.stackDepth }}
+                        aria-hidden="true"
+                      >
+                        <img
+                          src={item.image}
+                          alt=""
+                          className="kegiatan-deck-card__image"
+                          draggable={false}
+                        />
+                        <p className="kegiatan-deck-card__index">
+                          {item.deckIndex + 1} / {galleryDeckItems.length}
+                        </p>
+                        <p className="kegiatan-deck-card__badge">Profil Tim</p>
+                        <h4 className="kegiatan-deck-card__title">{item.title}</h4>
+                        <p className="kegiatan-deck-card__tap-hint">Swipe kanan saat giliran balik</p>
+                      </article>
+                    ))}
 
-                  {activeGalleryDeckItem ? (
-                    <article
-                      key={`${activeGalleryDeckItem.deckKey}-active`}
-                      ref={activeGalleryDeckCardRef}
-                      className={`kegiatan-deck-card kegiatan-deck-card--team is-top ${isGalleryDeckFlipped ? 'is-flipped' : ''} ${isGalleryDeckDragging ? 'is-dragging' : ''} ${isGalleryDeckThrowing ? 'is-throwing' : ''}`}
-                      onPointerDown={handleGalleryDeckPointerDown}
-                      onPointerMove={handleGalleryDeckPointerMove}
-                      onPointerUp={handleGalleryDeckPointerUp}
-                      onPointerCancel={handleGalleryDeckPointerCancel}
-                      onLostPointerCapture={handleGalleryDeckPointerCaptureLost}
-                      onKeyDown={handleGalleryDeckCardKeyDown}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={isGalleryDeckFlipped}
-                      aria-label={`Kartu profil ${activeGalleryDeckItem.title}. Klik untuk ${isGalleryDeckFlipped ? 'kembali ke sisi depan' : 'melihat keterangan lengkap'}.`}
-                    >
-                      <div className="kegiatan-deck-card__flip-inner">
-                        <div className="kegiatan-deck-card__face kegiatan-deck-card__face--front">
-                          <img
-                            src={activeGalleryDeckItem.image}
-                            alt={activeGalleryDeckItem.title}
-                            className="kegiatan-deck-card__image"
-                            draggable={false}
-                          />
-                          <h4 className="kegiatan-deck-card__title">{activeGalleryDeckItem.title}</h4>
-                          <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
+                    {activeGalleryDeckItem ? (
+                      <article
+                        key={`${activeGalleryDeckItem.deckKey}-active`}
+                        ref={activeGalleryDeckCardRef}
+                        className={`kegiatan-deck-card kegiatan-deck-card--team is-top ${isGalleryDeckFlipped ? 'is-flipped' : ''} ${isGalleryDeckDragging ? 'is-dragging' : ''} ${isGalleryDeckThrowing ? 'is-throwing' : ''}`}
+                        onPointerDown={handleGalleryDeckPointerDown}
+                        onPointerMove={handleGalleryDeckPointerMove}
+                        onPointerUp={handleGalleryDeckPointerUp}
+                        onPointerCancel={handleGalleryDeckPointerCancel}
+                        onLostPointerCapture={handleGalleryDeckPointerCaptureLost}
+                        onKeyDown={handleGalleryDeckCardKeyDown}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isGalleryDeckFlipped}
+                        aria-label={`Kartu tim ${activeGalleryDeckItem.title}. ${galleryDeckPhase === 'forward' ? 'Geser ke kiri untuk lanjut ke kartu berikutnya.' : 'Geser ke kanan untuk kembali ke kartu sebelumnya.'} Klik untuk ${isGalleryDeckFlipped ? 'kembali ke sisi depan' : 'membuka profil lengkap'}.`}
+                      >
+                        <div className="kegiatan-deck-card__flip-inner">
+                          <div className="kegiatan-deck-card__face kegiatan-deck-card__face--front">
+                            <img
+                              src={activeGalleryDeckItem.image}
+                              alt={activeGalleryDeckItem.title}
+                              className="kegiatan-deck-card__image"
+                              draggable={false}
+                            />
+                            <p className="kegiatan-deck-card__index">
+                              {activeGalleryDeckIndex + 1} / {galleryDeckItems.length}
+                            </p>
+                            <p className="kegiatan-deck-card__badge">Profil Tim</p>
+                            <h4 className="kegiatan-deck-card__title">{activeGalleryDeckItem.title}</h4>
+                            <p className="kegiatan-deck-card__tap-hint">
+                              {galleryDeckPhase === 'forward'
+                                ? 'Swipe kiri sampai kartu terakhir. Klik untuk lihat profil.'
+                                : 'Swipe kanan untuk kembali. Klik untuk lihat profil.'}
+                            </p>
+                          </div>
+                          <div className="kegiatan-deck-card__face kegiatan-deck-card__face--back tim-deck-card__face--back">
+                            <p className="kegiatan-deck-card__back-period">Tim Kami</p>
+                            <h4 className="kegiatan-deck-card__back-title">{activeGalleryDeckItem.title}</h4>
+                            <p className="kegiatan-deck-card__back-description tim-deck-card__back-description">
+                              {activeGalleryDeckItem.content ||
+                                activeGalleryDeckItem.excerpt ||
+                                'Profil tim belum ditambahkan.'}
+                            </p>
+                            <p className="kegiatan-deck-card__flip-hint">
+                              Klik untuk kembali. Geser sampai habis agar kartu langsung masuk ke belakang.
+                            </p>
+                          </div>
                         </div>
-                        <div className="kegiatan-deck-card__face kegiatan-deck-card__face--back tim-deck-card__face--back">
-                          <h4 className="kegiatan-deck-card__back-title">{activeGalleryDeckItem.title}</h4>
-                          <p className="kegiatan-deck-card__back-description tim-deck-card__back-description">
-                            {activeGalleryDeckItem.content || activeGalleryDeckItem.excerpt || 'Keterangan tim belum ditambahkan.'}
-                          </p>
-                          <p className="kegiatan-deck-card__flip-hint">
-                            Klik kartu untuk kembali ke sisi depan.
-                          </p>
-                        </div>
-                      </div>
-                    </article>
-                  ) : null}
+                      </article>
+                    ) : null}
+                  </div>
+
+                  <div className="kegiatan-deck__meta kegiatan-deck__meta--hint tim-deck__meta">
+                    <p>
+                      Urutannya sekarang tetap: mulai dari semua kartu menumpuk di kanan, swipe kiri
+                      sampai kartu terakhir, lalu baru swipe kanan untuk kembali lagi.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -3151,7 +3335,7 @@ export default function App() {
                     role="region"
                     aria-label="Deck event. Geser kartu ke kiri atau kanan untuk melihat event lain."
                   >
-                    {eventDeckItems.length === 0 ? (
+                    {!hasEventDeckContent ? (
                       <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
                         <h4>Belum ada event aktif</h4>
                         <p className="kegiatan-event__description">
