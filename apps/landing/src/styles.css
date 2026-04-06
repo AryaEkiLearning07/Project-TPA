@@ -378,6 +378,10 @@ main {
   background: linear-gradient(180deg, #fff8f4 0%, #fff2f8 100%);
 }
 
+#tim-kami.page-section {
+  background: linear-gradient(180deg, #fffaf6 0%, #fff4fa 100%);
+}
+
 #visi.page-section,
 #fasilitas.page-section {
   background: linear-gradient(180deg, #fffafc 0%, #fff6fa 100%);
@@ -586,6 +590,19 @@ main {
   align-content: center;
 }
 
+.tim-section {
+  display: grid;
+  gap: 14px;
+}
+
+.tim-section__lead {
+  margin: 0;
+  max-width: 64ch;
+  color: #6a4a65;
+  font-size: 15px;
+  line-height: 1.52;
+}
+
 .visi-section {
   display: block;
 }
@@ -626,6 +643,7 @@ main {
 
 .fasilitas-section .section-head,
 .gallery-section .section-head,
+.kegiatan-section .section-head,
 .pricing-section .section-head {
   margin-bottom: 18px;
 }
@@ -955,6 +973,8 @@ main {
   margin-bottom: 12px;
   display: grid;
   gap: 4px;
+  position: relative;
+  z-index: 6;
 }
 
 .kegiatan-block__head h3 {
@@ -1930,6 +1950,7 @@ main {
 
 :root[data-theme='dark'] #home.page-section,
 :root[data-theme='dark'] #tentang-kami.page-section,
+:root[data-theme='dark'] #tim-kami.page-section,
 :root[data-theme='dark'] #fasilitas.page-section,
 :root[data-theme='dark'] #kegiatan.page-section,
 :root[data-theme='dark'] #biaya-layanan.page-section,
@@ -1940,6 +1961,7 @@ main {
 :root[data-theme='dark'] .topbar__menu button,
 :root[data-theme='dark'] .brand__text small,
 :root[data-theme='dark'] .home-lead,
+:root[data-theme='dark'] .tim-section__lead,
 :root[data-theme='dark'] .tentang-section__content p,
 :root[data-theme='dark'] .visi-pane p,
 :root[data-theme='dark'] .facility-description p,
@@ -3524,6 +3546,10 @@ body {
   background: linear-gradient(180deg, #fff3f7 0%, #f7d9e5 100%);
 }
 
+.landing-page #tim-kami.page-section {
+  background: linear-gradient(180deg, #fff5f9 0%, #f7dbe8 100%);
+}
+
 .landing-page #fasilitas.page-section,
 .landing-page #kegiatan.page-section,
 .landing-page #biaya-layanan.page-section,
@@ -3536,6 +3562,7 @@ body {
 }
 
 .landing-page .home-lead,
+.landing-page .tim-section__lead,
 .landing-page .tentang-section__content p,
 .landing-page .visi-pane p,
 .landing-page .facility-description p,
@@ -3755,6 +3782,7 @@ body {
 .landing-page .page-section,
 .landing-page #home.page-section,
 .landing-page #tentang-kami.page-section,
+.landing-page #tim-kami.page-section,
 .landing-page #fasilitas.page-section,
 .landing-page #kegiatan.page-section,
 .landing-page #biaya-layanan.page-section,
@@ -3947,6 +3975,7 @@ body {
 }
 
 .landing-page .home-lead,
+.landing-page .tim-section__lead,
 .landing-page .tentang-section__content p,
 .landing-page .visi-pane p,
 .landing-page .pricing-card__summary,
@@ -3959,6 +3988,7 @@ body {
 
 .landing-page .page-section,
 .landing-page #tentang-kami.page-section,
+.landing-page #tim-kami.page-section,
 .landing-page #fasilitas.page-section,
 .landing-page #kegiatan.page-section,
 .landing-page #biaya-layanan.page-section,
@@ -4071,6 +4101,7 @@ body {
 
 :root[data-theme='dark'] .landing-page .page-section,
 :root[data-theme='dark'] .landing-page #tentang-kami.page-section,
+:root[data-theme='dark'] .landing-page #tim-kami.page-section,
 :root[data-theme='dark'] .landing-page #fasilitas.page-section,
 :root[data-theme='dark'] .landing-page #kegiatan.page-section,
 :root[data-theme='dark'] .landing-page #biaya-layanan.page-section,
@@ -4709,15 +4740,25 @@ body {
   }
 
   :root:not([data-theme='dark']) .landing-page .topbar:not(.topbar--scrolled) .brand__text strong {
-    color: #331126 !important;
-    font-weight: 800 !important;
-    text-shadow: 0 1px 4px rgba(255, 255, 255, 0.92) !important;
+    color: #ffd7e9 !important;
+    font-weight: 700 !important;
+    text-shadow: none !important;
   }
 
   :root:not([data-theme='dark']) .landing-page .topbar:not(.topbar--scrolled) .brand__text small {
-    color: #4d1f3a !important;
-    font-weight: 700 !important;
-    text-shadow: 0 1px 3px rgba(255, 255, 255, 0.90) !important;
+    color: #f8dfea !important;
+    font-weight: 400 !important;
+    text-shadow: none !important;
+  }
+
+  :root:not([data-theme='dark']) .landing-page .topbar--scrolled .brand__text strong {
+    color: #fff3fa !important;
+    text-shadow: 0 1px 6px rgba(66, 18, 42, 0.26) !important;
+  }
+
+  :root:not([data-theme='dark']) .landing-page .topbar--scrolled .brand__text small {
+    color: #ffe6f2 !important;
+    text-shadow: 0 1px 5px rgba(66, 18, 42, 0.22) !important;
   }
 }
 
@@ -4745,6 +4786,38 @@ body {
     border-radius: 18px !important;
     padding: 16px 14px !important;
     box-shadow: none !important;
+  }
+}
+
+/* Mobile hero content card: overlap image midpoint and float at center */
+@media (max-width: 900px) {
+  :root:not([data-theme='dark']) .landing-page #home.page-section.home-hero .home-section,
+  :root[data-theme='dark'] .landing-page #home.page-section.home-hero .home-section {
+    padding-top: min(112vw, 520px) !important;
+    padding-bottom: clamp(34px, 10vw, 48px) !important;
+  }
+
+  :root:not([data-theme='dark']) .landing-page #home.page-section.home-hero .home-section__content,
+  :root[data-theme='dark'] .landing-page #home.page-section.home-hero .home-section__content {
+    position: relative !important;
+    z-index: 4 !important;
+    max-width: min(92vw, 560px) !important;
+    margin-inline: auto !important;
+    margin-top: calc(-1 * min(38vw, 190px)) !important;
+    padding: 18px 16px !important;
+    border-radius: 20px !important;
+    box-shadow: 0 20px 38px rgba(34, 17, 30, 0.24) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+
+  :root:not([data-theme='dark']) .landing-page #home.page-section.home-hero .home-section__content {
+    background: rgba(255, 245, 250, 0.95) !important;
+    border: 1px solid rgba(231, 200, 215, 0.92) !important;
+  }
+
+  :root[data-theme='dark'] .landing-page #home.page-section.home-hero .home-section__content {
+    background: rgba(42, 29, 43, 0.84) !important;
+    border: 1px solid rgba(214, 140, 170, 0.38) !important;
   }
 }
 
@@ -4831,5 +4904,640 @@ body {
 
   .landing-page .testimonial-card__author {
     margin-top: 14px;
+  }
+}
+
+/* Kegiatan cards: desktop swipe deck + mobile compact carousel */
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-layout {
+  grid-template-columns: 1fr !important;
+  gap: 14px !important;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-block {
+  margin-top: 0 !important;
+  min-width: 0;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-event-card--empty {
+  width: 100%;
+  max-width: none !important;
+  padding: 14px !important;
+  border: 1px solid rgba(188, 39, 111, 0.24) !important;
+  border-radius: 16px !important;
+  background: rgba(255, 234, 244, 0.74) !important;
+  box-shadow: none !important;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-event-card--empty .kegiatan-event__description {
+  display: block;
+  overflow: visible;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck {
+  display: grid;
+  gap: 12px;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__stage {
+  --deck-motion-next: 0;
+  --deck-motion-prev: 0;
+  position: relative;
+  min-height: clamp(320px, 38vw, 436px);
+  border-radius: 24px;
+  overflow: visible;
+  z-index: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__stage--event {
+  min-height: clamp(292px, 33vw, 372px);
+  overflow: hidden;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__stage--gallery {
+  min-height: clamp(292px, 33vw, 372px);
+  overflow: hidden;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card {
+  --stack-depth: 1;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(282px, 80%);
+  aspect-ratio: 3 / 4.22;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 228, 240, 0.62);
+  background: #221821;
+  box-shadow: 0 16px 30px rgba(38, 20, 31, 0.34);
+  transform-origin: 50% 100%;
+  will-change: transform, opacity;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--gallery {
+  width: min(402px, 94%);
+  aspect-ratio: 4 / 3;
+  transform-origin: 50% 50%;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--event {
+  width: min(402px, 94%);
+  aspect-ratio: 4 / 3;
+  transform-origin: 50% 50%;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card.is-back {
+  pointer-events: none;
+  opacity: calc(
+    (1 - (var(--stack-depth) * 0.09))
+    + ((var(--deck-motion-next) + var(--deck-motion-prev)) * 0.03)
+  );
+  transition: transform 180ms cubic-bezier(0.2, 1, 0.3, 1), opacity 180ms ease;
+  z-index: calc(20 - var(--stack-depth));
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card.is-back.is-left {
+  transform:
+    translate(-50%, -50%)
+    translateX(calc((-4px - (var(--stack-depth) * 5px)) + (var(--deck-motion-prev) * 9px)))
+    translateY(calc(var(--stack-depth) * 1.6px))
+    rotate(calc((-0.35deg - (var(--stack-depth) * 0.75deg)) + (var(--deck-motion-prev) * 1.1deg)))
+    scale(calc((1 - (var(--stack-depth) * 0.013)) + (var(--deck-motion-prev) * 0.013)));
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card.is-back.is-right {
+  transform:
+    translate(-50%, -50%)
+    translateX(calc((4px + (var(--stack-depth) * 5px)) - (var(--deck-motion-next) * 9px)))
+    translateY(calc(var(--stack-depth) * 1.6px))
+    rotate(calc((0.35deg + (var(--stack-depth) * 0.75deg)) - (var(--deck-motion-next) * 1.1deg)))
+    scale(calc((1 - (var(--stack-depth) * 0.013)) + (var(--deck-motion-next) * 0.013)));
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card.is-top {
+  z-index: 40;
+  cursor: grab;
+  touch-action: pan-y;
+  transform:
+    translate(-50%, -50%)
+    translateX(var(--deck-drag-x, 0px))
+    rotate(var(--deck-drag-rotate, 0deg));
+  transition: transform 260ms cubic-bezier(0.2, 1, 0.3, 1), box-shadow 240ms ease;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card.is-top.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card.is-top.is-throwing {
+  transition: transform 220ms cubic-bezier(0.18, 0.9, 0.26, 1);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__title {
+  position: absolute !important;
+  inset: auto 0 0 0 !important;
+  margin: 0 !important;
+  padding: 42px 14px 30px !important;
+  border-radius: 0 0 22px 22px;
+  background: linear-gradient(180deg, rgba(22, 14, 20, 0) 0%, rgba(22, 14, 20, 0.94) 86%);
+  color: #fff !important;
+  font-size: clamp(18px, 1.6vw, 22px) !important;
+  line-height: 1.08 !important;
+  font-weight: 800 !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__tap-hint {
+  position: absolute !important;
+  left: 14px !important;
+  right: 14px !important;
+  bottom: 11px !important;
+  margin: 0 !important;
+  color: rgba(255, 241, 249, 0.95) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--event.is-top {
+  perspective: 1400px;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(0.2, 0.72, 0.24, 1);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--event.is-top.is-flipped .kegiatan-deck-card__flip-inner {
+  transform: rotateY(180deg);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__face--front {
+  overflow: hidden;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__face--back {
+  transform: rotateY(180deg);
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: 10px;
+  padding: 16px 14px 14px;
+  background: linear-gradient(165deg, rgba(35, 21, 33, 0.98) 0%, rgba(56, 30, 47, 0.98) 100%);
+  color: #ffeef6;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__back-period {
+  margin: 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 212, 232, 0.42);
+  background: rgba(255, 224, 238, 0.16);
+  color: rgba(255, 233, 245, 0.96);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__back-title {
+  margin: 0;
+  font-family: 'Baloo 2', 'Nunito', 'Segoe UI', 'Noto Sans', 'Helvetica Neue', Arial, sans-serif;
+  font-size: clamp(23px, 2vw, 28px);
+  line-height: 1.02;
+  color: #fff4fa;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__back-description {
+  margin: 0;
+  color: rgba(255, 236, 246, 0.94);
+  font-size: 13px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+  overflow: hidden;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--event .kegiatan-deck-card__back-description {
+  -webkit-line-clamp: 5;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__face--back .kegiatan-event__cta {
+  margin-top: 2px;
+  width: fit-content;
+  max-width: 100%;
+  border-color: rgba(255, 220, 236, 0.44);
+  background: rgba(255, 236, 246, 0.17);
+  color: #fff7fb;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__face--back .kegiatan-event__cta:hover {
+  background: rgba(255, 236, 246, 0.24);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__flip-hint {
+  margin: auto 0 0;
+  color: rgba(255, 220, 238, 0.84);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__index {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  margin: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(30, 21, 30, 0.76);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.14;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card__badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  margin: 0;
+  max-width: 74%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  background: rgba(44, 34, 45, 0.78);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.14;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(188, 39, 111, 0.20);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 242, 249, 0.72);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta .kegiatan-event__period {
+  margin: 0 !important;
+  font-size: 13px !important;
+  color: rgba(86, 56, 72, 0.86) !important;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta .kegiatan-event__description {
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta .kegiatan-event__cta {
+  margin-top: 2px !important;
+  padding: 8px 12px !important;
+  font-size: 12px !important;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta--hint {
+  padding: 11px 12px;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta--hint p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(86, 56, 72, 0.88);
+}
+
+/* Mobile keeps carousel concept with smaller cards */
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack {
+  position: relative;
+  border-radius: 22px;
+  margin-right: 8px;
+  isolation: isolate;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack::before,
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack::before {
+  z-index: -2;
+  transform: translate(12px, 6px) rotate(6deg);
+  background: linear-gradient(160deg, rgba(120, 87, 108, 0.88) 0%, rgba(86, 57, 74, 0.92) 100%);
+  border: 1px solid rgba(255, 228, 240, 0.48);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack::after {
+  z-index: -1;
+  transform: translate(6px, 3px) rotate(3deg);
+  background: linear-gradient(160deg, rgba(96, 63, 82, 0.9) 0%, rgba(73, 46, 62, 0.94) 100%);
+  border: 1px solid rgba(255, 233, 243, 0.54);
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack__image {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 3 / 4 !important;
+  object-fit: cover !important;
+  border-radius: inherit !important;
+  border: 1px solid rgba(255, 222, 236, 0.62) !important;
+  background: #f2dbe6 !important;
+  box-shadow: 0 14px 22px rgba(62, 33, 50, 0.26) !important;
+  margin: 0 !important;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack__title {
+  position: absolute !important;
+  inset: auto 0 0 0 !important;
+  margin: 0 !important;
+  padding: 36px 12px 26px !important;
+  border-radius: 0 0 22px 22px;
+  background: linear-gradient(180deg, rgba(27, 14, 22, 0) 0%, rgba(27, 14, 22, 0.92) 84%);
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  font-size: clamp(15px, 4.4vw, 18px) !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.44);
+  pointer-events: none;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack__hint {
+  position: absolute !important;
+  left: 12px !important;
+  right: 12px !important;
+  bottom: 8px !important;
+  margin: 0 !important;
+  color: rgba(255, 238, 248, 0.94) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-card-stack__badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+  max-width: 72%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(46, 35, 48, 0.75);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 2;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-event-card__meta {
+  display: grid;
+  gap: 6px;
+  padding-right: 6px;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-event__description {
+  -webkit-line-clamp: 2;
+}
+
+.landing-page :is(#kegiatan, #tim-kami) .kegiatan-gallery-card .kegiatan-card-stack__image {
+  aspect-ratio: 4 / 3 !important;
+}
+
+@media (min-width: 901px) {
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-layout {
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)) !important;
+    gap: 18px !important;
+    align-items: stretch;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-block {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck {
+    gap: 10px;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__stage--event {
+    min-height: clamp(248px, 66vw, 318px);
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__stage--gallery {
+    min-height: clamp(248px, 66vw, 318px);
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--event {
+    width: min(356px, 94%);
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck-card--gallery {
+    width: min(356px, 94%);
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta {
+    padding: 10px 11px;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-deck__meta--hint p {
+    font-size: 12px;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-block {
+    padding: 12px !important;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-event-scroll,
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-gallery-scroll {
+    padding: 8px 2px 12px !important;
+    min-width: 0;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-event-track,
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-gallery-track {
+    gap: 12px !important;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-event-track .kegiatan-event-card {
+    flex-basis: min(66vw, 220px) !important;
+    max-width: min(66vw, 220px) !important;
+    padding: 0 10px 0 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .landing-page :is(#kegiatan, #tim-kami) .kegiatan-gallery-card {
+    flex-basis: min(62vw, 198px) !important;
+    max-width: min(62vw, 198px) !important;
+    padding: 0 10px 0 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+}
+
+/* Tim cards: swipe deck + flip detail */
+.landing-page #tim-kami .tim-deck {
+  max-width: min(540px, 100%);
+  margin-inline: auto;
+}
+
+.landing-page #tim-kami .tim-deck__stage {
+  min-height: clamp(336px, 46vw, 472px);
+}
+
+.landing-page #tim-kami .kegiatan-deck-card--team {
+  width: min(320px, 88%);
+  aspect-ratio: 3 / 4.4;
+  transform-origin: 50% 50%;
+}
+
+.landing-page #tim-kami .kegiatan-deck-card--team.is-top {
+  perspective: 1400px;
+}
+
+.landing-page #tim-kami .kegiatan-deck-card--team.is-top.is-flipped .kegiatan-deck-card__flip-inner {
+  transform: rotateY(180deg);
+}
+
+.landing-page #tim-kami .tim-deck-card__face--back {
+  padding-top: 18px;
+}
+
+.landing-page #tim-kami .tim-deck-card__back-description {
+  white-space: pre-line;
+  -webkit-line-clamp: unset;
+  overflow: auto;
+  max-height: clamp(178px, 24vw, 238px);
+  padding-right: 2px;
+}
+
+.landing-page #tim-kami .tim-deck-card__back-description::-webkit-scrollbar {
+  width: 8px;
+}
+
+.landing-page #tim-kami .tim-deck-card__back-description::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(255, 220, 237, 0.38);
+}
+
+@media (max-width: 760px) {
+  .landing-page #tim-kami .tim-deck__stage {
+    min-height: clamp(288px, 82vw, 406px);
+  }
+
+  .landing-page #tim-kami .kegiatan-deck-card--team {
+    width: min(304px, 92%);
+  }
+
+  .landing-page #tim-kami .tim-deck-card__back-description {
+    max-height: clamp(156px, 42vw, 216px);
+  }
+}
+
+/* Desktop navbar style to match requested reference */
+@media (min-width: 901px) {
+  .landing-page .topbar,
+  .landing-page .topbar.topbar--scrolled {
+    background: linear-gradient(90deg, rgba(62, 45, 66, 0.94) 0%, rgba(108, 79, 104, 0.90) 100%) !important;
+    border-bottom: 1px solid rgba(255, 223, 238, 0.22) !important;
+    box-shadow: 0 10px 24px rgba(30, 17, 32, 0.28) !important;
+    backdrop-filter: blur(8px) !important;
+  }
+
+  .landing-page .brand__text strong {
+    font-family: 'Playfair Display', 'Times New Roman', Georgia, serif !important;
+    color: #f0cedd !important;
+    font-size: clamp(24px, 1.55vw, 30px) !important;
+    font-weight: 700 !important;
+    line-height: 1.04 !important;
+    letter-spacing: 0.01em !important;
+    text-shadow: 0 2px 8px rgba(24, 11, 25, 0.34) !important;
+  }
+
+  .landing-page .brand__text small {
+    color: #f7eaf2 !important;
+    font-family: 'Plus Jakarta Sans', 'Nunito', 'Segoe UI', 'Noto Sans', 'Helvetica Neue', Arial, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    text-shadow: 0 1px 5px rgba(24, 11, 25, 0.30) !important;
+  }
+}
+
+/* Mobile: enforce bright brand text when navbar is in glass/scrolled state */
+@media (max-width: 900px) {
+  .landing-page .topbar.topbar--scrolled .brand__text strong {
+    color: #fff8fd !important;
+    font-weight: 800 !important;
+    text-shadow: 0 2px 8px rgba(22, 8, 16, 0.45) !important;
+  }
+
+  .landing-page .topbar.topbar--scrolled .brand__text small {
+    color: #ffeefa !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 6px rgba(22, 8, 16, 0.40) !important;
   }
 }
