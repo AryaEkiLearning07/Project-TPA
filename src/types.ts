@@ -223,6 +223,7 @@ export interface AuthUser {
   email: string
   role: UserRole
   displayName: string
+  photoDataUrl?: string
 }
 
 export interface AuthSession {
@@ -244,6 +245,9 @@ export interface StaffUser {
   role: 'PETUGAS'
   isActive: boolean
   tanggalMasuk: string
+  photoDataUrl: string
+  photoName: string
+  description: string
   createdAt: string
   updatedAt: string
 }
@@ -254,6 +258,9 @@ export interface StaffUserInput {
   password: string
   isActive: boolean
   tanggalMasuk: string
+  photoDataUrl: string
+  photoName: string
+  description: string
 }
 
 export type StaffRegistrationRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
@@ -277,6 +284,7 @@ export interface StaffRegistrationInput {
 export type LandingAnnouncementCategory =
   | 'event'
   | 'dokumentasi'
+  | 'galeri'
   | 'fasilitas'
   | 'tim'
   | 'promosi'

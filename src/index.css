@@ -4,21 +4,22 @@
 :root {
   --font-base: 'Nunito', 'Segoe UI', sans-serif;
   --font-display: 'Baloo 2', 'Nunito', sans-serif;
-  --color-bg: #fff0f5;
-  --color-bg-soft: #fff5f8;
+  --color-bg: #fafafa;
+  --color-bg-soft: #f8fafc;
   --color-surface: #ffffff;
-  --color-border: #f5c6d0;
-  --color-text: #3d2030;
-  --color-text-muted: #8c6070;
-  --color-text-secondary: #6b4050;
-  --color-primary: #e84b8a;
-  --color-primary-strong: #d63377;
-  --color-primary-light: #f9a8c8;
-  --color-accent: #c94080;
-  --color-accent-light: #f7b8cc;
-  --color-sunny: #f7a8c0;
-  --color-danger: #c0392b;
-  --color-success: #2e8b57;
+  --color-border: #e5e7eb;
+  --color-text: #1f2937;
+  --color-text-muted: #6b7280;
+  --color-text-secondary: #4b5563;
+  --color-primary: #e85d7a;
+  --color-primary-strong: #d04a68;
+  --color-primary-light: #f7b8c8;
+  --color-accent: #6366f1;
+  --color-accent-light: #a5b4fc;
+  --color-sunny: #f59e0b;
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
@@ -45,13 +46,13 @@ body {
 body {
   font-family: var(--font-base);
   background:
-    radial-gradient(circle at 10% 14%, rgba(232, 75, 138, 0.18), transparent 46%),
-    radial-gradient(circle at 90% 10%, rgba(201, 64, 128, 0.14), transparent 40%),
-    radial-gradient(circle at 75% 85%, rgba(249, 168, 200, 0.2), transparent 46%),
+    radial-gradient(circle at 10% 14%, rgba(232, 93, 122, 0.06), transparent 46%),
+    radial-gradient(circle at 90% 10%, rgba(99, 102, 241, 0.04), transparent 40%),
+    radial-gradient(circle at 75% 85%, rgba(245, 158, 11, 0.03), transparent 46%),
     linear-gradient(
       180deg,
       var(--color-bg-soft) 0%,
-      #fff2f6 34%,
+      #fafafa 34%,
       var(--color-bg) 100%
     );
   background-attachment: fixed;
@@ -66,8 +67,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(201, 64, 128, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(201, 64, 128, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(232, 93, 122, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 93, 122, 0.02) 1px, transparent 1px);
   background-size: 22px 22px;
   mask-image: radial-gradient(circle at 30% 20%, black 20%, transparent 78%);
   z-index: -1;
@@ -88,7 +89,7 @@ textarea {
 }
 
 ::selection {
-  background: rgba(255, 91, 166, 0.3);
+  background: rgba(232, 93, 122, 0.25);
   color: var(--color-text);
 }
 
@@ -165,7 +166,7 @@ textarea {
 .pin-input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(255, 91, 166, 0.1);
+  box-shadow: 0 0 0 4px rgba(232, 93, 122, 0.15);
 }
 
 .pin-error {
@@ -340,7 +341,7 @@ textarea {
 .form-select:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(255, 91, 166, 0.1);
+  box-shadow: 0 0 0 4px rgba(232, 93, 122, 0.15);
 }
 
 .form-textarea {

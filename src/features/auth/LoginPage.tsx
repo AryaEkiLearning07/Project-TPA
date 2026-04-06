@@ -256,7 +256,7 @@ const LoginPage = ({
             <article className="auth-visual__feature">
               <Sparkles size={18} />
               <div>
-                <strong>{isParentPortalVariant ? 'Galeri Moment' : 'Monitoring Langsung'}</strong>
+                <strong>{isParentPortalVariant ? 'Momen Harian' : 'Monitoring Langsung'}</strong>
                 <span>
                   {isParentPortalVariant
                     ? 'Dapatkan moment-moment putra putri anda selama di TPA secara daring.'

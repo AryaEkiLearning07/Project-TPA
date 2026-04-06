@@ -29,6 +29,16 @@ const LANDING_ANNOUNCEMENT_DISPLAY_MODES = [
   'popup',
 ] as const
 
+const LANDING_ANNOUNCEMENT_CATEGORY_ALIASES: Record<string, LandingAnnouncementCategory> = {
+  team: 'tim',
+  staff: 'tim',
+  petugas: 'tim',
+  'tim kami': 'tim',
+  'tim-kami': 'tim',
+  'profil petugas': 'tim',
+  'profil-petugas': 'tim',
+}
+
 export type LandingAnnouncementCategory = (typeof LANDING_ANNOUNCEMENT_CATEGORIES)[number]
 export type LandingAnnouncementStatus = (typeof LANDING_ANNOUNCEMENT_STATUSES)[number]
 export type LandingAnnouncementDisplayMode = (typeof LANDING_ANNOUNCEMENT_DISPLAY_MODES)[number]
@@ -94,6 +104,16 @@ interface LandingAnnouncementRow extends RowDataPacket {
   published_at: string | Date | null
   author_name: string | null
   author_email: string | null
+  created_at: string | Date
+  updated_at: string | Date
+}
+
+interface LandingTeamStaffRow extends RowDataPacket {
+  id: number
+  full_name: string | null
+  staff_photo_data_url: string | null
+  staff_photo_name: string | null
+  staff_description: string | null
   created_at: string | Date
   updated_at: string | Date
 }
@@ -221,6 +241,21 @@ const toNullableDateKey = (value: unknown): string | null => {
 const isLandingAnnouncementCategory = (value: unknown): value is LandingAnnouncementCategory =>
   LANDING_ANNOUNCEMENT_CATEGORIES.some((item) => item === value)
 
+const normalizeLandingAnnouncementCategory = (
+  value: unknown,
+): LandingAnnouncementCategory | null => {
+  const normalized = toText(value).trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+
+  if (isLandingAnnouncementCategory(normalized)) {
+    return normalized
+  }
+
+  return LANDING_ANNOUNCEMENT_CATEGORY_ALIASES[normalized] ?? null
+}
+
 const isLandingAnnouncementStatus = (value: unknown): value is LandingAnnouncementStatus =>
   LANDING_ANNOUNCEMENT_STATUSES.some((item) => item === value)
 
@@ -264,7 +299,7 @@ const mapLandingAnnouncementRow = (row: LandingAnnouncementRow): LandingAnnounce
   id: String(row.id),
   slug: toText(row.slug),
   title: toText(row.title),
-  category: isLandingAnnouncementCategory(row.category) ? row.category : 'event',
+  category: normalizeLandingAnnouncementCategory(row.category) ?? 'event',
   displayMode: isLandingAnnouncementDisplayMode(row.display_mode)
     ? row.display_mode
     : 'section',
@@ -312,8 +347,8 @@ const sanitizeInput = (input: LandingAnnouncementInput): Required<
     throw new LandingAnnouncementError(400, 'Judul pengumuman wajib diisi.')
   }
 
-  const category = input.category
-  if (!isLandingAnnouncementCategory(category)) {
+  const category = normalizeLandingAnnouncementCategory(input.category)
+  if (!category) {
     throw new LandingAnnouncementError(400, 'Kategori pengumuman tidak valid.')
   }
 
@@ -449,6 +484,22 @@ const toAnnouncementId = (value: string): number => {
 
 export const parseLandingAnnouncementId = (value: string): number => toAnnouncementId(value)
 
+const hasUsersColumn = async (
+  executor: SqlExecutor,
+  columnName: string,
+): Promise<boolean> => {
+  const [rows] = await executor.execute(
+    `SELECT COUNT(*) AS count
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME = ?`,
+    [columnName],
+  ) as [Array<RowDataPacket & { count: number }>, unknown]
+
+  return Number(rows[0]?.count ?? 0) > 0
+}
+
 const hasDisplayModeColumn = async (executor: SqlExecutor): Promise<boolean> => {
   const [rows] = await executor.execute(
     `SELECT COUNT(*) AS count
@@ -459,6 +510,70 @@ const hasDisplayModeColumn = async (executor: SqlExecutor): Promise<boolean> => 
   ) as [Array<RowDataPacket & { count: number }>, unknown]
 
   return Number(rows[0]?.count ?? 0) > 0
+}
+
+const listLandingTeamItemsFromStaffUsers = async (
+  executor: SqlExecutor,
+): Promise<LandingAnnouncement[]> => {
+  const hasPhotoDataUrlColumn = await hasUsersColumn(executor, 'staff_photo_data_url')
+  const hasPhotoNameColumn = await hasUsersColumn(executor, 'staff_photo_name')
+  const hasDescriptionColumn = await hasUsersColumn(executor, 'staff_description')
+
+  const photoDataUrlExpr = hasPhotoDataUrlColumn ? 'staff_photo_data_url' : "''"
+  const photoNameExpr = hasPhotoNameColumn ? 'staff_photo_name' : "''"
+  const descriptionExpr = hasDescriptionColumn ? 'staff_description' : "''"
+
+  const [rows] = await executor.execute<LandingTeamStaffRow[]>(
+    `SELECT
+      id,
+      full_name,
+      ${photoDataUrlExpr} AS staff_photo_data_url,
+      ${photoNameExpr} AS staff_photo_name,
+      ${descriptionExpr} AS staff_description,
+      created_at,
+      updated_at
+    FROM users
+    WHERE role IN ('PETUGAS', 'STAFF')
+      AND is_active = 1
+    ORDER BY
+      created_at ASC,
+      id ASC`,
+  )
+
+  return rows.reduce<LandingAnnouncement[]>((result, row) => {
+    const title = toText(row.full_name).trim()
+    if (!title) {
+      return result
+    }
+
+    const createdAt = toIsoDateTime(row.created_at)
+    const updatedAt = toIsoDateTime(row.updated_at)
+
+    result.push({
+      id: `staff-${row.id}`,
+      slug: `staff-${row.id}`,
+      title,
+      category: 'tim',
+      displayMode: 'section',
+      excerpt: '',
+      content: toText(row.staff_description).trim(),
+      coverImageDataUrl: normalizeImageAssetUrl(row.staff_photo_data_url),
+      coverImageName: toText(row.staff_photo_name),
+      ctaLabel: '',
+      ctaUrl: '',
+      publishStartDate: '',
+      publishEndDate: '',
+      status: 'published',
+      isPinned: false,
+      publishedAt: updatedAt || createdAt,
+      authorName: '',
+      authorEmail: '',
+      createdAt,
+      updatedAt,
+    })
+
+    return result
+  }, [])
 }
 
 export const ensureLandingAnnouncementSchema = async (
@@ -599,7 +714,30 @@ export const listLandingAnnouncementsForLanding = async (options?: {
     hasCategory ? [category, limit] : [limit],
   )
 
-  return rows.map(mapLandingAnnouncementRow)
+  const announcements = rows.map(mapLandingAnnouncementRow)
+  if (hasCategory && category !== 'tim') {
+    return announcements
+  }
+
+  let staffTeamItems: LandingAnnouncement[] = []
+  try {
+    staffTeamItems = await listLandingTeamItemsFromStaffUsers(dbPool)
+  } catch {
+    staffTeamItems = []
+  }
+
+  if (staffTeamItems.length === 0) {
+    return hasCategory && category === 'tim'
+      ? []
+      : announcements.filter((item) => item.category !== 'tim')
+  }
+
+  if (hasCategory && category === 'tim') {
+    return staffTeamItems
+  }
+
+  const nonTeamItems = announcements.filter((item) => item.category !== 'tim')
+  return [...nonTeamItems, ...staffTeamItems]
 }
 
 export const createLandingAnnouncement = async (

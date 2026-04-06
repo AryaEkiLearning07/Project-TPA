@@ -1,5 +1,5 @@
 import { Eye, EyeOff } from 'lucide-react'
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
+import type { ChangeEvent, Dispatch, FormEvent, SetStateAction } from 'react'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 import type {
   StaffRegistrationRequest,
@@ -25,6 +25,7 @@ interface ManajemenPetugasPageProps {
   formatDateOnly: (value: string) => string
   formatDateTime: (value: string) => string
   calculateServiceLength: (tanggalMasuk: string) => string
+  onUploadStaffPhoto: (event: ChangeEvent<HTMLInputElement>) => Promise<void> | void
   onStartEditStaff: (staff: StaffUser) => void
   onDeleteStaff: (staff: StaffUser) => Promise<void> | void
   onToggleStaffStatus: (staff: StaffUser) => Promise<void> | void
@@ -50,6 +51,7 @@ const ManajemenPetugasPage = ({
   formatDateOnly,
   formatDateTime,
   calculateServiceLength,
+  onUploadStaffPhoto,
   onStartEditStaff,
   onDeleteStaff,
   onToggleStaffStatus,
@@ -67,20 +69,108 @@ const ManajemenPetugasPage = ({
             }
           }}
         >
-          <div className="card" style={{ width: 'min(94vw, 560px)', margin: 0 }}>
+          <div className="card" style={{ width: 'min(94vw, 680px)', margin: 0 }}>
             <h2>Edit Akun Petugas</h2>
-            <p className="card__description">Nama dan email hanya bisa dilihat. Yang bisa diubah: tanggal masuk dan password.</p>
+            <p className="card__description">
+              Upload foto petugas, isi nama dan keterangan, lalu simpan perubahan.
+            </p>
 
             <form onSubmit={onSubmitStaff}>
+              <div className="field-group">
+                <label className="label" htmlFor="staffPhotoUpload">
+                  Foto Petugas
+                </label>
+                <div className="staff-photo-upload">
+                  <input
+                    id="staffPhotoUpload"
+                    className="staff-photo-upload-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => void onUploadStaffPhoto(event)}
+                  />
+                  <label
+                    htmlFor="staffPhotoUpload"
+                    className={`staff-photo-upload-frame${staffForm.photoDataUrl ? ' is-filled' : ''}`}
+                    aria-label={
+                      staffForm.photoDataUrl
+                        ? 'Klik untuk ganti foto petugas'
+                        : 'Klik untuk upload foto petugas'
+                    }
+                  >
+                    {staffForm.photoDataUrl ? (
+                      <img
+                        src={staffForm.photoDataUrl}
+                        alt={staffForm.photoName || staffForm.fullName || 'Preview foto petugas'}
+                        className="staff-photo-upload-preview"
+                      />
+                    ) : (
+                      <span className="staff-photo-upload-placeholder">
+                        Klik frame untuk upload foto
+                      </span>
+                    )}
+                  </label>
+                </div>
+                <p className="staff-photo-upload-hint">Ukuran frame rasio 3:4 (vertikal).</p>
+                {staffForm.photoDataUrl ? (
+                  <div className="table-actions">
+                    <button
+                      type="button"
+                      className="button button--tiny button--ghost"
+                      onClick={() =>
+                        setStaffForm((previous) => ({
+                          ...previous,
+                          photoDataUrl: '',
+                          photoName: '',
+                        }))
+                      }
+                    >
+                      Hapus Foto
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
               <div className="form-grid form-grid--2">
                 <div className="field-group">
-                  <label className="label">Nama Lengkap</label>
-                  <p>{staffForm.fullName || '-'}</p>
+                  <label className="label" htmlFor="staffFullName">
+                    Nama Petugas
+                  </label>
+                  <input
+                    id="staffFullName"
+                    className="input"
+                    value={staffForm.fullName}
+                    onChange={(event) =>
+                      setStaffForm((previous) => ({
+                        ...previous,
+                        fullName: event.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: Kak Aisyah Putri"
+                  />
                 </div>
                 <div className="field-group">
                   <label className="label">Email</label>
                   <p>{staffForm.email || '-'}</p>
                 </div>
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="staffDescription">
+                  Keterangan Petugas
+                </label>
+                <textarea
+                  id="staffDescription"
+                  className="textarea"
+                  rows={4}
+                  value={staffForm.description}
+                  onChange={(event) =>
+                    setStaffForm((previous) => ({
+                      ...previous,
+                      description: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: Berpengalaman mendampingi anak usia dini, komunikatif, dan aktif dalam kegiatan harian."
+                />
               </div>
 
               <div className="form-grid form-grid--2">
@@ -220,7 +310,9 @@ const ManajemenPetugasPage = ({
           <table className="table">
             <thead>
               <tr>
+                <th>Foto</th>
                 <th>Nama</th>
+                <th>Keterangan</th>
                 <th>Email</th>
                 <th>Status</th>
                 <th>Tanggal Masuk</th>
@@ -231,20 +323,32 @@ const ManajemenPetugasPage = ({
             <tbody>
               {isLoadingStaff ? (
                 <tr>
-                  <td colSpan={6} className="table__empty">
+                  <td colSpan={8} className="table__empty">
                     Memuat data petugas...
                   </td>
                 </tr>
               ) : staffUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="table__empty">
+                  <td colSpan={8} className="table__empty">
                     Belum ada data petugas.
                   </td>
                 </tr>
               ) : (
                 staffUsers.map((staff) => (
                   <tr key={staff.id}>
+                    <td>
+                      {staff.photoDataUrl ? (
+                        <img
+                          src={staff.photoDataUrl}
+                          alt={staff.photoName || staff.fullName}
+                          className="staff-list-photo"
+                        />
+                      ) : (
+                        <span className="field-hint">-</span>
+                      )}
+                    </td>
                     <td>{staff.fullName}</td>
+                    <td>{staff.description || '-'}</td>
                     <td>{staff.email}</td>
                     <td>
                       <span className={`staff-status-pill ${staff.isActive ? 'staff-status-pill--active' : 'staff-status-pill--inactive'}`}>

@@ -677,7 +677,8 @@ const loadStaffUsersByEmail = async (email: string): Promise<RowDataPacket[]> =>
       email,
       role,
       is_active,
-      password_hash
+      password_hash,
+      staff_photo_data_url
     FROM users
     WHERE LOWER(email) = ?
       AND role IN ('ADMIN', 'SUPER_ADMIN', 'PETUGAS', 'STAFF')`,
@@ -769,11 +770,13 @@ const mapAuthUser = (params: {
   email: string
   role: UserRole
   displayName: string
+  photoDataUrl?: string
 }): AuthUser => ({
   id: String(params.id),
   email: normalizeEmail(params.email),
   role: params.role,
   displayName: params.displayName,
+  photoDataUrl: toText(params.photoDataUrl).trim(),
 })
 
 interface LoginAttemptState {
@@ -1098,6 +1101,7 @@ export const login = async (
           email: toText(staffUser.email),
           role,
           displayName: toText(staffUser.full_name) || 'Pengguna',
+          photoDataUrl: toText(staffUser.staff_photo_data_url),
         })
 
         const session = await createSession({
@@ -1227,7 +1231,8 @@ const loadActiveStaffUserById = async (
       full_name,
       email,
       role,
-      is_active
+      is_active,
+      staff_photo_data_url
     FROM users
     WHERE id = ?
       AND role IN ('ADMIN', 'SUPER_ADMIN', 'PETUGAS', 'STAFF')
@@ -1323,6 +1328,7 @@ export const resolveAuthContext = async (
       email: toText(staffRow.email),
       role: nextRole,
       displayName: toText(staffRow.full_name) || 'Pengguna',
+      photoDataUrl: toText(staffRow.staff_photo_data_url),
     })
 
     const sessionEmail = normalizeEmail(toText(session.email))

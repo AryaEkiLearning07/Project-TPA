@@ -94,6 +94,9 @@ const parseStaffPayload = (value: unknown): StaffUserInput => {
     password: toText(value.password),
     isActive: asBoolean(value.isActive, true),
     tanggalMasuk: toText(value.tanggalMasuk),
+    photoDataUrl: toText(value.photoDataUrl),
+    photoName: toText(value.photoName),
+    description: toText(value.description),
   }
 }
 
@@ -298,10 +301,12 @@ const parseLandingAnnouncementPayload = (value: unknown): LandingAnnouncementInp
     throw new AuthServiceError(400, 'Payload pengumuman landing tidak valid.')
   }
 
+  const parsedCategory = toText(value.category).trim().toLowerCase() as LandingAnnouncementInput['category']
+
   return {
     title: toText(value.title),
     slug: toText(value.slug),
-    category: toText(value.category).trim().toLowerCase() as LandingAnnouncementInput['category'],
+    category: parsedCategory,
     displayMode: toText(value.displayMode).trim().toLowerCase() as LandingAnnouncementInput['displayMode'],
     excerpt: toText(value.excerpt),
     content: toText(value.content),

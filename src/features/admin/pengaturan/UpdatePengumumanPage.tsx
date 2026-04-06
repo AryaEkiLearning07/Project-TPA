@@ -10,10 +10,12 @@ import type {
   LandingAnnouncementCategory,
   LandingAnnouncementDisplayMode,
   LandingAnnouncementStatus,
+  StaffUser,
 } from '../../../types'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 
 export interface LandingAnnouncementEditorForm {
+  staffUserId: string
   title: string
   slug: string
   category: LandingAnnouncementCategory
@@ -34,10 +36,12 @@ type AnnouncementFunction = 'dokumentasi' | 'fasilitas' | 'tim' | 'poster'
 
 interface UpdatePengumumanPageProps {
   announcements: LandingAnnouncement[]
+  staffUsers: StaffUser[]
   form: LandingAnnouncementEditorForm
   setForm: Dispatch<SetStateAction<LandingAnnouncementEditorForm>>
   editingAnnouncementId: string | null
   isLoading: boolean
+  isLoadingStaff: boolean
   isSaving: boolean
   deletingAnnouncementId: string | null
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
@@ -59,7 +63,7 @@ const statusLabelMap: Record<LandingAnnouncementStatus, string> = {
 const functionLabelMap: Record<AnnouncementFunction, string> = {
   dokumentasi: 'Dokumentasi',
   fasilitas: 'Fasilitas',
-  tim: 'Tim Kami',
+  tim: 'Petugas',
   poster: 'Poster',
 }
 
@@ -97,15 +101,18 @@ const renderImageCell = (announcement: LandingAnnouncement) => {
     return <span className="field-hint">-</span>
   }
 
+  const isTeamPhoto = announcement.category === 'tim'
+
   return (
     <img
       src={announcement.coverImageDataUrl}
       alt={announcement.title || 'Poster'}
       style={{
-        width: '88px',
-        height: '56px',
+        width: isTeamPhoto ? '64px' : '88px',
+        height: isTeamPhoto ? '64px' : '56px',
         objectFit: 'cover',
-        borderRadius: '10px',
+        objectPosition: isTeamPhoto ? 'center 18%' : 'center',
+        borderRadius: isTeamPhoto ? '16px' : '10px',
         border: '1px solid var(--admin-border-color, #d6dae3)',
       }}
     />
@@ -114,10 +121,12 @@ const renderImageCell = (announcement: LandingAnnouncement) => {
 
 const UpdatePengumumanPage = ({
   announcements,
+  staffUsers,
   form,
   setForm,
   editingAnnouncementId,
   isLoading,
+  isLoadingStaff,
   isSaving,
   deletingAnnouncementId,
   onSubmit,
@@ -134,29 +143,58 @@ const UpdatePengumumanPage = ({
   const filteredAnnouncements = announcements.filter((announcement) =>
     matchesFunction(announcement, activeFunction),
   )
-  const shouldScrollAnnouncementList = filteredAnnouncements.length > 5
   const isDocumentationMode = activeFunction === 'dokumentasi'
   const isFacilityMode = activeFunction === 'fasilitas'
   const isTeamMode = activeFunction === 'tim'
   const isPosterMode = activeFunction === 'poster'
   const tableColumnCount = isPosterMode || isTeamMode ? 6 : 7
+  const isEditingData = isTeamMode ? Boolean(form.staffUserId) : Boolean(editingAnnouncementId)
+  const sortedStaffUsers = [...staffUsers].sort((left, right) =>
+    left.fullName.localeCompare(right.fullName, 'id-ID', { sensitivity: 'base' }),
+  )
+  const shouldScrollAnnouncementList = isTeamMode
+    ? sortedStaffUsers.length > 5
+    : filteredAnnouncements.length > 5
 
   useEffect(() => {
-    if (!editingAnnouncementId) {
+    if (!isEditingData) {
       return
     }
     editCardRef.current?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     })
-  }, [editingAnnouncementId])
+  }, [isEditingData])
+
+  const handleTeamStaffSelection = (staffId: string) => {
+    const selectedStaff = staffUsers.find((staff) => staff.id === staffId)
+    setForm((previous) => ({
+      ...previous,
+      staffUserId: staffId,
+      title: selectedStaff?.fullName ?? '',
+      content: selectedStaff?.description ?? '',
+      coverImageDataUrl: selectedStaff?.photoDataUrl ?? '',
+      coverImageName: selectedStaff?.photoName ?? '',
+      status: 'published',
+      category: 'tim',
+      displayMode: 'section',
+      publishStartDate: '',
+      publishEndDate: '',
+      excerpt: '',
+      ctaLabel: '',
+      ctaUrl: '',
+      isPinned: false,
+    }))
+  }
 
   const handleFunctionChange = (nextFunction: AnnouncementFunction) => {
     onResetForm()
     setForm((previous) => {
+      let result: LandingAnnouncementEditorForm
       if (nextFunction === 'dokumentasi') {
-        return {
+        result = {
           ...previous,
+          staffUserId: '',
           category: 'dokumentasi',
           displayMode: 'section',
           publishEndDate: '',
@@ -164,11 +202,10 @@ const UpdatePengumumanPage = ({
           ctaUrl: '',
           content: '',
         }
-      }
-
-      if (nextFunction === 'fasilitas') {
-        return {
+      } else if (nextFunction === 'fasilitas') {
+        result = {
           ...previous,
+          staffUserId: '',
           category: 'fasilitas',
           displayMode: 'section',
           publishStartDate: '',
@@ -179,11 +216,10 @@ const UpdatePengumumanPage = ({
           content: '',
           status: 'published',
         }
-      }
-
-      if (nextFunction === 'tim') {
-        return {
+      } else if (nextFunction === 'tim') {
+        result = {
           ...previous,
+          staffUserId: '',
           category: 'tim',
           displayMode: 'section',
           publishStartDate: '',
@@ -195,22 +231,24 @@ const UpdatePengumumanPage = ({
           status: 'published',
           isPinned: false,
         }
+      } else {
+        result = {
+          ...previous,
+          staffUserId: '',
+          category:
+            previous.category === 'promosi' || previous.category === 'ucapan'
+              ? previous.category
+              : 'ucapan',
+          displayMode: 'popup',
+          status: 'published',
+          excerpt: '',
+          content: '',
+          ctaLabel: '',
+          ctaUrl: '',
+          isPinned: false,
+        }
       }
-
-      return {
-        ...previous,
-        category:
-          previous.category === 'promosi' || previous.category === 'ucapan'
-            ? previous.category
-            : 'ucapan',
-        displayMode: 'popup',
-        status: 'published',
-        excerpt: '',
-        content: '',
-        ctaLabel: '',
-        ctaUrl: '',
-        isPinned: false,
-      }
+      return result
     })
   }
 
@@ -236,16 +274,18 @@ const UpdatePengumumanPage = ({
           >
             <option value="dokumentasi">Update Dokumentasi</option>
             <option value="fasilitas">Update Fasilitas TPA</option>
-            <option value="tim">Update Tim Kami</option>
+            <option value="tim">Update Petugas</option>
             <option value="poster">Update Poster</option>
           </select>
         </div>
       </div>
 
       <div className="card">
-        <h3>Daftar {functionLabelMap[activeFunction]}</h3>
+        <h3>{isTeamMode ? 'Daftar Petugas Terdaftar' : `Daftar ${functionLabelMap[activeFunction]}`}</h3>
         <p className="card__description">
-          Menampilkan seluruh riwayat {functionLabelMap[activeFunction].toLowerCase()} yang pernah diupload.
+          {isTeamMode
+            ? 'Pilih petugas yang sudah terdaftar untuk mengatur foto dan keterangan yang tampil di landing page.'
+            : `Menampilkan seluruh riwayat ${functionLabelMap[activeFunction].toLowerCase()} yang pernah diupload.`}
         </p>
 
         <div
@@ -293,27 +333,85 @@ const UpdatePengumumanPage = ({
               {isTeamMode ? (
                 <tr>
                   <th>Foto</th>
-                  <th>Nama</th>
-                  <th>Keterangan Lengkap</th>
-                  <th>Status</th>
+                  <th>Nama Petugas</th>
+                  <th>Keterangan Petugas</th>
+                  <th>Status Akun</th>
                   <th>Update</th>
                   <th>Aksi</th>
                 </tr>
               ) : null}
             </thead>
             <tbody>
-              {isLoading ? (
+              {isTeamMode && isLoadingStaff ? (
+                <tr>
+                  <td colSpan={tableColumnCount} className="table__empty">
+                    Memuat data petugas...
+                  </td>
+                </tr>
+              ) : isLoading ? (
                 <tr>
                   <td colSpan={tableColumnCount} className="table__empty">
                     Memuat daftar update...
                   </td>
                 </tr>
-              ) : filteredAnnouncements.length === 0 ? (
+              ) : isTeamMode && staffUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={tableColumnCount} className="table__empty">
+                    Belum ada data petugas terdaftar.
+                  </td>
+                </tr>
+              ) : filteredAnnouncements.length === 0 && !isTeamMode ? (
                 <tr>
                   <td colSpan={tableColumnCount} className="table__empty">
                     Tidak ada data {functionLabelMap[activeFunction].toLowerCase()}.
                   </td>
                 </tr>
+              ) : isTeamMode ? (
+                sortedStaffUsers.map((staff) => (
+                  <tr key={staff.id}>
+                    <td>{renderImageCell({
+                      id: staff.id,
+                      slug: '',
+                      title: staff.fullName,
+                      category: 'tim',
+                      displayMode: 'section',
+                      excerpt: '',
+                      content: staff.description,
+                      coverImageDataUrl: staff.photoDataUrl,
+                      coverImageName: staff.photoName,
+                      ctaLabel: '',
+                      ctaUrl: '',
+                      publishStartDate: '',
+                      publishEndDate: '',
+                      status: 'published',
+                      isPinned: false,
+                      publishedAt: '',
+                      authorName: '',
+                      authorEmail: '',
+                      createdAt: staff.createdAt,
+                      updatedAt: staff.updatedAt,
+                    })}</td>
+                    <td>
+                      <strong>{staff.fullName}</strong>
+                      <div className="field-hint">{staff.email}</div>
+                    </td>
+                    <td>{staff.description || '-'}</td>
+                    <td>{staff.isActive ? 'Aktif' : 'Nonaktif'}</td>
+                    <td>{formatDateTime(staff.updatedAt)}</td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="button button--tiny button--ghost"
+                          onClick={() => handleTeamStaffSelection(staff.id)}
+                          disabled={isSaving}
+                        >
+                          Pilih
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : (
                 filteredAnnouncements.map((announcement) => {
                   if (isDocumentationMode) {
@@ -451,16 +549,16 @@ const UpdatePengumumanPage = ({
       </div>
 
       <div className="card" ref={editCardRef}>
-        <h3>{editingAnnouncementId ? 'Edit Data' : 'Tambah Data Baru'}</h3>
+        <h3>{isEditingData ? 'Edit Data' : 'Tambah Data Baru'}</h3>
         <p className="card__description">
           Form input menyesuaikan fungsi {functionLabelMap[activeFunction].toLowerCase()}.
         </p>
 
         <form onSubmit={onSubmit}>
-          {!isPosterMode ? (
+          {!isPosterMode && !isTeamMode ? (
             <div className="field-group">
               <label className="label" htmlFor="announcementTitle">
-                {isTeamMode ? 'Nama Tim' : 'Judul'}
+                Judul
               </label>
               <input
                 id="announcementTitle"
@@ -475,9 +573,7 @@ const UpdatePengumumanPage = ({
                 placeholder={
                   isFacilityMode
                     ? 'Contoh: Area Indoor (Soft Play)'
-                    : isTeamMode
-                      ? 'Contoh: Kak Aisyah Putri'
-                      : 'Contoh: Dokumentasi kegiatan motorik halus'
+                    : 'Contoh: Dokumentasi kegiatan motorik halus'
                 }
               />
             </div>
@@ -610,30 +706,99 @@ const UpdatePengumumanPage = ({
 
           {isTeamMode ? (
             <>
+              <div className="field-group">
+                <label className="label" htmlFor="teamStaffSelect">
+                  Pilih Petugas Terdaftar
+                </label>
+                <select
+                  id="teamStaffSelect"
+                  className="input"
+                  value={form.staffUserId}
+                  onChange={(event) => handleTeamStaffSelection(event.target.value)}
+                  disabled={isSaving || isLoadingStaff || staffUsers.length === 0}
+                >
+                  <option value="">Pilih petugas dari daftar</option>
+                  {sortedStaffUsers.map((staff) => (
+                    <option key={staff.id} value={staff.id}>
+                      {staff.fullName} {!staff.isActive ? '(Nonaktif)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="field-hint">
+                  Hanya petugas aktif yang tampil di landing page. Pilih petugas dulu sebelum upload foto dan isi keterangan.
+                </p>
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="announcementImageTeam">
+                  Foto Petugas
+                </label>
+                <input
+                  id="announcementImageTeam"
+                  className="team-photo-upload-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void onUploadCoverImage(event)}
+                  disabled={isSaving || !form.staffUserId}
+                />
+                <label
+                  htmlFor="announcementImageTeam"
+                  className={`team-photo-upload-frame${form.coverImageDataUrl ? ' has-image' : ''}${isSaving || !form.staffUserId ? ' is-disabled' : ''}`}
+                >
+                  {form.coverImageDataUrl ? (
+                    <img src={form.coverImageDataUrl} alt={form.coverImageName || 'Preview foto petugas'} />
+                  ) : (
+                    <span className="team-photo-upload-frame__placeholder">
+                      Klik untuk upload foto petugas
+                    </span>
+                  )}
+                  <span className="team-photo-upload-frame__hint">Rasio 3:4 (vertikal)</span>
+                </label>
+                <p className="field-hint">Klik frame di atas untuk pilih atau ganti foto.</p>
+                {form.coverImageDataUrl ? (
+                  <div className="table-actions">
+                    <button
+                      type="button"
+                      className="button button--tiny button--ghost"
+                      onClick={onClearCoverImage}
+                    >
+                      Hapus Foto
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="announcementTitleTeam">
+                  Nama Petugas
+                </label>
+                <input
+                  id="announcementTitleTeam"
+                  className="input"
+                  value={form.title}
+                  readOnly
+                  placeholder="Nama petugas akan terisi otomatis"
+                />
+              </div>
+
               <div className="field-group field-group--small">
                 <label className="label" htmlFor="announcementStatusTeam">
-                  Status
+                  Status Landing
                 </label>
                 <select
                   id="announcementStatusTeam"
                   className="input"
                   value={form.status}
-                  onChange={(event) =>
-                    setForm((previous) => ({
-                      ...previous,
-                      status: event.target.value as LandingAnnouncementStatus,
-                    }))
-                  }
+                  disabled
+                  onChange={() => undefined}
                 >
-                  <option value="draft">Draft</option>
                   <option value="published">Published</option>
-                  <option value="archived">Archived</option>
                 </select>
               </div>
 
               <div className="field-group">
                 <label className="label" htmlFor="teamFullDescription">
-                  Keterangan Lengkap
+                  Keterangan Petugas
                 </label>
                 <textarea
                   id="teamFullDescription"
@@ -646,12 +811,13 @@ const UpdatePengumumanPage = ({
                       content: event.target.value,
                     }))
                   }
-                  placeholder="Contoh: Pengalaman 8 tahun menangani anak usia dini, sertifikat pendampingan anak, dan jam terbang harian di kelas toddler."
+                  placeholder="Contoh: Berpengalaman mendampingi anak usia dini, sabar, komunikatif, dan aktif dalam kegiatan harian kelas."
+                  disabled={!form.staffUserId}
                 />
               </div>
 
               <p className="field-hint" style={{ marginTop: '-0.25rem' }}>
-                Sisi depan kartu menampilkan foto dan nama, sisi belakang menampilkan keterangan lengkap.
+                Profil ini akan mengikuti akun petugas terdaftar dan otomatis dipakai pada kartu Tim Kami di landing page.
               </p>
             </>
           ) : null}
@@ -697,38 +863,41 @@ const UpdatePengumumanPage = ({
             </>
           ) : null}
 
-          <div className="field-group">
-            <label className="label" htmlFor="announcementImage">
-              {isFacilityMode ? 'Gambar Fasilitas' : isTeamMode ? 'Foto Tim' : 'Foto'}
-            </label>
-            <input
-              id="announcementImage"
-              className="input"
-              type="file"
-              accept="image/*"
-              onChange={(event) => void onUploadCoverImage(event)}
-            />
-            {form.coverImageDataUrl ? (
-              <div className="announcement-cover-preview">
-                <img src={form.coverImageDataUrl} alt={form.coverImageName || 'Preview pengumuman'} />
-                <div className="table-actions">
-                  <button
-                    type="button"
-                    className="button button--tiny button--ghost"
-                    onClick={onClearCoverImage}
-                  >
-                    Hapus Foto
-                  </button>
+          {!isTeamMode ? (
+            <div className="field-group">
+              <label className="label" htmlFor="announcementImage">
+                {isFacilityMode ? 'Gambar Fasilitas' : 'Foto'}
+              </label>
+              <input
+                id="announcementImage"
+                className="input"
+                type="file"
+                accept="image/*"
+                onChange={(event) => void onUploadCoverImage(event)}
+                disabled={isSaving}
+              />
+              {form.coverImageDataUrl ? (
+                <div className="announcement-cover-preview">
+                  <img src={form.coverImageDataUrl} alt={form.coverImageName || 'Preview pengumuman'} />
+                  <div className="table-actions">
+                    <button
+                      type="button"
+                      className="button button--tiny button--ghost"
+                      onClick={onClearCoverImage}
+                    >
+                      Hapus Foto
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="form-actions">
             <button type="submit" className="button" disabled={isSaving}>
               {isSaving
                 ? 'Menyimpan...'
-                : editingAnnouncementId
+                : isEditingData
                   ? 'Update Data'
                   : 'Simpan Data'}
             </button>

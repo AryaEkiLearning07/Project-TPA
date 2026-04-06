@@ -20,16 +20,16 @@ function Get-CloudflaredMetricsPorts {
 
   $result = @()
   $pidSet = @{}
-  foreach (\$processId in \$ProcessIds) {
-    \$pidSet["$processId"] = $true
+  foreach ($processId in $ProcessIds) {
+    $pidSet["$processId"] = $true
   }
 
   $netstatLines = @(netstat -ano -p tcp)
   foreach ($line in $netstatLines) {
     if ($line -match '^\s*TCP\s+127\.0\.0\.1:(\d+)\s+0\.0\.0\.0:0\s+LISTENING\s+(\d+)\s*$') {
       $port = [int]$matches[1]
-      $pid = $matches[2]
-      if ($pidSet.ContainsKey($pid)) {
+      $processIdFromNetstat = $matches[2]
+      if ($pidSet.ContainsKey($processIdFromNetstat)) {
         $result += $port
       }
       continue
@@ -37,8 +37,8 @@ function Get-CloudflaredMetricsPorts {
 
     if ($line -match '^\s*TCP\s+\[::1\]:(\d+)\s+\[::\]:0\s+LISTENING\s+(\d+)\s*$') {
       $port = [int]$matches[1]
-      $pid = $matches[2]
-      if ($pidSet.ContainsKey($pid)) {
+      $processIdFromNetstat = $matches[2]
+      if ($pidSet.ContainsKey($processIdFromNetstat)) {
         $result += $port
       }
     }

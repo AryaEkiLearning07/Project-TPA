@@ -262,6 +262,7 @@ const createFallbackServerDateContext = () => {
 }
 
 const initialLandingAnnouncementForm: LandingAnnouncementEditorForm = {
+  staffUserId: '',
   title: '',
   slug: '',
   category: 'event',
@@ -673,6 +674,22 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     setEditingLandingAnnouncementId(null)
   }, [])
 
+  // Effect to ensure form category is correct when switching to update-pengumuman tab
+  useEffect(() => {
+    if (settingsTab === 'update-pengumuman' && landingAnnouncementForm.category === 'event') {
+      // Initialize form with 'dokumentasi' category when first entering the tab
+      setLandingAnnouncementForm((previous) => ({
+        ...previous,
+        category: 'dokumentasi',
+        displayMode: 'section',
+        publishEndDate: '',
+        ctaLabel: '',
+        ctaUrl: '',
+        content: '',
+      }))
+    }
+  }, [settingsTab, landingAnnouncementForm.category])
+
   const toLandingAnnouncementInput = useCallback((
     form: LandingAnnouncementEditorForm,
   ): LandingAnnouncementInput => {
@@ -686,7 +703,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         : ''
     )
 
-    return {
+    const payload: LandingAnnouncementInput = {
       title: normalizedTitle,
       slug: form.slug.trim(),
       category: form.category,
@@ -704,6 +721,8 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       authorName: user.displayName,
       authorEmail: user.email,
     }
+
+    return payload
   }, [user.displayName, user.email])
 
   const loadLandingAnnouncements = useCallback(async (options?: { silent?: boolean }) => {
@@ -741,7 +760,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       landingAnnouncementForm.category === 'ucapan'
     const title = landingAnnouncementForm.title.trim()
     if (!title && !isPosterMode) {
-      setErrorMessage('Judul pengumuman wajib diisi.')
+      setErrorMessage(isTeamMode ? 'Nama petugas wajib diisi.' : 'Judul pengumuman wajib diisi.')
       return
     }
 
@@ -769,7 +788,12 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
 
     if (isTeamMode && !landingAnnouncementForm.content.trim()) {
-      setErrorMessage('Keterangan lengkap tim wajib diisi.')
+      setErrorMessage('Keterangan petugas wajib diisi.')
+      return
+    }
+
+    if (isTeamMode && !landingAnnouncementForm.staffUserId.trim()) {
+      setErrorMessage('Pilih petugas dari daftar petugas terlebih dahulu.')
       return
     }
 
@@ -792,6 +816,32 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 
     setSavingLandingAnnouncement(true)
     try {
+      if (isTeamMode) {
+        const selectedStaff = staffUsers.find(
+          (staff) => staff.id === landingAnnouncementForm.staffUserId.trim(),
+        )
+
+        if (!selectedStaff) {
+          throw new Error('Petugas terpilih tidak ditemukan. Muat ulang daftar petugas lalu coba lagi.')
+        }
+
+        await adminApi.updateStaffUser(selectedStaff.id, {
+          fullName: selectedStaff.fullName,
+          email: selectedStaff.email,
+          password: '',
+          isActive: selectedStaff.isActive,
+          tanggalMasuk: selectedStaff.tanggalMasuk,
+          photoDataUrl: landingAnnouncementForm.coverImageDataUrl.trim(),
+          photoName: landingAnnouncementForm.coverImageName.trim(),
+          description: landingAnnouncementForm.content.trim(),
+        })
+
+        await loadStaff()
+        setMessage('Profil petugas untuk landing page berhasil diperbarui.')
+        resetLandingAnnouncementForm()
+        return
+      }
+
       const payload = toLandingAnnouncementInput(landingAnnouncementForm)
       if (editingLandingAnnouncementId) {
         await adminApi.updateLandingAnnouncement(editingLandingAnnouncementId, payload)
@@ -818,6 +868,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const handleSelectLandingAnnouncement = (announcement: LandingAnnouncement) => {
     setEditingLandingAnnouncementId(announcement.id)
     setLandingAnnouncementForm({
+      staffUserId: '',
       title: announcement.title,
       slug: announcement.slug,
       category: announcement.category,
@@ -1494,7 +1545,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       }
 
       if (settingsTab === 'update-pengumuman') {
-        void loadLandingAnnouncements()
+        void Promise.all([loadLandingAnnouncements(), loadStaff()])
       }
       return
     }
@@ -1778,6 +1829,31 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     setShowStaffPassword(false)
   }
 
+  const handleUploadStaffPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    try {
+      const compressed = await compressImageToDataUrl(file, {
+        maxDimension: 1280,
+        quality: 0.8,
+        aspectRatio: 3 / 4,
+      })
+      setStaffForm((previous) => ({
+        ...previous,
+        photoDataUrl: compressed.dataUrl,
+        photoName: compressed.name,
+      }))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Gagal memproses foto petugas.'
+      setErrorMessage(message)
+    } finally {
+      event.target.value = ''
+    }
+  }
+
   const validateStaffForm = (): string | null => {
     if (!staffForm.fullName.trim()) {
       return 'Nama petugas wajib diisi.'
@@ -1787,6 +1863,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
     }
     if (!staffForm.tanggalMasuk) {
       return 'Tanggal masuk wajib diisi.'
+    }
+    if (!staffForm.description.trim()) {
+      return 'Keterangan petugas wajib diisi.'
     }
     if (!editingStaffId && staffForm.password.trim().length < 8) {
       return 'Password petugas minimal 8 karakter.'
@@ -1820,6 +1899,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           password: staffForm.password,
           isActive: staffForm.isActive,
           tanggalMasuk: staffForm.tanggalMasuk,
+          photoDataUrl: staffForm.photoDataUrl.trim(),
+          photoName: staffForm.photoName.trim(),
+          description: staffForm.description.trim(),
         })
         setMessage('Akun petugas berhasil diperbarui.')
       } else {
@@ -1829,6 +1911,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           password: staffForm.password,
           isActive: staffForm.isActive,
           tanggalMasuk: staffForm.tanggalMasuk,
+          photoDataUrl: staffForm.photoDataUrl.trim(),
+          photoName: staffForm.photoName.trim(),
+          description: staffForm.description.trim(),
         })
         setMessage('Akun petugas berhasil dibuat.')
       }
@@ -1889,6 +1974,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         password: '',
         isActive: nextIsActive,
         tanggalMasuk: staff.tanggalMasuk,
+        photoDataUrl: staff.photoDataUrl,
+        photoName: staff.photoName,
+        description: staff.description,
       })
       setMessage(
         `Status ${staff.fullName} berhasil diubah menjadi ${nextIsActive ? 'Aktif' : 'Nonaktif'}.`,
@@ -1963,6 +2051,9 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       password: '',
       isActive: staff.isActive,
       tanggalMasuk: staff.tanggalMasuk || staff.createdAt.slice(0, 10),
+      photoDataUrl: staff.photoDataUrl,
+      photoName: staff.photoName,
+      description: staff.description,
     })
     setShowStaffPassword(false)
     setActiveSidebar('settings')
@@ -3844,6 +3935,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             formatDateOnly={formatDateOnly}
             formatDateTime={formatDateTime}
             calculateServiceLength={calculateServiceLength}
+            onUploadStaffPhoto={handleUploadStaffPhoto}
             onStartEditStaff={startEditStaff}
             onDeleteStaff={handleDeleteStaff}
             onToggleStaffStatus={handleToggleStaffStatus}
@@ -3868,10 +3960,12 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         return (
           <UpdatePengumumanPage
             announcements={landingAnnouncements}
+            staffUsers={staffUsers}
             form={landingAnnouncementForm}
             setForm={setLandingAnnouncementForm}
             editingAnnouncementId={editingLandingAnnouncementId}
             isLoading={isLoadingLandingAnnouncements}
+            isLoadingStaff={isLoadingStaff}
             isSaving={isSavingLandingAnnouncement}
             deletingAnnouncementId={deletingLandingAnnouncementId}
             onSubmit={handleSubmitLandingAnnouncement}
@@ -3931,6 +4025,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         onClose={() => setSidebarOpen(false)}
         onLogout={onLogout}
         userLabel={user.displayName}
+        userPhotoDataUrl={user.photoDataUrl}
         accountLabel="Akun Admin"
         panelTitle="Panel Admin"
         menuLabel="Menu Admin"
@@ -4178,4 +4273,3 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
 }
 
 export default AdminSection
-

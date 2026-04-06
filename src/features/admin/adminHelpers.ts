@@ -210,6 +210,9 @@ export const initialStaffForm: StaffUserInput = {
     password: '',
     isActive: true,
     tanggalMasuk: '',
+    photoDataUrl: '',
+    photoName: '',
+    description: '',
 }
 
 export const initialServiceRatesForm: ServicePackageRatesInput = {

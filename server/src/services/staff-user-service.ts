@@ -100,6 +100,7 @@ const normalizeDateKey = (value: string): string => {
 type SqlExecutor = Pick<PoolConnection, 'execute'>
 let ensureStaffRegistrationSchemaReadyPromise: Promise<void> | null = null
 let hasEnsuredStaffJoinDateColumn = false
+let hasEnsuredStaffProfileColumns = false
 
 const ensureStaffRegistrationRequestsTable = async (
   executor: SqlExecutor,
@@ -184,6 +185,42 @@ const ensureStaffJoinDateColumn = async (
   hasEnsuredStaffJoinDateColumn = true
 }
 
+const ensureStaffProfileColumns = async (
+  executor: SqlExecutor = dbPool,
+): Promise<void> => {
+  if (hasEnsuredStaffProfileColumns) {
+    return
+  }
+
+  await ensureStaffJoinDateColumn(executor)
+
+  const hasPhotoDataUrlColumn = await hasUsersColumn(executor, 'staff_photo_data_url')
+  if (!hasPhotoDataUrlColumn) {
+    await executor.execute(
+      `ALTER TABLE users
+      ADD COLUMN staff_photo_data_url LONGTEXT NULL AFTER tanggal_masuk`,
+    )
+  }
+
+  const hasPhotoNameColumn = await hasUsersColumn(executor, 'staff_photo_name')
+  if (!hasPhotoNameColumn) {
+    await executor.execute(
+      `ALTER TABLE users
+      ADD COLUMN staff_photo_name VARCHAR(255) NULL AFTER staff_photo_data_url`,
+    )
+  }
+
+  const hasDescriptionColumn = await hasUsersColumn(executor, 'staff_description')
+  if (!hasDescriptionColumn) {
+    await executor.execute(
+      `ALTER TABLE users
+      ADD COLUMN staff_description TEXT NULL AFTER staff_photo_name`,
+    )
+  }
+
+  hasEnsuredStaffProfileColumns = true
+}
+
 const normalizeRegistrationRequestStatus = (
   value: unknown,
 ): StaffRegistrationRequestStatus => {
@@ -204,6 +241,9 @@ const mapStaffRow = (row: RowDataPacket): StaffUser => ({
   role: 'PETUGAS',
   isActive: parseBoolean(row.is_active),
   tanggalMasuk: toText(row.tanggal_masuk) || toIsoDateTime(row.created_at).slice(0, 10),
+  photoDataUrl: toText(row.staff_photo_data_url),
+  photoName: toText(row.staff_photo_name),
+  description: toText(row.staff_description),
   createdAt: toIsoDateTime(row.created_at),
   updatedAt: toIsoDateTime(row.updated_at),
 })
@@ -238,6 +278,9 @@ const validateInput = (
   const password = toText(input.password)
   const isActive = Boolean(input.isActive)
   const tanggalMasukRaw = toText(input.tanggalMasuk).trim()
+  const photoDataUrl = toText(input.photoDataUrl).trim()
+  const photoName = toText(input.photoName).trim().slice(0, 255)
+  const description = toText(input.description).trim()
 
   if (!fullName) {
     throw new AuthServiceError(400, 'Nama petugas wajib diisi.')
@@ -271,6 +314,9 @@ const validateInput = (
     password,
     isActive,
     tanggalMasuk,
+    photoDataUrl,
+    photoName,
+    description,
   }
 }
 
@@ -432,6 +478,9 @@ const getStaffByIdWithConnection = async (
       role,
       is_active,
       DATE_FORMAT(COALESCE(tanggal_masuk, DATE(created_at)), '%Y-%m-%d') AS tanggal_masuk,
+      staff_photo_data_url,
+      staff_photo_name,
+      staff_description,
       created_at,
       updated_at
     FROM users
@@ -448,6 +497,7 @@ const getStaffByIdWithConnection = async (
 export const getStaffUsers = async (): Promise<StaffUser[]> => {
   await ensureAuthSchema(dbPool)
   await ensureStaffJoinDateColumn(dbPool)
+  await ensureStaffProfileColumns(dbPool)
 
   const [rows] = await dbPool.execute<RowDataPacket[]>(
     `SELECT
@@ -457,6 +507,9 @@ export const getStaffUsers = async (): Promise<StaffUser[]> => {
       role,
       is_active,
       DATE_FORMAT(COALESCE(tanggal_masuk, DATE(created_at)), '%Y-%m-%d') AS tanggal_masuk,
+      staff_photo_data_url,
+      staff_photo_name,
+      staff_description,
       created_at,
       updated_at
     FROM users
@@ -639,6 +692,7 @@ export const approveStaffRegistrationRequest = async (params: {
     await ensureAuthSchema(connection)
     await ensureStaffRegistrationSchemaReady(connection)
     await ensureStaffJoinDateColumn(connection)
+    await ensureStaffProfileColumns(connection)
 
     const request = await loadStaffRegistrationRequestByIdWithConnection(
       connection,
@@ -760,6 +814,7 @@ export const createStaffUser = async (input: StaffUserInput): Promise<StaffUser>
     await ensureAuthSchema(connection)
     await ensureStaffRegistrationSchemaReady(connection)
     await ensureStaffJoinDateColumn(connection)
+    await ensureStaffProfileColumns(connection)
     await ensureUniqueEmail(connection, validated.email)
     const dbStaffRole = await resolveStaffDbRoleLabel(connection)
 
@@ -771,8 +826,11 @@ export const createStaffUser = async (input: StaffUserInput): Promise<StaffUser>
         password_hash,
         role,
         is_active,
-        tanggal_masuk
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
+        tanggal_masuk,
+        staff_photo_data_url,
+        staff_photo_name,
+        staff_description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validated.fullName,
         validated.email,
@@ -780,6 +838,9 @@ export const createStaffUser = async (input: StaffUserInput): Promise<StaffUser>
         dbStaffRole,
         validated.isActive ? 1 : 0,
         validated.tanggalMasuk,
+        validated.photoDataUrl || null,
+        validated.photoName || null,
+        validated.description,
       ],
     )
 
@@ -833,6 +894,7 @@ export const updateStaffUser = async (
     await connection.beginTransaction()
     await ensureAuthSchema(connection)
     await ensureStaffJoinDateColumn(connection)
+    await ensureStaffProfileColumns(connection)
 
     const existing = await getStaffByIdWithConnection(connection, staffId)
     if (!existing) {
@@ -857,6 +919,9 @@ export const updateStaffUser = async (
           password_hash = ?,
           is_active = ?,
           tanggal_masuk = ?,
+          staff_photo_data_url = ?,
+          staff_photo_name = ?,
+          staff_description = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND role IN ('PETUGAS', 'STAFF')`,
@@ -866,6 +931,9 @@ export const updateStaffUser = async (
           passwordHash,
           validated.isActive ? 1 : 0,
           validated.tanggalMasuk,
+          validated.photoDataUrl || null,
+          validated.photoName || null,
+          validated.description,
           staffId,
         ],
       )
@@ -877,6 +945,9 @@ export const updateStaffUser = async (
           email = ?,
           is_active = ?,
           tanggal_masuk = ?,
+          staff_photo_data_url = ?,
+          staff_photo_name = ?,
+          staff_description = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND role IN ('PETUGAS', 'STAFF')`,
@@ -885,6 +956,9 @@ export const updateStaffUser = async (
           validated.email,
           validated.isActive ? 1 : 0,
           validated.tanggalMasuk,
+          validated.photoDataUrl || null,
+          validated.photoName || null,
+          validated.description,
           staffId,
         ],
       )
@@ -928,6 +1002,7 @@ export const deleteStaffUser = async (id: string): Promise<void> => {
   try {
     await connection.beginTransaction()
     await ensureAuthSchema(connection)
+    await ensureStaffProfileColumns(connection)
 
     const existing = await getStaffByIdWithConnection(connection, staffId)
     if (!existing) {

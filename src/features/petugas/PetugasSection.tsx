@@ -871,6 +871,7 @@ function PetugasSection({ user, onLogout }: PetugasSectionProps) {
         onClose={() => setSidebarOpen(false)}
         onLogout={onLogout}
         userLabel={user.displayName}
+        userPhotoDataUrl={user.photoDataUrl}
         accountLabel="Akun Pendamping"
         panelTitle="Panel Petugas"
         menuLabel="Menu Petugas"
