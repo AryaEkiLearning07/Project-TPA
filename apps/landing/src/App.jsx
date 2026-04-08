@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
+import TeamCardStack from './TeamCardStack.jsx'
 
 const logoTpaSrc = `${import.meta.env.BASE_URL}logo_TPA.jpg`
 const heroPhotoDesktopSrc = `${import.meta.env.BASE_URL}hero2-desktop.jpg`
@@ -2962,12 +2963,8 @@ export default function App() {
               sertifikat pada sisi belakang.
             </p>
 
-            <div
-              className="kegiatan-deck tim-deck"
-              role="region"
-              aria-label="Deck tim. Geser kartu ke kiri atau kanan untuk melihat anggota tim lain."
-            >
-              {galleryDeckItems.length === 0 ? (
+            <div className="team-card-shell">
+              {teamItems.length === 0 ? (
                 <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
                   <h4>Data tim belum tersedia</h4>
                   <p className="kegiatan-event__description">
@@ -2975,86 +2972,7 @@ export default function App() {
                   </p>
                 </article>
               ) : (
-                <div
-                  ref={galleryDeckStageRef}
-                  className="kegiatan-deck__stage tim-deck__stage"
-                >
-                  {[...visibleGalleryLeftDeckItems].reverse().map((item) => (
-                    <article
-                      key={`${item.deckKey}-left-${item.stackDepth}`}
-                      className="kegiatan-deck-card kegiatan-deck-card--team is-back is-left"
-                      style={{ '--stack-depth': item.stackDepth }}
-                      aria-hidden="true"
-                    >
-                      <img
-                        src={item.image}
-                        alt=""
-                        className="kegiatan-deck-card__image"
-                        draggable={false}
-                      />
-                      <h4 className="kegiatan-deck-card__title">{item.title}</h4>
-                      <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
-                    </article>
-                  ))}
-
-                  {[...visibleGalleryRightDeckItems].reverse().map((item) => (
-                    <article
-                      key={`${item.deckKey}-right-${item.stackDepth}`}
-                      className="kegiatan-deck-card kegiatan-deck-card--team is-back is-right"
-                      style={{ '--stack-depth': item.stackDepth }}
-                      aria-hidden="true"
-                    >
-                      <img
-                        src={item.image}
-                        alt=""
-                        className="kegiatan-deck-card__image"
-                        draggable={false}
-                      />
-                      <h4 className="kegiatan-deck-card__title">{item.title}</h4>
-                      <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
-                    </article>
-                  ))}
-
-                  {activeGalleryDeckItem ? (
-                    <article
-                      key={`${activeGalleryDeckItem.deckKey}-active`}
-                      ref={activeGalleryDeckCardRef}
-                      className={`kegiatan-deck-card kegiatan-deck-card--team is-top ${isGalleryDeckFlipped ? 'is-flipped' : ''} ${isGalleryDeckDragging ? 'is-dragging' : ''} ${isGalleryDeckThrowing ? 'is-throwing' : ''}`}
-                      onPointerDown={handleGalleryDeckPointerDown}
-                      onPointerMove={handleGalleryDeckPointerMove}
-                      onPointerUp={handleGalleryDeckPointerUp}
-                      onPointerCancel={handleGalleryDeckPointerCancel}
-                      onLostPointerCapture={handleGalleryDeckPointerCaptureLost}
-                      onKeyDown={handleGalleryDeckCardKeyDown}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={isGalleryDeckFlipped}
-                      aria-label={`Kartu profil ${activeGalleryDeckItem.title}. Klik untuk ${isGalleryDeckFlipped ? 'kembali ke sisi depan' : 'melihat keterangan lengkap'}.`}
-                    >
-                      <div className="kegiatan-deck-card__flip-inner">
-                        <div className="kegiatan-deck-card__face kegiatan-deck-card__face--front">
-                          <img
-                            src={activeGalleryDeckItem.image}
-                            alt={activeGalleryDeckItem.title}
-                            className="kegiatan-deck-card__image"
-                            draggable={false}
-                          />
-                          <h4 className="kegiatan-deck-card__title">{activeGalleryDeckItem.title}</h4>
-                          <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat profil lengkap</p>
-                        </div>
-                        <div className="kegiatan-deck-card__face kegiatan-deck-card__face--back tim-deck-card__face--back">
-                          <h4 className="kegiatan-deck-card__back-title">{activeGalleryDeckItem.title}</h4>
-                          <p className="kegiatan-deck-card__back-description tim-deck-card__back-description">
-                            {activeGalleryDeckItem.content || activeGalleryDeckItem.excerpt || 'Keterangan tim belum ditambahkan.'}
-                          </p>
-                          <p className="kegiatan-deck-card__flip-hint">
-                            Klik kartu untuk kembali ke sisi depan.
-                          </p>
-                        </div>
-                      </div>
-                    </article>
-                  ) : null}
-                </div>
+                <TeamCardStack items={teamItems} />
               )}
             </div>
           </div>
@@ -3140,18 +3058,27 @@ export default function App() {
             ) : null}
 
             <div className="kegiatan-layout">
-              <article className="operational-card kegiatan-block">
-                <div className="kegiatan-block__head">
-                  <h3>Event</h3>
-                  <p>Agenda kegiatan terjadwal yang bisa diikuti anak.</p>
+              {(isKegiatanDeckUnified || !isCompactViewport) ? (
+                <div
+                  className="kegiatan-deck kegiatan-deck--event"
+                  role="region"
+                  aria-label="Deck event. Geser kartu ke kiri atau kanan untuk melihat event lain."
+                >
+                  {eventDeckItems.length === 0 ? (
+                    <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
+                      <h4>Belum ada event aktif</h4>
+                      <p className="kegiatan-event__description">
+                        Tambahkan data event melalui panel admin agar tampil di halaman ini.
+                      </p>
+                    </article>
+                  ) : (
+                    <TeamCardStack items={eventDeckItems} mode="event" />
+                  )}
                 </div>
-                {(isKegiatanDeckUnified || !isCompactViewport) ? (
-                  <div
-                    className="kegiatan-deck kegiatan-deck--event"
-                    role="region"
-                    aria-label="Deck event. Geser kartu ke kiri atau kanan untuk melihat event lain."
-                  >
-                    {eventDeckItems.length === 0 ? (
+              ) : (
+                <div className="kegiatan-event-scroll" role="region" aria-label="Daftar event yang bisa digeser">
+                  <div className="kegiatan-event-track">
+                    {eventItems.length === 0 ? (
                       <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
                         <h4>Belum ada event aktif</h4>
                         <p className="kegiatan-event__description">
@@ -3159,168 +3086,43 @@ export default function App() {
                         </p>
                       </article>
                     ) : (
-                      <>
-                        <div
-                          ref={eventDeckStageRef}
-                          className="kegiatan-deck__stage kegiatan-deck__stage--event"
+                      eventItems.map((item) => (
+                        <article
+                          key={`${item.id || item.title}-${item.category}-${item.publishStartDate || item.period}`}
+                          className="operational-grid__item kegiatan-event-card"
                         >
-                          {[...visibleEventLeftDeckItems].reverse().map((item) => (
-                            <article
-                              key={`${item.deckKey}-left-${item.stackDepth}`}
-                              className="kegiatan-deck-card kegiatan-deck-card--event is-back is-left"
-                              style={{ '--stack-depth': item.stackDepth }}
-                              aria-hidden="true"
-                            >
-                              <img
-                                src={item.image}
-                                alt=""
-                                className="kegiatan-deck-card__image"
-                                draggable={false}
-                              />
-                              <h4 className="kegiatan-deck-card__title">{item.title}</h4>
-                              <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat selengkapnya</p>
-                              {item.period ? (
-                                <p className="kegiatan-deck-card__badge" title={item.period}>
-                                  {item.period}
-                                </p>
-                              ) : null}
-                            </article>
-                          ))}
-
-                          {[...visibleEventRightDeckItems].reverse().map((item) => (
-                            <article
-                              key={`${item.deckKey}-right-${item.stackDepth}`}
-                              className="kegiatan-deck-card kegiatan-deck-card--event is-back is-right"
-                              style={{ '--stack-depth': item.stackDepth }}
-                              aria-hidden="true"
-                            >
-                              <img
-                                src={item.image}
-                                alt=""
-                                className="kegiatan-deck-card__image"
-                                draggable={false}
-                              />
-                              <h4 className="kegiatan-deck-card__title">{item.title}</h4>
-                              <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat selengkapnya</p>
-                              {item.period ? (
-                                <p className="kegiatan-deck-card__badge" title={item.period}>
-                                  {item.period}
-                                </p>
-                              ) : null}
-                            </article>
-                          ))}
-
-                          {activeEventDeckItem ? (
-                            <article
-                              key={`${activeEventDeckItem.deckKey}-active`}
-                              ref={activeEventDeckCardRef}
-                              className={`kegiatan-deck-card kegiatan-deck-card--event is-top ${isEventDeckFlipped ? 'is-flipped' : ''} ${isEventDeckDragging ? 'is-dragging' : ''} ${isEventDeckThrowing ? 'is-throwing' : ''}`}
-                              onPointerDown={handleEventDeckPointerDown}
-                              onPointerMove={handleEventDeckPointerMove}
-                              onPointerUp={handleEventDeckPointerUp}
-                              onPointerCancel={handleEventDeckPointerCancel}
-                              onLostPointerCapture={handleEventDeckPointerCaptureLost}
-                              onKeyDown={handleEventDeckCardKeyDown}
-                              role="button"
-                              tabIndex={0}
-                              aria-pressed={isEventDeckFlipped}
-                              aria-label={`Kartu event ${activeEventDeckItem.title}. Klik untuk ${isEventDeckFlipped ? 'kembali ke sisi depan' : 'melihat keterangan lengkap'}.`}
-                            >
-                              <div className="kegiatan-deck-card__flip-inner">
-                                <div className="kegiatan-deck-card__face kegiatan-deck-card__face--front">
-                                  <img
-                                    src={activeEventDeckItem.image}
-                                    alt={activeEventDeckItem.title}
-                                    className="kegiatan-deck-card__image"
-                                    draggable={false}
-                                  />
-                                  <h4 className="kegiatan-deck-card__title">{activeEventDeckItem.title}</h4>
-                                  <p className="kegiatan-deck-card__tap-hint">Klik untuk lihat selengkapnya</p>
-                                  {activeEventDeckItem.period ? (
-                                    <p className="kegiatan-deck-card__badge" title={activeEventDeckItem.period}>
-                                      {activeEventDeckItem.period}
-                                    </p>
-                                  ) : null}
-                                </div>
-                                <div className="kegiatan-deck-card__face kegiatan-deck-card__face--back">
-                                  {activeEventDeckItem.period ? (
-                                    <p className="kegiatan-deck-card__back-period">{activeEventDeckItem.period}</p>
-                                  ) : null}
-                                  <h4 className="kegiatan-deck-card__back-title">{activeEventDeckItem.title}</h4>
-                                  <p className="kegiatan-deck-card__back-description">
-                                    {activeEventDeckItem.excerpt || 'Keterangan event belum tersedia.'}
-                                  </p>
-                                  {activeEventDeckItem.ctaLabel && activeEventDeckItem.ctaUrl ? (
-                                    <a
-                                      href={activeEventDeckItem.ctaUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="button button--ghost kegiatan-event__cta"
-                                    >
-                                      {activeEventDeckItem.ctaLabel}
-                                    </a>
-                                  ) : null}
-                                  <p className="kegiatan-deck-card__flip-hint">
-                                    Klik kartu untuk kembali ke sisi depan.
-                                  </p>
-                                </div>
-                              </div>
-                            </article>
-                          ) : null}
-                        </div>
-
-                      </>
+                          <div className="kegiatan-card-stack">
+                            <img src={item.image} alt={item.title} className="kegiatan-event__image kegiatan-card-stack__image" />
+                            <h4 className="kegiatan-card-stack__title">{item.title}</h4>
+                            <p className="kegiatan-card-stack__hint">Klik untuk lihat selengkapnya</p>
+                            {item.period ? (
+                              <p className="kegiatan-card-stack__badge" title={item.period}>
+                                {item.period}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="kegiatan-event-card__meta">
+                            <p className="kegiatan-event__period">{item.period}</p>
+                            {item.excerpt ? (
+                              <p className="kegiatan-event__description">{item.excerpt}</p>
+                            ) : null}
+                            {item.ctaLabel && item.ctaUrl ? (
+                              <a
+                                href={item.ctaUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="button button--ghost kegiatan-event__cta"
+                              >
+                                {item.ctaLabel}
+                              </a>
+                            ) : null}
+                          </div>
+                        </article>
+                      ))
                     )}
                   </div>
-                ) : (
-                  <div className="kegiatan-event-scroll" role="region" aria-label="Daftar event yang bisa digeser">
-                    <div className="kegiatan-event-track">
-                      {eventItems.length === 0 ? (
-                        <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
-                          <h4>Belum ada event aktif</h4>
-                          <p className="kegiatan-event__description">
-                            Tambahkan data event melalui panel admin agar tampil di halaman ini.
-                          </p>
-                        </article>
-                      ) : (
-                        eventItems.map((item) => (
-                          <article
-                            key={`${item.id || item.title}-${item.category}-${item.publishStartDate || item.period}`}
-                            className="operational-grid__item kegiatan-event-card"
-                          >
-                            <div className="kegiatan-card-stack">
-                              <img src={item.image} alt={item.title} className="kegiatan-event__image kegiatan-card-stack__image" />
-                              <h4 className="kegiatan-card-stack__title">{item.title}</h4>
-                              <p className="kegiatan-card-stack__hint">Klik untuk lihat selengkapnya</p>
-                              {item.period ? (
-                                <p className="kegiatan-card-stack__badge" title={item.period}>
-                                  {item.period}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="kegiatan-event-card__meta">
-                              <p className="kegiatan-event__period">{item.period}</p>
-                              {item.excerpt ? (
-                                <p className="kegiatan-event__description">{item.excerpt}</p>
-                              ) : null}
-                              {item.ctaLabel && item.ctaUrl ? (
-                                <a
-                                  href={item.ctaUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="button button--ghost kegiatan-event__cta"
-                                >
-                                  {item.ctaLabel}
-                                </a>
-                              ) : null}
-                            </div>
-                          </article>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-              </article>
+                </div>
+              )}
             </div>
           </div>
         </section>

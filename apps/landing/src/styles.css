@@ -731,7 +731,8 @@ main {
   -ms-overflow-style: none;
   padding-inline: calc((100% - var(--facility-card-width)) / 2);
   padding-block: 10px 16px;
-  touch-action: pan-x;
+  /* Keep horizontal swipe, but still allow vertical page scroll from this area on mobile. */
+  touch-action: pan-x pan-y;
   cursor: grab;
 }
 
