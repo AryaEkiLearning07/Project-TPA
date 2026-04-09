@@ -18,11 +18,13 @@ import { ensureParentRelationshipSchema } from './parent-relations-service.js'
 import { hashPassword, PasswordError } from '../utils/password.js'
 import {
   parseAttendanceNotesJson,
+  parseIncidentItemsJson,
+  parseMealEquipmentJson,
   toAttendanceNotesJson,
   toDate,
   toTime,
 } from '../utils/data-mappers.js'
-import type { CarriedItem, SupplyInventoryItem } from '../types/index.js'
+import type { CarriedItem, IncidentReport, SupplyInventoryItem } from '../types/index.js'
 import {
   getServiceBillingHistory,
   type ServiceBillingHistoryResponse,
@@ -113,6 +115,28 @@ interface ParentDailyAttendanceRow extends RowDataPacket {
   updated_at: string | Date
 }
 
+interface ParentDailyIncidentRow extends RowDataPacket {
+  id: number | string
+  child_id: number | string
+  report_date: string | Date
+  arrival_physical_condition: string | null
+  arrival_emotional_condition: string | null
+  departure_physical_condition: string | null
+  departure_emotional_condition: string | null
+  meal_equipment_json: string | null
+  items_json: string | null
+  bath_equipment: string | null
+  medicines: string | null
+  bag_items: string | null
+  parent_message: string | null
+  message_for_parent: string | null
+  notes: string | null
+  arrival_signature_data: string | null
+  departure_signature_data: string | null
+  created_at: string | Date
+  updated_at: string | Date
+}
+
 interface ParentDailyReport {
   attendanceId: string
   childId: string
@@ -138,6 +162,16 @@ interface ParentBillingSnapshot {
   summary: ServiceBillingHistoryResponse['summary']
   periods: ServiceBillingHistoryResponse['periods']
   transactions: ServiceBillingHistoryResponse['transactions']
+}
+
+const dbPhysicalToUi: Record<string, string> = {
+  HEALTHY: 'sehat',
+  SICK: 'sakit',
+}
+
+const dbEmotionalToUi: Record<string, string> = {
+  HAPPY: 'senang',
+  SAD: 'sedih',
 }
 
 const ensureEmailAvailable = async (
@@ -309,6 +343,7 @@ const buildParentDashboardData = async (
   const childIdSet = new Set(children.map((child) => child.id))
   const dailyReportsByChildId: Record<string, ParentDailyReport | null> = {}
   const allAttendanceReports: ParentDailyReport[] = []
+  const allIncidentReports: IncidentReport[] = []
   children.forEach((child) => {
     dailyReportsByChildId[child.id] = null
   })
@@ -375,6 +410,70 @@ const buildParentDashboardData = async (
       if (mappedReport.date === todayDate && !dailyReportsByChildId[childId]) {
         dailyReportsByChildId[childId] = mappedReport
       }
+    }
+
+    const [incidentRows] = await connection.execute<ParentDailyIncidentRow[]>(
+      `SELECT
+        ir.id,
+        ir.child_id,
+        ir.report_date,
+        ir.arrival_physical_condition,
+        ir.arrival_emotional_condition,
+        ir.departure_physical_condition,
+        ir.departure_emotional_condition,
+        ir.meal_equipment_json,
+        ir.items_json,
+        ir.bath_equipment,
+        ir.medicines,
+        ir.bag_items,
+        ir.parent_message,
+        ir.message_for_parent,
+        ir.notes,
+        ir.arrival_signature_data,
+        ir.departure_signature_data,
+        ir.created_at,
+        ir.updated_at
+      FROM incident_reports ir
+      JOIN children c ON c.id = ir.child_id
+      WHERE c.parent_profile_id = ?
+        AND c.is_active = 1
+      ORDER BY ir.report_date DESC, ir.updated_at DESC, ir.id DESC`,
+      [Number(accountRow.parent_profile_id)],
+    )
+
+    for (const row of incidentRows) {
+      const childId = String(row.child_id)
+      if (!childIdSet.has(childId)) {
+        continue
+      }
+
+      const parsedIncidentItems = parseIncidentItemsJson(row.items_json)
+      allIncidentReports.push({
+        id: String(row.id),
+        createdAt: toIsoDateTime(row.created_at),
+        updatedAt: toIsoDateTime(row.updated_at),
+        childId,
+        date: toDate(row.report_date),
+        arrivalPhysicalCondition:
+          dbPhysicalToUi[toText(row.arrival_physical_condition).toUpperCase()] ?? 'sehat',
+        arrivalEmotionalCondition:
+          dbEmotionalToUi[toText(row.arrival_emotional_condition).toUpperCase()] ?? 'senang',
+        departurePhysicalCondition:
+          dbPhysicalToUi[toText(row.departure_physical_condition).toUpperCase()] ?? 'sehat',
+        departureEmotionalCondition:
+          dbEmotionalToUi[toText(row.departure_emotional_condition).toUpperCase()] ?? 'senang',
+        carriedItemsPhotoDataUrl: parsedIncidentItems.groupPhotoDataUrl,
+        carriedItems: parsedIncidentItems.items,
+        mealEquipment: parseMealEquipmentJson(row.meal_equipment_json),
+        bathEquipment: toText(row.bath_equipment),
+        medicines: toText(row.medicines),
+        bag: toText(row.bag_items),
+        parentMessage: toText(row.parent_message),
+        messageForParent: toText(row.message_for_parent),
+        notes: toText(row.notes),
+        arrivalSignatureDataUrl: toText(row.arrival_signature_data),
+        departureSignatureDataUrl: toText(row.departure_signature_data),
+      })
     }
 
     await Promise.all(
@@ -466,7 +565,7 @@ const buildParentDashboardData = async (
     attendanceRecords: allAttendanceReports,
     billingByChild: billingByChildId,
     supplyInventoryByChild: supplyInventoryByChildId,
-    incidentReports: [],
+    incidentReports: allIncidentReports,
     observationRecords: [],
     communicationEntries: [],
   }

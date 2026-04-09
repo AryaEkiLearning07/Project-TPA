@@ -1,0 +1,138 @@
+.card-stack-demo {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2rem;
+}
+
+.card-stack-demo__hero,
+.card-stack-demo__stage {
+  width: min(100%, 980px);
+}
+
+.card-stack-demo__hero {
+  display: grid;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.card-stack-demo__eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #e85d7a;
+}
+
+.card-stack-demo__hero h1 {
+  margin: 0;
+  font-size: clamp(2.3rem, 7vw, 4.8rem);
+  line-height: 0.95;
+}
+
+.card-stack-demo__copy {
+  margin: 0 auto;
+  max-width: 54ch;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #6b7280;
+}
+
+.card-stack-demo__stage {
+  display: grid;
+  justify-items: center;
+  gap: 1.25rem;
+}
+
+.card-stack-demo__card {
+  position: relative;
+  height: 100%;
+  border-radius: 28px;
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow:
+    0 30px 60px -30px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  color: #fff;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.card-stack-demo__card::before {
+  content: '';
+  position: absolute;
+  inset: auto -8% -28% auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28), transparent 70%);
+  pointer-events: none;
+}
+
+.card-stack-demo__pill {
+  width: fit-content;
+  padding: 0.42rem 0.78rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(10px);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.card-stack-demo__card-copy {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.card-stack-demo__card-copy h2 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 3.4rem);
+  line-height: 0.95;
+}
+
+.card-stack-demo__card-copy p {
+  margin: 0;
+  max-width: 28ch;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.card-stack-demo__status {
+  width: min(100%, 420px);
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(229, 231, 235, 0.95);
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 20px 40px -34px rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(16px);
+}
+
+.card-stack-demo__status p {
+  margin: 0;
+  color: #4b5563;
+  font-weight: 700;
+}
+
+.card-stack-demo__status p + p {
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .card-stack-demo__card {
+    padding: 1.1rem;
+    border-radius: 24px;
+  }
+
+  .card-stack-demo__copy {
+    font-size: 0.95rem;
+  }
+}

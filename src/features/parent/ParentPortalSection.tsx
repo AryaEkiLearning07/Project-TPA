@@ -18,6 +18,7 @@ import type {
   AuthUser,
   CarriedItem,
   ChildProfile,
+  IncidentReport,
   ParentDashboardData,
   ParentProfile,
   ServiceBillingPeriod,
@@ -25,6 +26,7 @@ import type {
   ServiceBillingTransaction,
   SupplyInventoryItem,
 } from '../../types'
+import { INCIDENT_CATEGORY_BY_KEY } from '../../constants/incident-categories'
 import { parentApi } from '../../services/api'
 import { useHideOnScroll } from '../../utils/useHideOnScroll'
 import './parent-portal.css'
@@ -184,6 +186,19 @@ const hasText = (value: unknown) => asText(value).trim().length > 0
 
 const toSafeCarriedItems = (items: CarriedItem[] | null | undefined): CarriedItem[] =>
   Array.isArray(items) ? items : []
+
+const toSafeIncidentReports = (
+  reports: ParentDashboardData['incidentReports'] | null | undefined,
+): IncidentReport[] => (Array.isArray(reports) ? reports : [])
+
+const toIncidentCarriedItems = (items: IncidentReport['carriedItems']): CarriedItem[] =>
+  (Array.isArray(items) ? items : []).map((item, index) => ({
+    id: item.id || `incident-item-${index}`,
+    category: INCIDENT_CATEGORY_BY_KEY[item.categoryKey]?.label || item.categoryKey || 'Lainnya',
+    imageDataUrl: '',
+    imageName: '',
+    description: item.description || '-',
+  }))
 
 const normalizePaymentMethod = (value: string) => {
   const raw = asText(value).trim()
@@ -367,6 +382,15 @@ export default function ParentPortalSection({
         `${right.date}${right.createdAt}`.localeCompare(`${left.date}${left.createdAt}`, 'id'),
       )
   }, [activeChild, dashboardData])
+  const incidentReports = useMemo(() => {
+    if (!activeChild) return []
+
+    return toSafeIncidentReports(dashboardData?.incidentReports)
+      .filter((report) => report.childId === activeChild.id)
+      .sort((left, right) =>
+        `${right.date}${right.createdAt}`.localeCompare(`${left.date}${left.createdAt}`, 'id'),
+      )
+  }, [activeChild, dashboardData?.incidentReports])
 
   const todayReport = activeChild
     ? dashboardData?.dailyReports?.[activeChild.id] ?? reports[0] ?? null
@@ -962,6 +986,64 @@ export default function ParentPortalSection({
                           )}
                         </article>
                       </div>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </div>
+          )}
+        </article>
+
+        <article className="parent-solid-card">
+          <div className="parent-solid-card__header parent-solid-card__header--stack">
+            <h3>REKAP BERITA ACARA</h3>
+            <p className="parent-solid-card__lead">
+              Ringkasan berita acara yang diinput petugas untuk anak.
+            </p>
+          </div>
+
+          {incidentReports.length === 0 ? (
+            <p className="parent-solid-empty">Belum ada berita acara.</p>
+          ) : (
+            <div className="parent-solid-report-list">
+              {incidentReports.map((report) => {
+                const incidentItems = toIncidentCarriedItems(report.carriedItems)
+                const arrivalCondition = `${report.arrivalPhysicalCondition || '-'} | ${
+                  report.arrivalEmotionalCondition || '-'
+                }`
+                const departureCondition = `${report.departurePhysicalCondition || '-'} | ${
+                  report.departureEmotionalCondition || '-'
+                }`
+
+                return (
+                  <article key={`incident-${report.id}`} className="parent-solid-card parent-solid-card--nested">
+                    <h4>{formatLongDate(report.date)}</h4>
+                    <p className="parent-solid-card__lead">{`Kondisi datang: ${arrivalCondition} • Kondisi pulang: ${departureCondition}`}</p>
+
+                    <div className="parent-solid-grid parent-solid-grid--two">
+                      <div className="parent-solid-message-box">
+                        <label>Pesan Orang Tua</label>
+                        <p>{hasText(report.parentMessage) ? report.parentMessage : 'Belum ada pesan untuk petugas.'}</p>
+                      </div>
+                      <div className="parent-solid-message-box">
+                        <label>Pesan Petugas</label>
+                        <p>{hasText(report.messageForParent) ? report.messageForParent : 'Belum ada pesan dari petugas.'}</p>
+                      </div>
+                    </div>
+
+                    <article className="parent-solid-card parent-solid-card--nested">
+                      <h4>Barang Bawaan</h4>
+                      {renderCarriedItemList(
+                        incidentItems,
+                        'Tidak ada detail barang bawaan pada berita acara.',
+                      )}
+                    </article>
+
+                    {hasText(report.notes) ? (
+                      <article className="parent-solid-card parent-solid-card--nested">
+                        <h4>Catatan Petugas</h4>
+                        <p>{report.notes}</p>
+                      </article>
                     ) : null}
                   </article>
                 )

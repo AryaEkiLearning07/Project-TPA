@@ -1,0 +1,31 @@
+.card-stack {
+  --card-stack-width: min(100%, 420px);
+  --card-stack-height: 400px;
+  position: relative;
+  width: var(--card-stack-width);
+  height: var(--card-stack-height);
+  overflow: visible;
+  touch-action: pan-y;
+  user-select: none;
+  cursor: grab;
+}
+
+.card-stack.is-dragging {
+  cursor: grabbing;
+}
+
+.card-stack__item {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  will-change: transform;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
+.card-stack__card {
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
