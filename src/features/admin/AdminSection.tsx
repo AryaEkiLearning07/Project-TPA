@@ -670,7 +670,20 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   }, [])
 
   const resetLandingAnnouncementForm = useCallback(() => {
-    setLandingAnnouncementForm(initialLandingAnnouncementForm)
+    setLandingAnnouncementForm((previous) => {
+      const normalizedCategory =
+        previous.category === 'event' ? 'dokumentasi' : previous.category
+      const nextDisplayMode =
+        normalizedCategory === 'promosi' || normalizedCategory === 'ucapan'
+          ? 'popup'
+          : 'section'
+
+      return {
+        ...initialLandingAnnouncementForm,
+        category: normalizedCategory,
+        displayMode: nextDisplayMode,
+      }
+    })
     setEditingLandingAnnouncementId(null)
   }, [])
 
@@ -792,6 +805,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       return
     }
 
+    if (isTeamMode && !landingAnnouncementForm.excerpt.trim()) {
+      setErrorMessage('Jabatan petugas wajib diisi.')
+      return
+    }
+
     if (isTeamMode && !landingAnnouncementForm.staffUserId.trim()) {
       setErrorMessage('Pilih petugas dari daftar petugas terlebih dahulu.')
       return
@@ -833,6 +851,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           tanggalMasuk: selectedStaff.tanggalMasuk,
           photoDataUrl: landingAnnouncementForm.coverImageDataUrl.trim(),
           photoName: landingAnnouncementForm.coverImageName.trim(),
+          positionTitle: landingAnnouncementForm.excerpt.trim(),
           description: landingAnnouncementForm.content.trim(),
         })
 
@@ -1901,6 +1920,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           tanggalMasuk: staffForm.tanggalMasuk,
           photoDataUrl: staffForm.photoDataUrl.trim(),
           photoName: staffForm.photoName.trim(),
+          positionTitle: staffForm.positionTitle.trim(),
           description: staffForm.description.trim(),
         })
         setMessage('Akun petugas berhasil diperbarui.')
@@ -1913,6 +1933,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
           tanggalMasuk: staffForm.tanggalMasuk,
           photoDataUrl: staffForm.photoDataUrl.trim(),
           photoName: staffForm.photoName.trim(),
+          positionTitle: staffForm.positionTitle.trim(),
           description: staffForm.description.trim(),
         })
         setMessage('Akun petugas berhasil dibuat.')
@@ -1976,6 +1997,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
         tanggalMasuk: staff.tanggalMasuk,
         photoDataUrl: staff.photoDataUrl,
         photoName: staff.photoName,
+        positionTitle: staff.positionTitle,
         description: staff.description,
       })
       setMessage(
@@ -2053,6 +2075,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
       tanggalMasuk: staff.tanggalMasuk || staff.createdAt.slice(0, 10),
       photoDataUrl: staff.photoDataUrl,
       photoName: staff.photoName,
+      positionTitle: staff.positionTitle,
       description: staff.description,
     })
     setShowStaffPassword(false)

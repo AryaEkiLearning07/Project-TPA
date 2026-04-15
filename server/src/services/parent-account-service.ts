@@ -4,6 +4,7 @@ import type {
   RowDataPacket,
 } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
+import { revokeSessionsBySubject } from './auth-service.js'
 import {
   ensureParentRelationshipSchema,
   hasParentProfileIdentity,
@@ -364,9 +365,15 @@ const validateInput = (
 const loadAccountMetaById = async (
   connection: PoolConnection,
   accountId: number,
-): Promise<{ id: number; parentProfileId: number } | null> => {
+): Promise<{ id: number; parentProfileId: number; isActive: boolean } | null> => {
   const [rows] = await connection.execute<RowDataPacket[]>(
-    'SELECT id, parent_profile_id FROM parent_accounts WHERE id = ? LIMIT 1',
+    `SELECT
+      id,
+      parent_profile_id,
+      is_active
+    FROM parent_accounts
+    WHERE id = ?
+    LIMIT 1`,
     [accountId],
   )
 
@@ -378,6 +385,7 @@ const loadAccountMetaById = async (
   return {
     id: Number(row.id),
     parentProfileId: Number(row.parent_profile_id),
+    isActive: parseBoolean(row.is_active),
   }
 }
 
@@ -583,6 +591,14 @@ export const updateParentAccount = async (
       validated.childIds,
     )
 
+    const shouldRevokeSessions = existing.isActive !== validated.isActive
+    if (shouldRevokeSessions) {
+      await revokeSessionsBySubject(
+        { role: 'ORANG_TUA', subjectId: accountId },
+        connection,
+      )
+    }
+
     await cleanupOrphanProfile(connection, existing.parentProfileId)
 
     const updatedAccount = await getAccountByIdWithConnection(connection, accountId)
@@ -624,6 +640,10 @@ export const deleteParentAccount = async (id: string): Promise<void> => {
     }
 
     await connection.execute('DELETE FROM parent_accounts WHERE id = ?', [accountId])
+    await revokeSessionsBySubject(
+      { role: 'ORANG_TUA', subjectId: accountId },
+      connection,
+    )
     await cleanupOrphanProfile(connection, existing.parentProfileId)
 
     await connection.commit()

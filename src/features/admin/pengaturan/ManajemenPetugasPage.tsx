@@ -62,20 +62,37 @@ const ManajemenPetugasPage = ({
     <section className="page">
       {editingStaffId ? (
         <div
-          className="app-confirm-overlay"
+          className="modal-overlay admin-staff-edit-overlay"
           onClick={(event) => {
             if (event.target === event.currentTarget) {
               onResetStaffForm()
             }
           }}
         >
-          <div className="card" style={{ width: 'min(94vw, 680px)', margin: 0 }}>
-            <h2>Edit Akun Petugas</h2>
-            <p className="card__description">
-              Upload foto petugas, isi nama dan keterangan, lalu simpan perubahan.
-            </p>
+          <div
+            className="modal-content modal-content--large admin-staff-edit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="staffEditTitle"
+          >
+            <div className="modal-header">
+              <div className="admin-staff-edit-modal__heading">
+                <h2 id="staffEditTitle">Edit Akun Petugas</h2>
+                <p className="admin-staff-edit-modal__description">
+                  Upload foto petugas, isi nama, jabatan, dan keterangan, lalu simpan perubahan.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={onResetStaffForm}
+                aria-label="Tutup popup edit akun petugas"
+              >
+                x
+              </button>
+            </div>
 
-            <form onSubmit={onSubmitStaff}>
+            <form onSubmit={onSubmitStaff} className="modal-body admin-staff-edit-modal__body">
               <div className="field-group">
                 <label className="label" htmlFor="staffPhotoUpload">
                   Foto Petugas
@@ -152,6 +169,24 @@ const ManajemenPetugasPage = ({
                   <label className="label">Email</label>
                   <p>{staffForm.email || '-'}</p>
                 </div>
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="staffPositionTitle">
+                  Jabatan
+                </label>
+                <input
+                  id="staffPositionTitle"
+                  className="input"
+                  value={staffForm.positionTitle}
+                  onChange={(event) =>
+                    setStaffForm((previous) => ({
+                      ...previous,
+                      positionTitle: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: Koordinator Pengasuhan"
+                />
               </div>
 
               <div className="field-group">
@@ -347,7 +382,10 @@ const ManajemenPetugasPage = ({
                         <span className="field-hint">-</span>
                       )}
                     </td>
-                    <td>{staff.fullName}</td>
+                    <td>
+                      <strong>{staff.fullName}</strong>
+                      <div className="field-hint">{staff.positionTitle || '-'}</div>
+                    </td>
                     <td>{staff.description || '-'}</td>
                     <td>{staff.email}</td>
                     <td>

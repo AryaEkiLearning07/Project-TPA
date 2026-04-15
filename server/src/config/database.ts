@@ -1,10 +1,9 @@
 import mysql from 'mysql2/promise'
 import { env } from './env.js'
 
-// Modified: Use port 4000 for database connection (same as dev server)
 export const dbPool = mysql.createPool({
   host: env.db.host,
-  port: env.db.port, // Use port from environment variables (default 3306)
+  port: env.db.port,
   user: env.db.user,
   password: env.db.password,
   database: env.db.name,
@@ -28,6 +27,9 @@ export const checkDatabaseConnection = async (): Promise<void> => {
     console.error(
       `[Database] Connection check failed (${env.db.host}:${env.db.port} as ${env.db.user}): ${message}`,
     )
+    if (message.includes('ECONNREFUSED')) {
+      console.error('[Database] MySQL belum aktif. Jalankan "npm run db:start" dari root project.')
+    }
     throw error
   }
 }

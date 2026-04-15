@@ -247,6 +247,7 @@ export interface StaffUser {
   tanggalMasuk: string
   photoDataUrl: string
   photoName: string
+  positionTitle: string
   description: string
   createdAt: string
   updatedAt: string
@@ -260,6 +261,7 @@ export interface StaffUserInput {
   tanggalMasuk: string
   photoDataUrl: string
   photoName: string
+  positionTitle: string
   description: string
 }
 

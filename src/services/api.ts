@@ -37,6 +37,7 @@ import type {
   ChildProfile,
   ChildProfileInput,
   GalleryItem,
+  ParentProfile,
 } from '../types'
 
 interface ApiResponse<T> {
@@ -674,6 +675,29 @@ export const supplyInventoryApi = {
 export const parentApi = {
   getDashboardData: (): Promise<ParentDashboardData> =>
     request('/parent/dashboard'),
+  updateProfile: (payload: {
+    childId: string
+    childProfile: ChildProfileInput
+    parentProfile: ParentProfile
+  }): Promise<ParentDashboardData> =>
+    request(`/parent/profile/${encodeURIComponent(payload.childId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        childProfile: payload.childProfile,
+        parentProfile: payload.parentProfile,
+      }),
+    }),
+  changePassword: (payload: {
+    currentPassword: string
+    newPassword: string
+  }): Promise<{ updated: boolean }> =>
+    request('/parent/password', {
+      method: 'PUT',
+      body: JSON.stringify({
+        currentPassword: payload.currentPassword,
+        newPassword: payload.newPassword,
+      }),
+    }),
   getChildDetails: (childId: string): Promise<ChildProfile> =>
     request(`/parent/child/${childId}`),
   getDailyLogs: (childId: string, date?: string): Promise<AttendanceRecord[]> =>

@@ -96,6 +96,7 @@ const parseStaffPayload = (value: unknown): StaffUserInput => {
     tanggalMasuk: toText(value.tanggalMasuk),
     photoDataUrl: toText(value.photoDataUrl),
     photoName: toText(value.photoName),
+    positionTitle: toText(value.positionTitle),
     description: toText(value.description),
   }
 }
@@ -216,10 +217,35 @@ const toOptionalPeriodId = (value: unknown): string | undefined => {
   return normalized
 }
 
+const getJakartaDateKey = (value: Date = new Date()): string => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  const parts = formatter.formatToParts(value)
+  const year = parts.find((part) => part.type === 'year')?.value ?? ''
+  const month = parts.find((part) => part.type === 'month')?.value ?? ''
+  const day = parts.find((part) => part.type === 'day')?.value ?? ''
+
+  if (!year || !month || !day) {
+    const fallback = new Date()
+    return [
+      fallback.getUTCFullYear(),
+      String(fallback.getUTCMonth() + 1).padStart(2, '0'),
+      String(fallback.getUTCDate()).padStart(2, '0'),
+    ].join('-')
+  }
+
+  return `${year}-${month}-${day}`
+}
+
 const toAttendanceDate = (value: unknown): string => {
   const normalized = toText(value).trim()
   if (!normalized) {
-    return new Date().toISOString().slice(0, 10)
+    return getJakartaDateKey()
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
     throw new AuthServiceError(400, 'Format tanggal absensi tidak valid (YYYY-MM-DD).')
@@ -397,7 +423,7 @@ const handleError = (res: Response, error: unknown) => {
 
 const buildServerDateContext = () => {
   const now = new Date()
-  const todayDate = now.toISOString().slice(0, 10)
+  const todayDate = getJakartaDateKey(now)
 
   return {
     timestamp: now.toISOString(),

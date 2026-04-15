@@ -164,26 +164,35 @@ const removeErrorKey = (errors: FieldErrors, key: string): FieldErrors => {
 
 const validateAdminMandatoryFields = (input: ChildProfileInput): FieldErrors => {
   const errors: FieldErrors = {}
-  const optionalKeys = new Set<keyof ChildProfileInput>([
-    'photoDataUrl',
-    'allergy',
-    'toiletTrainingBab',
-    'toiletTrainingBak',
-    'toiletTrainingBath',
-    'brushingTeeth',
-    'eating',
-    'drinkingMilk',
-    'whenCrying',
-    'whenPlaying',
-    'sleeping',
-    'otherHabits',
-  ])
+  const requiredKeys: (keyof ChildProfileInput)[] = [
+    // Biodata anak
+    'fullName',
+    'nickName',
+    'gender',
+    'childOrder',
+    'birthPlace',
+    'birthDate',
+    'religion',
+    'outsideActivities',
+    // Data orang tua
+    'fatherName',
+    'motherName',
+    'email',
+    'whatsappNumber',
+    'homePhone',
+    'otherPhone',
+    'homeAddress',
+    'officeAddress',
+    // Layanan
+    'servicePackage',
+    'serviceStartDate',
+    'arrivalTime',
+    'departureTime',
+    'pickupPersons',
+    'depositPurpose',
+  ]
 
-  ;(Object.keys(input) as (keyof ChildProfileInput)[]).forEach((key) => {
-    if (optionalKeys.has(key)) {
-      return
-    }
-
+  requiredKeys.forEach((key) => {
     const value = input[key]
     if (Array.isArray(value)) {
       if (value.length === 0) {
@@ -199,6 +208,9 @@ const validateAdminMandatoryFields = (input: ChildProfileInput): FieldErrors => 
 
   return errors
 }
+
+const ADMIN_MANDATORY_FIELD_ERROR_MESSAGE =
+  'Field wajib hanya pada bagian Data Anak, Data Orangtua, dan Layanan. Bagian Perkembangan Kondisi Anak serta Kebiasaan Sehari-hari bersifat opsional.'
 
 const formatWhatsAppLink = (phone: string): string => {
   const cleaned = phone.replace(/\D/g, '')
@@ -455,9 +467,7 @@ const DataAnakPage = ({
     const strictErrors = viewerRole === 'ADMIN' ? validateAdminMandatoryFields(normalized) : {}
     if (Object.keys(strictErrors).length > 0) {
       setErrors(strictErrors)
-      setSaveError(
-        'Semua field wajib diisi kecuali Foto, Alergi, dan field pada bagian Kebiasaan Sehari-hari.',
-      )
+      setSaveError(ADMIN_MANDATORY_FIELD_ERROR_MESSAGE)
       return
     }
 
@@ -1148,7 +1158,7 @@ const DataAnakPage = ({
                 </>
               )}
 
-              <div className="section-title">Lain-lain</div>
+              <div className="section-title">Layanan</div>
               <div className="form-grid form-grid--3">
                 <div className="field-group">
                   <label className="label" htmlFor="servicePackage">Paket layanan</label>

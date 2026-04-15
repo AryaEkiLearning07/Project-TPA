@@ -4,6 +4,26 @@ Backend minimal untuk koneksi ke database MySQL yang sudah ada.
 
 ## Menjalankan
 
+### Menyalakan MySQL (disarankan via Docker)
+
+Jalankan dari root project:
+
+```bash
+npm run db:start
+```
+
+Lihat log MySQL:
+
+```bash
+npm run db:logs
+```
+
+Matikan container MySQL:
+
+```bash
+npm run db:stop
+```
+
 1. Install dependency:
 
 ```bash

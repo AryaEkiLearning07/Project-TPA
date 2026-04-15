@@ -6184,6 +6184,202 @@ body {
   }
 }
 
+/* Tim Kami: section polish */
+.landing-page #tim-kami.page-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-page #tim-kami.page-section::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: clamp(220px, 30vw, 320px);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 68%),
+    radial-gradient(circle at 8% 26%, rgba(250, 201, 223, 0.35) 0%, rgba(250, 201, 223, 0) 58%),
+    radial-gradient(circle at 92% 28%, rgba(207, 231, 255, 0.28) 0%, rgba(207, 231, 255, 0) 56%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.landing-page #tim-kami .tim-section {
+  position: relative;
+  z-index: 1;
+  gap: 18px;
+}
+
+.landing-page #tim-kami .tim-section__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.landing-page #tim-kami .tim-section__head {
+  margin-bottom: 0;
+}
+
+.landing-page #tim-kami .tim-section__head h2 {
+  margin: 0;
+}
+
+.landing-page #tim-kami .tim-section__lead {
+  margin-top: 8px;
+  max-width: 56ch;
+  font-size: clamp(15px, 1.45vw, 17px);
+  line-height: 1.58;
+}
+
+.landing-page #tim-kami .tim-section__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: min(100%, 460px);
+}
+
+.landing-page #tim-kami .tim-section__chip {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(167, 107, 141, 0.26);
+  background:
+    linear-gradient(170deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 243, 250, 0.88) 100%);
+  color: rgba(89, 52, 73, 0.92);
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 16px rgba(130, 72, 102, 0.12);
+}
+
+.landing-page #tim-kami .tim-section__chip strong {
+  margin-right: 6px;
+  color: #903e69;
+  font-size: 14px;
+}
+
+.landing-page #tim-kami .team-card-shell {
+  position: relative;
+  border-radius: clamp(22px, 2.8vw, 30px);
+  padding: clamp(14px, 2.4vw, 24px);
+  border: 1px solid rgba(170, 114, 147, 0.22);
+  background: linear-gradient(160deg, rgba(255, 253, 255, 0.92) 0%, rgba(248, 233, 243, 0.76) 100%);
+  box-shadow:
+    0 24px 46px rgba(126, 63, 97, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.landing-page #tim-kami .team-card-shell__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.landing-page #tim-kami .team-card-shell__backdrop::before,
+.landing-page #tim-kami .team-card-shell__backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.landing-page #tim-kami .team-card-shell__backdrop::before {
+  background:
+    radial-gradient(circle at 50% 44%, rgba(92, 122, 165, 0.2) 0%, rgba(92, 122, 165, 0) 58%),
+    radial-gradient(circle at 20% 18%, rgba(251, 191, 216, 0.2) 0%, rgba(251, 191, 216, 0) 50%),
+    radial-gradient(circle at 84% 22%, rgba(192, 223, 255, 0.16) 0%, rgba(192, 223, 255, 0) 48%);
+}
+
+.landing-page #tim-kami .team-card-shell__backdrop::after {
+  opacity: 0.22;
+  background-image:
+    linear-gradient(115deg, rgba(120, 77, 106, 0.22) 0, rgba(120, 77, 106, 0) 12%),
+    linear-gradient(295deg, rgba(120, 77, 106, 0.22) 0, rgba(120, 77, 106, 0) 12%);
+  background-size: 18px 18px;
+}
+
+.landing-page #tim-kami .team-card-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-page #tim-kami .team-card-shell .team-card-stack {
+  position: relative;
+  z-index: 2;
+}
+
+.landing-page #tim-kami .team-card-shell__note {
+  margin: 8px auto 0;
+  width: fit-content;
+  max-width: min(100%, 60ch);
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(156, 96, 131, 0.24);
+  background: rgba(255, 250, 253, 0.78);
+  color: rgba(95, 57, 78, 0.86);
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.landing-page #tim-kami .team-card-shell--empty {
+  padding: clamp(16px, 2.4vw, 24px);
+}
+
+.landing-page #tim-kami .team-card-shell__empty {
+  position: relative;
+  z-index: 1;
+  max-width: min(560px, 100%);
+  margin-inline: auto;
+  border: 1px solid rgba(174, 114, 148, 0.22);
+  background: rgba(255, 252, 254, 0.9);
+}
+
+@media (max-width: 900px) {
+  .landing-page #tim-kami .tim-section__hero {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .landing-page #tim-kami .tim-section__chips {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .landing-page #tim-kami .team-card-shell {
+    border-radius: 22px;
+    padding: 12px;
+  }
+
+  .landing-page #tim-kami .tim-section__chips {
+    gap: 6px;
+  }
+
+  .landing-page #tim-kami .tim-section__chip {
+    font-size: 11.5px;
+    padding: 7px 10px;
+  }
+
+  .landing-page #tim-kami .tim-section__chip strong {
+    font-size: 13px;
+  }
+
+  .landing-page #tim-kami .team-card-shell__note {
+    margin-top: 6px;
+    font-size: 11.5px;
+  }
+}
+
 /* Desktop navbar style to match requested reference */
 @media (min-width: 901px) {
   .landing-page .topbar,

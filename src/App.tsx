@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import LoginPage from './features/auth/LoginPage'
 import AppLoader from './components/common/AppLoader'
 import AppErrorBoundary from './components/common/AppErrorBoundary'
@@ -302,7 +304,12 @@ const App = () => {
   if (session.user.role === 'ORANG_TUA') {
     return (
       <AppErrorBoundary>
-        <ParentPortalSection user={session.user} onLogout={handleLogout} />
+        <LocalizationProvider
+          dateAdapter={AdapterDayjs}
+          adapterLocale="id"
+        >
+          <ParentPortalSection user={session.user} onLogout={handleLogout} />
+        </LocalizationProvider>
       </AppErrorBoundary>
     )
   }

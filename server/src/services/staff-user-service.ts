@@ -218,6 +218,14 @@ const ensureStaffProfileColumns = async (
     )
   }
 
+  const hasPositionTitleColumn = await hasUsersColumn(executor, 'staff_position_title')
+  if (!hasPositionTitleColumn) {
+    await executor.execute(
+      `ALTER TABLE users
+      ADD COLUMN staff_position_title VARCHAR(120) NULL AFTER staff_description`,
+    )
+  }
+
   hasEnsuredStaffProfileColumns = true
 }
 
@@ -243,6 +251,7 @@ const mapStaffRow = (row: RowDataPacket): StaffUser => ({
   tanggalMasuk: toText(row.tanggal_masuk) || toIsoDateTime(row.created_at).slice(0, 10),
   photoDataUrl: toText(row.staff_photo_data_url),
   photoName: toText(row.staff_photo_name),
+  positionTitle: toText(row.staff_position_title),
   description: toText(row.staff_description),
   createdAt: toIsoDateTime(row.created_at),
   updatedAt: toIsoDateTime(row.updated_at),
@@ -280,6 +289,7 @@ const validateInput = (
   const tanggalMasukRaw = toText(input.tanggalMasuk).trim()
   const photoDataUrl = toText(input.photoDataUrl).trim()
   const photoName = toText(input.photoName).trim().slice(0, 255)
+  const positionTitle = toText(input.positionTitle).trim().slice(0, 120)
   const description = toText(input.description).trim()
 
   if (!fullName) {
@@ -316,6 +326,7 @@ const validateInput = (
     tanggalMasuk,
     photoDataUrl,
     photoName,
+    positionTitle,
     description,
   }
 }
@@ -480,6 +491,7 @@ const getStaffByIdWithConnection = async (
       DATE_FORMAT(COALESCE(tanggal_masuk, DATE(created_at)), '%Y-%m-%d') AS tanggal_masuk,
       staff_photo_data_url,
       staff_photo_name,
+      staff_position_title,
       staff_description,
       created_at,
       updated_at
@@ -509,6 +521,7 @@ export const getStaffUsers = async (): Promise<StaffUser[]> => {
       DATE_FORMAT(COALESCE(tanggal_masuk, DATE(created_at)), '%Y-%m-%d') AS tanggal_masuk,
       staff_photo_data_url,
       staff_photo_name,
+      staff_position_title,
       staff_description,
       created_at,
       updated_at
@@ -829,8 +842,9 @@ export const createStaffUser = async (input: StaffUserInput): Promise<StaffUser>
         tanggal_masuk,
         staff_photo_data_url,
         staff_photo_name,
+        staff_position_title,
         staff_description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         validated.fullName,
         validated.email,
@@ -840,6 +854,7 @@ export const createStaffUser = async (input: StaffUserInput): Promise<StaffUser>
         validated.tanggalMasuk,
         validated.photoDataUrl || null,
         validated.photoName || null,
+        validated.positionTitle || null,
         validated.description,
       ],
     )
@@ -921,6 +936,7 @@ export const updateStaffUser = async (
           tanggal_masuk = ?,
           staff_photo_data_url = ?,
           staff_photo_name = ?,
+          staff_position_title = ?,
           staff_description = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -933,6 +949,7 @@ export const updateStaffUser = async (
           validated.tanggalMasuk,
           validated.photoDataUrl || null,
           validated.photoName || null,
+          validated.positionTitle || null,
           validated.description,
           staffId,
         ],
@@ -947,6 +964,7 @@ export const updateStaffUser = async (
           tanggal_masuk = ?,
           staff_photo_data_url = ?,
           staff_photo_name = ?,
+          staff_position_title = ?,
           staff_description = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -958,6 +976,7 @@ export const updateStaffUser = async (
           validated.tanggalMasuk,
           validated.photoDataUrl || null,
           validated.photoName || null,
+          validated.positionTitle || null,
           validated.description,
           staffId,
         ],

@@ -4736,6 +4736,70 @@ select.input.input--locked {
   flex: 1;
 }
 
+.admin-staff-edit-overlay {
+  z-index: 1250;
+  background: rgba(60, 20, 35, 0.56);
+}
+
+.admin-staff-edit-modal {
+  max-width: 760px;
+  border: 1px solid #f4c8d2;
+  background:
+    radial-gradient(circle at top right, rgba(232, 120, 165, 0.18), rgba(232, 120, 165, 0) 38%),
+    linear-gradient(165deg, #ffffff, #fff1f5);
+  box-shadow: 0 28px 58px -28px rgba(120, 40, 60, 0.58);
+}
+
+.admin-staff-edit-modal .modal-header {
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.admin-staff-edit-modal__heading {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-staff-edit-modal__description {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.admin-staff-edit-modal__body {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-staff-edit-modal .staff-photo-upload {
+  width: min(100%, 280px);
+}
+
+.admin-staff-edit-modal .form-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .admin-staff-edit-modal {
+    width: min(94vw, 760px);
+    max-height: 92vh;
+  }
+
+  .admin-staff-edit-modal .modal-header {
+    padding: 0.9rem 1rem;
+  }
+
+  .admin-staff-edit-modal__body {
+    padding: 0.95rem 1rem 1.05rem;
+  }
+
+  .admin-staff-edit-modal .staff-photo-upload {
+    width: min(100%, 240px);
+  }
+}
+
 .app-confirm-overlay {
   position: fixed;
   inset: 0;

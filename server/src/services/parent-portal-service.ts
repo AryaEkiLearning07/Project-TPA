@@ -13,9 +13,9 @@ import {
   ChildRegistrationCodeServiceError,
   ensureChildRegistrationCodeSchema,
 } from './child-registration-code-service.js'
-import { getChildrenByParentProfileId } from './child-service.js'
+import { getChildrenByParentProfileId, ServiceError, updateChild } from './child-service.js'
 import { ensureParentRelationshipSchema } from './parent-relations-service.js'
-import { hashPassword, PasswordError } from '../utils/password.js'
+import { hashPassword, PasswordError, verifyPassword } from '../utils/password.js'
 import {
   parseAttendanceNotesJson,
   parseIncidentItemsJson,
@@ -29,6 +29,15 @@ import {
   getServiceBillingHistory,
   type ServiceBillingHistoryResponse,
 } from './service-billing-service.js'
+import {
+  ParentAccountServiceError,
+  updateParentAccount,
+} from './parent-account-service.js'
+import type {
+  ChildProfileInput,
+  ParentAccountInput,
+  ParentProfile,
+} from '../types/index.js'
 
 const toText = (value: unknown): string => (typeof value === 'string' ? value : '')
 
@@ -87,6 +96,31 @@ const parseBoolean = (value: unknown): boolean => {
   return false
 }
 
+const getJakartaDateKey = (value: Date = new Date()): string => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  const parts = formatter.formatToParts(value)
+  const year = parts.find((part) => part.type === 'year')?.value ?? ''
+  const month = parts.find((part) => part.type === 'month')?.value ?? ''
+  const day = parts.find((part) => part.type === 'day')?.value ?? ''
+
+  if (!year || !month || !day) {
+    const fallback = new Date()
+    return [
+      fallback.getUTCFullYear(),
+      String(fallback.getUTCMonth() + 1).padStart(2, '0'),
+      String(fallback.getUTCDate()).padStart(2, '0'),
+    ].join('-')
+  }
+
+  return `${year}-${month}-${day}`
+}
+
 export class ParentPortalServiceError extends Error {
   status: number
 
@@ -95,10 +129,6 @@ export class ParentPortalServiceError extends Error {
     this.name = 'ParentPortalServiceError'
     this.status = status
   }
-}
-
-interface ParentTodayDateRow extends RowDataPacket {
-  today_date: string | Date
 }
 
 interface ParentDailyAttendanceRow extends RowDataPacket {
@@ -284,6 +314,7 @@ const loadParentAccountMeta = async (
     `SELECT
       pa.id AS account_id,
       pa.username,
+      pa.password_hash,
       pa.is_active,
       pa.created_at AS account_created_at,
       pa.updated_at AS account_updated_at,
@@ -335,10 +366,7 @@ const buildParentDashboardData = async (
     connection,
   )
 
-  const [dateRows] = await connection.execute<ParentTodayDateRow[]>(
-    `SELECT DATE_FORMAT(CURRENT_DATE(), '%Y-%m-%d') AS today_date`,
-  )
-  const todayDate = toDate(dateRows[0]?.today_date) || new Date().toISOString().slice(0, 10)
+  const todayDate = getJakartaDateKey()
 
   const childIdSet = new Set(children.map((child) => child.id))
   const dailyReportsByChildId: Record<string, ParentDailyReport | null> = {}
@@ -774,6 +802,181 @@ export const updateParentMessageForAttendance = async (params: {
       attendanceId: String(attendanceId),
       parentMessage,
     }
+  } finally {
+    connection.release()
+  }
+}
+
+export const updateParentPortalProfile = async (params: {
+  parentAccountId: string
+  childId: string
+  childProfile: ChildProfileInput
+  parentProfile: ParentProfile
+}) => {
+  const parentAccountId = parseAccountId(params.parentAccountId)
+  const childId = toText(params.childId).trim()
+  if (!childId) {
+    throw new ParentPortalServiceError(400, 'Data anak tidak valid.')
+  }
+
+  const connection = await dbPool.getConnection()
+
+  try {
+    await ensureParentRelationshipSchema(connection)
+    const context = await getParentAccountContext(connection, parentAccountId)
+    const accountRow = await loadParentAccountMeta(connection, context.accountId)
+    if (!accountRow) {
+      throw new ParentPortalServiceError(404, 'Akun orang tua tidak ditemukan.')
+    }
+
+    const children = await getChildrenByParentProfileId(context.parentProfileId, connection)
+    const allowedChildIds = new Set(children.map((child) => child.id))
+    if (!allowedChildIds.has(childId)) {
+      throw new ParentPortalServiceError(404, 'Data anak tidak ditemukan pada akun ini.')
+    }
+
+    const normalizedParentProfile: ParentProfile = {
+      fatherName: toText(params.parentProfile.fatherName).trim(),
+      motherName: toText(params.parentProfile.motherName).trim(),
+      email: normalizeEmail(toText(params.parentProfile.email)),
+      whatsappNumber: toText(params.parentProfile.whatsappNumber).trim(),
+      homePhone: toText(params.parentProfile.homePhone).trim(),
+      otherPhone: toText(params.parentProfile.otherPhone).trim(),
+      homeAddress: toText(params.parentProfile.homeAddress).trim(),
+      officeAddress: toText(params.parentProfile.officeAddress).trim(),
+    }
+
+    const parentAccountPayload: ParentAccountInput = {
+      username: toText(accountRow.username).trim() || normalizedParentProfile.email,
+      password: '',
+      isActive: parseBoolean(accountRow.is_active),
+      childIds: children.map((child) => child.id),
+      parentProfile: normalizedParentProfile,
+    }
+
+    await updateParentAccount(String(context.accountId), parentAccountPayload)
+
+    const childPayload: ChildProfileInput = {
+      ...params.childProfile,
+      fullName: toText(params.childProfile.fullName).trim(),
+      nickName: toText(params.childProfile.nickName).trim(),
+      gender: params.childProfile.gender,
+      photoDataUrl: toText(params.childProfile.photoDataUrl).trim(),
+      birthPlace: toText(params.childProfile.birthPlace).trim(),
+      birthDate: toText(params.childProfile.birthDate).trim(),
+      childOrder: toText(params.childProfile.childOrder).trim(),
+      religion: params.childProfile.religion,
+      outsideActivities: toText(params.childProfile.outsideActivities).trim(),
+      fatherName: normalizedParentProfile.fatherName,
+      motherName: normalizedParentProfile.motherName,
+      homeAddress: normalizedParentProfile.homeAddress,
+      homePhone: normalizedParentProfile.homePhone,
+      officeAddress: normalizedParentProfile.officeAddress,
+      otherPhone: normalizedParentProfile.otherPhone,
+      email: normalizedParentProfile.email,
+      whatsappNumber: normalizedParentProfile.whatsappNumber,
+      allergy: toText(params.childProfile.allergy).trim(),
+      servicePackage: params.childProfile.servicePackage,
+      serviceStartDate: toText(params.childProfile.serviceStartDate).trim(),
+      arrivalTime: toText(params.childProfile.arrivalTime).trim(),
+      departureTime: toText(params.childProfile.departureTime).trim(),
+      pickupPersons: Array.isArray(params.childProfile.pickupPersons)
+        ? params.childProfile.pickupPersons
+            .map((name) => toText(name).trim())
+            .filter(Boolean)
+        : [],
+      depositPurpose: toText(params.childProfile.depositPurpose).trim(),
+      prenatalPeriod: toText(params.childProfile.prenatalPeriod).trim(),
+      partusPeriod: toText(params.childProfile.partusPeriod).trim(),
+      postNatalPeriod: toText(params.childProfile.postNatalPeriod).trim(),
+      motorSkill: toText(params.childProfile.motorSkill).trim(),
+      languageSkill: toText(params.childProfile.languageSkill).trim(),
+      healthHistory: toText(params.childProfile.healthHistory).trim(),
+      toiletTrainingBab: toText(params.childProfile.toiletTrainingBab).trim(),
+      toiletTrainingBak: toText(params.childProfile.toiletTrainingBak).trim(),
+      toiletTrainingBath: toText(params.childProfile.toiletTrainingBath).trim(),
+      brushingTeeth: toText(params.childProfile.brushingTeeth).trim(),
+      eating: toText(params.childProfile.eating).trim(),
+      drinkingMilk: toText(params.childProfile.drinkingMilk).trim(),
+      whenCrying: toText(params.childProfile.whenCrying).trim(),
+      whenPlaying: toText(params.childProfile.whenPlaying).trim(),
+      sleeping: toText(params.childProfile.sleeping).trim(),
+      otherHabits: toText(params.childProfile.otherHabits).trim(),
+    }
+
+    await updateChild(childId, childPayload)
+    return await getParentDashboardData(String(context.accountId))
+  } catch (error) {
+    if (error instanceof ParentAccountServiceError) {
+      throw new ParentPortalServiceError(error.status, error.message)
+    }
+    if (error instanceof ServiceError) {
+      throw new ParentPortalServiceError(error.statusCode, error.message)
+    }
+    if (error instanceof PasswordError) {
+      throw new ParentPortalServiceError(error.status, error.message)
+    }
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+export const changeParentPortalPassword = async (params: {
+  parentAccountId: string
+  currentPassword: string
+  newPassword: string
+}) => {
+  const parentAccountId = parseAccountId(params.parentAccountId)
+  const currentPassword = toText(params.currentPassword).trim()
+  const newPassword = toText(params.newPassword).trim()
+
+  if (!currentPassword) {
+    throw new ParentPortalServiceError(400, 'Password saat ini wajib diisi.')
+  }
+  if (!newPassword) {
+    throw new ParentPortalServiceError(400, 'Password baru wajib diisi.')
+  }
+  if (newPassword.length < 8) {
+    throw new ParentPortalServiceError(400, 'Password baru minimal 8 karakter.')
+  }
+  if (newPassword === currentPassword) {
+    throw new ParentPortalServiceError(400, 'Password baru harus berbeda dari password saat ini.')
+  }
+
+  const connection = await dbPool.getConnection()
+
+  try {
+    await ensureParentRelationshipSchema(connection)
+    const accountRow = await loadParentAccountMeta(connection, parentAccountId)
+    if (!accountRow || !parseBoolean(accountRow.is_active)) {
+      throw new ParentPortalServiceError(404, 'Akun orang tua tidak ditemukan.')
+    }
+
+    const currentPasswordHash = toText(accountRow.password_hash)
+    const isCurrentPasswordValid = await verifyPassword(currentPassword, currentPasswordHash)
+    if (!isCurrentPasswordValid) {
+      throw new ParentPortalServiceError(400, 'Password saat ini tidak sesuai.')
+    }
+
+    const nextPasswordHash = await hashPassword(newPassword)
+    await connection.execute(
+      `UPDATE parent_accounts
+      SET
+        password_hash = ?,
+        updated_at = UTC_TIMESTAMP()
+      WHERE id = ?`,
+      [nextPasswordHash, Number(accountRow.account_id)],
+    )
+
+    return {
+      updated: true,
+    }
+  } catch (error) {
+    if (error instanceof PasswordError) {
+      throw new ParentPortalServiceError(error.status, error.message)
+    }
+    throw error
   } finally {
     connection.release()
   }

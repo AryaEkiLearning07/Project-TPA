@@ -172,6 +172,7 @@ const UpdatePengumumanPage = ({
       ...previous,
       staffUserId: staffId,
       title: selectedStaff?.fullName ?? '',
+      excerpt: selectedStaff?.positionTitle ?? '',
       content: selectedStaff?.description ?? '',
       coverImageDataUrl: selectedStaff?.photoDataUrl ?? '',
       coverImageName: selectedStaff?.photoName ?? '',
@@ -180,7 +181,6 @@ const UpdatePengumumanPage = ({
       displayMode: 'section',
       publishStartDate: '',
       publishEndDate: '',
-      excerpt: '',
       ctaLabel: '',
       ctaUrl: '',
       isPinned: false,
@@ -393,6 +393,7 @@ const UpdatePengumumanPage = ({
                     })}</td>
                     <td>
                       <strong>{staff.fullName}</strong>
+                      <div className="field-hint">{staff.positionTitle || 'Jabatan belum diisi'}</div>
                       <div className="field-hint">{staff.email}</div>
                     </td>
                     <td>{staff.description || '-'}</td>
@@ -725,7 +726,7 @@ const UpdatePengumumanPage = ({
                   ))}
                 </select>
                 <p className="field-hint">
-                  Hanya petugas aktif yang tampil di landing page. Pilih petugas dulu sebelum upload foto dan isi keterangan.
+                  Hanya petugas aktif yang tampil di landing page. Pilih petugas dulu sebelum upload foto, isi jabatan, dan isi keterangan.
                 </p>
               </div>
 
@@ -778,6 +779,25 @@ const UpdatePengumumanPage = ({
                   value={form.title}
                   readOnly
                   placeholder="Nama petugas akan terisi otomatis"
+                />
+              </div>
+
+              <div className="field-group">
+                <label className="label" htmlFor="announcementPositionTeam">
+                  Jabatan
+                </label>
+                <input
+                  id="announcementPositionTeam"
+                  className="input"
+                  value={form.excerpt}
+                  onChange={(event) =>
+                    setForm((previous) => ({
+                      ...previous,
+                      excerpt: event.target.value,
+                    }))
+                  }
+                  placeholder="Contoh: Koordinator Pengasuhan"
+                  disabled={!form.staffUserId}
                 />
               </div>
 

@@ -1,5 +1,18 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap');
+
 .team-card-stack {
-  width: min(100%, 760px);
+  /* Serif for job title line under staff name */
+  --team-role-font:
+    'Source Serif 4',
+    'Source Serif Pro',
+    'Playfair Display',
+    'Times New Roman',
+    Georgia,
+    serif;
+}
+
+.team-card-stack {
+  width: min(100%, 560px);
   margin-inline: auto;
 }
 
@@ -9,7 +22,7 @@
 
 .team-card-stack__stage {
   position: relative;
-  min-height: clamp(396px, 52vw, 524px);
+  min-height: clamp(404px, 54vw, 536px);
   isolation: isolate;
   contain: layout paint;
   overflow: visible;
@@ -46,6 +59,95 @@
   pointer-events: auto;
 }
 
+.team-card-stack.is-dragging .team-card-stack__item {
+  transition: none !important;
+  will-change: auto;
+}
+
+.team-card-stack.is-dragging .team-card-stack__item.is-top {
+  will-change: transform, opacity;
+}
+
+.team-card-stack--team .team-card-stack__item {
+  transition: none;
+}
+
+.team-card-stack--team .team-card-stack__stage {
+  min-height: clamp(466px, 62vw, 610px);
+}
+
+.team-card-stack--team .team-card-stack__stage::before {
+  inset: 5% 0% 4%;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(192, 223, 255, 0.2) 0%, rgba(192, 223, 255, 0) 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
+  filter: none;
+}
+
+.team-card-stack--team .team-card-stack__stage::after {
+  display: none;
+}
+
+.team-card-stack--team .team-card-stack__card--team {
+  width: min(372px, 88%);
+  border-radius: 18px;
+  border: 1px solid rgba(215, 228, 255, 0.26);
+  background: #0a101a;
+  box-shadow:
+    0 36px 72px rgba(3, 8, 14, 0.58),
+    0 16px 28px rgba(3, 8, 14, 0.42);
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__face--front {
+  position: relative;
+  background: transparent;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__face--front::before {
+  display: none;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__face--front::after {
+  display: none;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back .team-card-stack__card--team .kegiatan-deck-card__face--front::before {
+  background: transparent;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back.is-left .team-card-stack__card--team .kegiatan-deck-card__face--front::before {
+  background: transparent;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back.is-right .team-card-stack__card--team .kegiatan-deck-card__face--front::before {
+  background: transparent;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back .team-card-stack__card--team .kegiatan-deck-card__image {
+  filter: none;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back .team-card-stack__card--team {
+  border-color: rgba(174, 197, 232, 0.22);
+  box-shadow:
+    0 24px 44px rgba(3, 8, 14, 0.44),
+    0 12px 22px rgba(3, 8, 14, 0.3);
+}
+
+.team-card-stack--team .team-card-stack__item.is-back .team-card-stack__card--team .kegiatan-deck-card__badge,
+.team-card-stack--team .team-card-stack__item.is-back .team-card-stack__card--team .kegiatan-deck-card__title {
+  opacity: 0;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back.is-left {
+  transform-origin: right center;
+}
+
+.team-card-stack--team .team-card-stack__item.is-back.is-right {
+  transform-origin: left center;
+}
+
 .team-card-stack__card {
   position: relative;
   width: min(340px, 88%);
@@ -64,6 +166,7 @@
   cursor: grab;
   transform: translateZ(0);
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .team-card-stack__card.is-top.is-dragging {
@@ -71,6 +174,27 @@
   box-shadow:
     0 44px 84px rgba(34, 16, 28, 0.34),
     0 22px 34px rgba(34, 16, 28, 0.18);
+}
+
+.team-card-stack--team .team-card-stack__card--team.is-top {
+  border-color: rgba(230, 239, 255, 0.44);
+  box-shadow:
+    0 42px 86px rgba(4, 9, 16, 0.62),
+    0 20px 36px rgba(4, 9, 16, 0.46);
+}
+
+.team-card-stack--team .team-card-stack__card--team.is-top::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.team-card-stack--team .team-card-stack__card--team.is-top .kegiatan-deck-card__image {
+  filter: saturate(1.04) contrast(1.03);
 }
 
 .team-card-stack__card.is-flipped .kegiatan-deck-card__flip-inner {
@@ -82,6 +206,18 @@
 .team-card-stack__card .kegiatan-deck-card__image {
   transform: translateZ(0);
   backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.team-card-stack__card .kegiatan-deck-card__face {
+  overflow: hidden;
+}
+
+.team-card-stack__card .kegiatan-deck-card__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .team-card-stack__card .kegiatan-deck-card__index,
@@ -103,19 +239,101 @@
   background: rgba(34, 24, 34, 0.56);
 }
 
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__index {
+  display: none;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__badge {
+  top: 12px;
+  right: 12px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 11px;
+  border: 1px solid rgba(226, 238, 255, 0.48);
+  background: rgba(12, 18, 30, 0.78);
+  color: #f0f5ff;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-align: center;
+  backdrop-filter: blur(7px);
+  box-shadow: 0 8px 14px rgba(2, 6, 12, 0.32);
+  z-index: 4;
+}
+
 .team-card-stack__card .kegiatan-deck-card__title {
+  display: grid;
+  gap: 6px;
   padding: 64px 18px 42px !important;
   border-radius: 0 0 28px 28px;
   background: linear-gradient(180deg, rgba(18, 12, 18, 0) 0%, rgba(18, 12, 18, 0.92) 62%, rgba(18, 12, 18, 0.98) 100%);
+  font-family: 'Playfair Display', 'Times New Roman', Georgia, serif !important;
   font-size: clamp(22px, 2vw, 28px) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+  line-height: 1.08 !important;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__title {
+  position: absolute !important;
+  inset: auto 0 0 0 !important;
+  margin: 0 !important;
+  padding: 92px 18px 18px !important;
+  border-radius: 0 0 18px 18px;
+  background: linear-gradient(180deg, rgba(7, 11, 18, 0) 0%, rgba(7, 11, 18, 0.78) 54%, rgba(7, 11, 18, 0.97) 100%);
+  color: #f3f7ff !important;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif !important;
+  font-size: clamp(24px, 2.25vw, 32px) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.008em;
+  line-height: 1.06 !important;
+  text-align: center;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.58);
+  z-index: 3;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__title--team {
+  display: grid;
+  gap: 5px;
+  align-items: center;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__team-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  width: 100%;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__team-role {
+  display: block;
+  width: 100%;
+  font-family: var(--team-role-font);
+  font-size: clamp(14px, 1.15vw, 17px);
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: 1.2;
+  color: rgba(241, 247, 255, 0.92);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.42);
 }
 
 .team-card-stack__card .kegiatan-deck-card__tap-hint {
   left: 18px !important;
   right: 18px !important;
   bottom: 16px !important;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif !important;
   font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em;
   line-height: 1.25 !important;
+}
+
+.team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__tap-hint {
+  display: none;
 }
 
 .team-card-stack__face--back {
@@ -131,8 +349,35 @@
   overflow: auto;
   max-height: clamp(178px, 24vw, 238px);
   padding-right: 2px;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif;
   font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
   line-height: 1.58;
+}
+
+.team-card-stack__card .kegiatan-deck-card__back-title {
+  font-family: 'Playfair Display', 'Times New Roman', Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.08;
+}
+
+.team-card-stack__back-role {
+  margin: -2px 0 2px;
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.35;
+  text-transform: uppercase;
+  color: rgba(255, 223, 237, 0.84);
+}
+
+.team-card-stack__card .kegiatan-deck-card__back-period,
+.team-card-stack__card .kegiatan-deck-card__flip-hint {
+  font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Noto Sans', Arial, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .team-card-stack__back-description::-webkit-scrollbar {
@@ -172,18 +417,85 @@
   box-shadow: none;
 }
 
+.team-card-stack--team .tim-deck__meta {
+  display: none;
+}
+
 @media (max-width: 760px) {
+  .team-card-stack--team .team-card-stack__stage {
+    min-height: clamp(398px, 126vw, 482px);
+  }
+
   .team-card-stack__stage {
     min-height: clamp(404px, 128vw, 486px);
   }
 
+  .team-card-stack--mobile-team .team-card-stack__stage {
+    contain: none;
+  }
+
+  .team-card-stack__stage::before {
+    filter: none;
+    opacity: 0.72;
+  }
+
+  .team-card-stack__item {
+    will-change: auto;
+  }
+
+  .team-card-stack__item.is-top {
+    will-change: transform;
+  }
+
   .team-card-stack__card {
     width: min(304px, 92%);
+    box-shadow:
+      0 30px 56px rgba(34, 16, 28, 0.3),
+      0 12px 20px rgba(34, 16, 28, 0.15);
+  }
+
+  .team-card-stack--team .team-card-stack__card--team {
+    width: min(300px, 90%);
+    border-radius: 16px;
+  }
+
+  .team-card-stack--mobile-team .team-card-stack__card {
+    perspective: none;
+  }
+
+  .team-card-stack__card .kegiatan-deck-card__flip-inner,
+  .team-card-stack__card .kegiatan-deck-card__image {
+    transform: none;
+  }
+
+  .team-card-stack--mobile-team .team-card-stack__card .kegiatan-deck-card__flip-inner {
+    will-change: transform;
+  }
+
+  .team-card-stack__card .kegiatan-deck-card__image {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .team-card-stack__card .kegiatan-deck-card__index,
+  .team-card-stack__card .kegiatan-deck-card__badge {
+    backdrop-filter: none;
   }
 
   .team-card-stack__card .kegiatan-deck-card__title {
     padding: 58px 16px 38px !important;
     font-size: clamp(21px, 6.2vw, 26px) !important;
+  }
+
+  .team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__title {
+    padding: 82px 14px 14px !important;
+    border-radius: 0 0 16px 16px;
+    font-size: clamp(22px, 6.4vw, 28px) !important;
+    line-height: 1.05 !important;
+  }
+
+  .team-card-stack--team .team-card-stack__card--team .kegiatan-deck-card__team-role {
+    font-size: clamp(13.5px, 3.9vw, 16px);
   }
 
   .team-card-stack__back-description {

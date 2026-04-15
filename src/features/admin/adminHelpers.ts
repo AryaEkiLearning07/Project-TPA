@@ -212,6 +212,7 @@ export const initialStaffForm: StaffUserInput = {
     tanggalMasuk: '',
     photoDataUrl: '',
     photoName: '',
+    positionTitle: '',
     description: '',
 }
 

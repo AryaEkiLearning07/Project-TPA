@@ -113,6 +113,7 @@ interface LandingTeamStaffRow extends RowDataPacket {
   full_name: string | null
   staff_photo_data_url: string | null
   staff_photo_name: string | null
+  staff_position_title: string | null
   staff_description: string | null
   created_at: string | Date
   updated_at: string | Date
@@ -517,10 +518,12 @@ const listLandingTeamItemsFromStaffUsers = async (
 ): Promise<LandingAnnouncement[]> => {
   const hasPhotoDataUrlColumn = await hasUsersColumn(executor, 'staff_photo_data_url')
   const hasPhotoNameColumn = await hasUsersColumn(executor, 'staff_photo_name')
+  const hasPositionTitleColumn = await hasUsersColumn(executor, 'staff_position_title')
   const hasDescriptionColumn = await hasUsersColumn(executor, 'staff_description')
 
   const photoDataUrlExpr = hasPhotoDataUrlColumn ? 'staff_photo_data_url' : "''"
   const photoNameExpr = hasPhotoNameColumn ? 'staff_photo_name' : "''"
+  const positionTitleExpr = hasPositionTitleColumn ? 'staff_position_title' : "''"
   const descriptionExpr = hasDescriptionColumn ? 'staff_description' : "''"
 
   const [rows] = await executor.execute<LandingTeamStaffRow[]>(
@@ -529,6 +532,7 @@ const listLandingTeamItemsFromStaffUsers = async (
       full_name,
       ${photoDataUrlExpr} AS staff_photo_data_url,
       ${photoNameExpr} AS staff_photo_name,
+      ${positionTitleExpr} AS staff_position_title,
       ${descriptionExpr} AS staff_description,
       created_at,
       updated_at
@@ -555,7 +559,7 @@ const listLandingTeamItemsFromStaffUsers = async (
       title,
       category: 'tim',
       displayMode: 'section',
-      excerpt: '',
+      excerpt: toText(row.staff_position_title).trim(),
       content: toText(row.staff_description).trim(),
       coverImageDataUrl: normalizeImageAssetUrl(row.staff_photo_data_url),
       coverImageName: toText(row.staff_photo_name),

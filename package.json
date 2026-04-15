@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "db:start": "docker compose -f docker-compose.db.yml up -d mysql",
+    "db:stop": "docker compose -f docker-compose.db.yml stop mysql",
+    "db:down": "docker compose -f docker-compose.db.yml down",
+    "db:logs": "docker compose -f docker-compose.db.yml logs mysql --tail=120",
     "dev:client": "vite --host",
     "dev:landing": "vite --config apps/landing/vite.config.js --host --port 5174 --strictPort",
     "dev:server": "npm run dev --prefix server",

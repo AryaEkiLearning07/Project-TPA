@@ -6,6 +6,7 @@ import type {
 } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
 import { ensureChildrenTable } from './child-service.js'
+import { ensureAuthSchema } from './auth-service.js'
 import {
   ensureParentRelationshipSchema,
   type SqlExecutor,
@@ -107,9 +108,290 @@ const mapCodeRow = (row: RowDataPacket): ChildRegistrationCodeRecord => ({
   updatedAt: toIsoDateTime(row.updated_at) ?? new Date().toISOString(),
 })
 
+interface ColumnMetaRow extends RowDataPacket {
+  column_type: string
+  is_nullable: 'YES' | 'NO'
+}
+
+const normalizeColumnTypeForCompare = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^integer\b/, 'int')
+
+const loadColumnMeta = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+): Promise<ColumnMetaRow | null> => {
+  const [rows] = (await executor.execute<ColumnMetaRow[]>(
+    `SELECT
+      COLUMN_TYPE AS column_type,
+      IS_NULLABLE AS is_nullable
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+    LIMIT 1`,
+    [tableName, columnName],
+  )) as [ColumnMetaRow[], unknown]
+
+  return rows[0] ?? null
+}
+
+const resolveReferencedColumnType = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+  fallbackType: string,
+): Promise<string> => {
+  const meta = await loadColumnMeta(executor, tableName, columnName)
+  const rawType = toText(meta?.column_type).trim()
+  return rawType ? rawType.toUpperCase() : fallbackType
+}
+
+const ensureColumnType = async (
+  executor: SqlExecutor,
+  input: {
+    tableName: string
+    columnName: string
+    targetType: string
+    nullable: boolean
+  },
+): Promise<void> => {
+  const meta = await loadColumnMeta(executor, input.tableName, input.columnName)
+  if (!meta) {
+    return
+  }
+
+  const currentType = normalizeColumnTypeForCompare(toText(meta.column_type))
+  const targetType = normalizeColumnTypeForCompare(input.targetType)
+  const nullableMatches = (meta.is_nullable === 'YES') === input.nullable
+
+  if (currentType === targetType && nullableMatches) {
+    return
+  }
+
+  await executor.execute(
+    `ALTER TABLE ${input.tableName}
+    MODIFY COLUMN ${input.columnName} ${input.targetType} ${input.nullable ? 'NULL' : 'NOT NULL'}`,
+  )
+}
+
+const hasColumn = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+): Promise<boolean> => {
+  const [rows] = (await executor.execute(
+    `SELECT 1
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+    LIMIT 1`,
+    [tableName, columnName],
+  )) as [RowDataPacket[], unknown]
+
+  return rows.length > 0
+}
+
+const hasIndex = async (
+  executor: SqlExecutor,
+  tableName: string,
+  indexName: string,
+): Promise<boolean> => {
+  const [rows] = (await executor.execute(
+    `SELECT 1
+    FROM INFORMATION_SCHEMA.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND INDEX_NAME = ?
+    LIMIT 1`,
+    [tableName, indexName],
+  )) as [RowDataPacket[], unknown]
+
+  return rows.length > 0
+}
+
+const hasForeignKeyOnColumn = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+): Promise<boolean> => {
+  const [rows] = (await executor.execute(
+    `SELECT 1
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+      AND REFERENCED_TABLE_NAME IS NOT NULL
+    LIMIT 1`,
+    [tableName, columnName],
+  )) as [RowDataPacket[], unknown]
+
+  return rows.length > 0
+}
+
+const ensureGeneratedByAdminColumn = async (executor: SqlExecutor): Promise<void> => {
+  const exists = await hasColumn(executor, 'child_registration_codes', 'generated_by_admin_id')
+  if (exists) {
+    return
+  }
+
+  await executor.execute(
+    `ALTER TABLE child_registration_codes
+    ADD COLUMN generated_by_admin_id BIGINT NULL
+    AFTER claimed_by_parent_account_id`,
+  )
+}
+
+const ensureGeneratedByAdminIndex = async (executor: SqlExecutor): Promise<void> => {
+  const exists = await hasIndex(
+    executor,
+    'child_registration_codes',
+    'idx_child_registration_codes_generated_admin',
+  )
+  if (exists) {
+    return
+  }
+
+  await executor.execute(
+    `ALTER TABLE child_registration_codes
+    ADD INDEX idx_child_registration_codes_generated_admin (generated_by_admin_id)`,
+  )
+}
+
+const ensureChildRegistrationCodeColumnTypes = async (
+  executor: SqlExecutor,
+): Promise<void> => {
+  const childrenIdType = await resolveReferencedColumnType(
+    executor,
+    'children',
+    'id',
+    'BIGINT',
+  )
+  const parentAccountsIdType = await resolveReferencedColumnType(
+    executor,
+    'parent_accounts',
+    'id',
+    'BIGINT',
+  )
+  const usersIdType = await resolveReferencedColumnType(executor, 'users', 'id', 'BIGINT')
+
+  await ensureColumnType(executor, {
+    tableName: 'child_registration_codes',
+    columnName: 'child_id',
+    targetType: childrenIdType,
+    nullable: false,
+  })
+  await ensureColumnType(executor, {
+    tableName: 'child_registration_codes',
+    columnName: 'claimed_by_parent_account_id',
+    targetType: parentAccountsIdType,
+    nullable: true,
+  })
+  await ensureColumnType(executor, {
+    tableName: 'child_registration_codes',
+    columnName: 'generated_by_admin_id',
+    targetType: usersIdType,
+    nullable: true,
+  })
+}
+
+const reconcileChildRegistrationCodeReferences = async (
+  executor: SqlExecutor,
+): Promise<void> => {
+  await executor.execute(
+    `DELETE crc
+    FROM child_registration_codes crc
+    LEFT JOIN children c ON c.id = crc.child_id
+    WHERE c.id IS NULL`,
+  )
+
+  await executor.execute(
+    `UPDATE child_registration_codes crc
+    LEFT JOIN parent_accounts pa ON pa.id = crc.claimed_by_parent_account_id
+    SET
+      crc.claimed_by_parent_account_id = NULL,
+      crc.claimed_at = NULL,
+      crc.status = CASE
+        WHEN crc.status = 'CLAIMED' THEN 'REVOKED'
+        ELSE crc.status
+      END,
+      crc.updated_at = CURRENT_TIMESTAMP
+    WHERE crc.claimed_by_parent_account_id IS NOT NULL
+      AND pa.id IS NULL`,
+  )
+
+  await executor.execute(
+    `UPDATE child_registration_codes crc
+    LEFT JOIN users u ON u.id = crc.generated_by_admin_id
+    SET
+      crc.generated_by_admin_id = NULL,
+      crc.updated_at = CURRENT_TIMESTAMP
+    WHERE crc.generated_by_admin_id IS NOT NULL
+      AND u.id IS NULL`,
+  )
+}
+
+const ensureChildRegistrationCodeForeignKeys = async (
+  executor: SqlExecutor,
+): Promise<void> => {
+  const hasChildForeignKey = await hasForeignKeyOnColumn(
+    executor,
+    'child_registration_codes',
+    'child_id',
+  )
+  if (!hasChildForeignKey) {
+    await executor.execute(
+      `ALTER TABLE child_registration_codes
+      ADD CONSTRAINT fk_child_registration_codes_child
+      FOREIGN KEY (child_id)
+      REFERENCES children(id)
+      ON UPDATE CASCADE
+      ON DELETE CASCADE`,
+    )
+  }
+
+  const hasClaimedAccountForeignKey = await hasForeignKeyOnColumn(
+    executor,
+    'child_registration_codes',
+    'claimed_by_parent_account_id',
+  )
+  if (!hasClaimedAccountForeignKey) {
+    await executor.execute(
+      `ALTER TABLE child_registration_codes
+      ADD CONSTRAINT fk_child_registration_codes_claimed_parent_account
+      FOREIGN KEY (claimed_by_parent_account_id)
+      REFERENCES parent_accounts(id)
+      ON UPDATE CASCADE
+      ON DELETE SET NULL`,
+    )
+  }
+
+  const hasGeneratedAdminForeignKey = await hasForeignKeyOnColumn(
+    executor,
+    'child_registration_codes',
+    'generated_by_admin_id',
+  )
+  if (!hasGeneratedAdminForeignKey) {
+    await executor.execute(
+      `ALTER TABLE child_registration_codes
+      ADD CONSTRAINT fk_child_registration_codes_generated_admin
+      FOREIGN KEY (generated_by_admin_id)
+      REFERENCES users(id)
+      ON UPDATE CASCADE
+      ON DELETE SET NULL`,
+    )
+  }
+}
+
 const ensureChildRegistrationCodeTable = async (
   executor: SqlExecutor,
 ): Promise<void> => {
+  await ensureAuthSchema(executor)
   await ensureChildrenTable(executor)
   await ensureParentRelationshipSchema(executor)
   await executor.execute(
@@ -129,6 +411,11 @@ const ensureChildRegistrationCodeTable = async (
       INDEX idx_child_registration_codes_claimed_account (claimed_by_parent_account_id)
     )`,
   )
+  await ensureGeneratedByAdminColumn(executor)
+  await ensureChildRegistrationCodeColumnTypes(executor)
+  await ensureGeneratedByAdminIndex(executor)
+  await reconcileChildRegistrationCodeReferences(executor)
+  await ensureChildRegistrationCodeForeignKeys(executor)
 }
 
 export const ensureChildRegistrationCodeSchema = async (

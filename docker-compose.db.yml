@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: project-tpa-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: db_TPA
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      TZ: Asia/Bangkok
+    ports:
+      - "3306:3306"
+    volumes:
+      - tpa_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  tpa_mysql_data:

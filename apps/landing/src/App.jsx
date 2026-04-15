@@ -3109,23 +3109,40 @@ export default function App() {
           className={`page-section ${visibleSections['tim-kami'] ? 'is-visible' : ''}`}
         >
           <div className="section-shell tim-section">
-            <div className="section-head">
-              <h2>Tim Kami</h2>
-            </div>
-            <p className="tim-section__lead">
-              Profil pendamping aktif di TPA Rumah Ceria UBAYA.
-            </p>
+            <div className="tim-section__hero">
+              <div className="section-head tim-section__head">
+                <h2>Tim Kami</h2>
+                <p className="tim-section__lead">
+                  Profil pendamping aktif di TPA Rumah Ceria UBAYA.
+                </p>
+              </div>
 
-            <div className="team-card-shell">
+              <div className="tim-section__chips" aria-label="Panduan interaksi kartu tim">
+                <p className="tim-section__chip">
+                  <strong>{teamItems.length}</strong>
+                  Pendamping aktif
+                </p>
+                <p className="tim-section__chip">Geser kiri/kanan untuk pindah kartu</p>
+                <p className="tim-section__chip">Klik kartu depan untuk lihat detail</p>
+              </div>
+            </div>
+
+            <div className={`team-card-shell ${teamItems.length === 0 ? 'team-card-shell--empty' : ''}`}>
+              <div className="team-card-shell__backdrop" aria-hidden="true" />
               {teamItems.length === 0 ? (
-                <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty">
+                <article className="operational-grid__item kegiatan-event-card kegiatan-event-card--empty team-card-shell__empty">
                   <h4>Data tim belum tersedia</h4>
                   <p className="kegiatan-event__description">
                     Tambahkan data tim melalui panel admin agar tampil di halaman ini.
                   </p>
                 </article>
               ) : (
-                <TeamCardStack items={teamItems} />
+                <>
+                  <TeamCardStack items={teamItems} />
+                  <p className="team-card-shell__note">
+                    Geser untuk menjelajahi profil. Klik kartu yang aktif untuk membuka detail.
+                  </p>
+                </>
               )}
             </div>
           </div>

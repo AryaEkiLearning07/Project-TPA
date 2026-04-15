@@ -1,5 +1,6 @@
 import type { Pool, PoolConnection, RowDataPacket } from 'mysql2/promise'
 import { dbPool } from '../config/database.js'
+import { ensureAuthSchema } from './auth-service.js'
 
 type SqlExecutor = Pick<Pool, 'execute'> | Pick<PoolConnection, 'execute'>
 
@@ -103,6 +104,141 @@ const ensureStaffAttendanceTable = async (executor: SqlExecutor): Promise<void> 
       INDEX idx_staff_daily_attendance_user (staff_user_id),
       INDEX idx_staff_daily_attendance_date (attendance_date)
     )`,
+  )
+}
+
+interface ColumnMetaRow extends RowDataPacket {
+  column_type: string
+  is_nullable: 'YES' | 'NO'
+}
+
+const normalizeColumnTypeForCompare = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/^integer\b/, 'int')
+
+const loadColumnMeta = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+): Promise<ColumnMetaRow | null> => {
+  const [rows] = (await executor.execute<ColumnMetaRow[]>(
+    `SELECT
+      COLUMN_TYPE AS column_type,
+      IS_NULLABLE AS is_nullable
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+    LIMIT 1`,
+    [tableName, columnName],
+  )) as [ColumnMetaRow[], unknown]
+
+  return rows[0] ?? null
+}
+
+const resolveReferencedColumnType = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+  fallbackType: string,
+): Promise<string> => {
+  const meta = await loadColumnMeta(executor, tableName, columnName)
+  const rawType = toText(meta?.column_type).trim()
+  return rawType ? rawType.toUpperCase() : fallbackType
+}
+
+const ensureColumnType = async (
+  executor: SqlExecutor,
+  input: {
+    tableName: string
+    columnName: string
+    targetType: string
+    nullable: boolean
+  },
+): Promise<void> => {
+  const meta = await loadColumnMeta(executor, input.tableName, input.columnName)
+  if (!meta) {
+    return
+  }
+
+  const currentType = normalizeColumnTypeForCompare(toText(meta.column_type))
+  const targetType = normalizeColumnTypeForCompare(input.targetType)
+  const nullableMatches = (meta.is_nullable === 'YES') === input.nullable
+
+  if (currentType === targetType && nullableMatches) {
+    return
+  }
+
+  await executor.execute(
+    `ALTER TABLE ${input.tableName}
+    MODIFY COLUMN ${input.columnName} ${input.targetType} ${input.nullable ? 'NULL' : 'NOT NULL'}`,
+  )
+}
+
+const hasForeignKeyOnColumn = async (
+  executor: SqlExecutor,
+  tableName: string,
+  columnName: string,
+): Promise<boolean> => {
+  const [rows] = (await executor.execute(
+    `SELECT 1
+    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = ?
+      AND COLUMN_NAME = ?
+      AND REFERENCED_TABLE_NAME IS NOT NULL
+    LIMIT 1`,
+    [tableName, columnName],
+  )) as [RowDataPacket[], unknown]
+
+  return rows.length > 0
+}
+
+const ensureStaffAttendanceColumnType = async (
+  executor: SqlExecutor,
+): Promise<void> => {
+  const usersIdType = await resolveReferencedColumnType(executor, 'users', 'id', 'BIGINT')
+  await ensureColumnType(executor, {
+    tableName: 'staff_daily_attendance',
+    columnName: 'staff_user_id',
+    targetType: usersIdType,
+    nullable: false,
+  })
+}
+
+const reconcileStaffAttendanceReferences = async (
+  executor: SqlExecutor,
+): Promise<void> => {
+  await executor.execute(
+    `DELETE sda
+    FROM staff_daily_attendance sda
+    LEFT JOIN users u ON u.id = sda.staff_user_id
+    WHERE u.id IS NULL`,
+  )
+}
+
+const ensureStaffAttendanceForeignKey = async (
+  executor: SqlExecutor,
+): Promise<void> => {
+  const exists = await hasForeignKeyOnColumn(
+    executor,
+    'staff_daily_attendance',
+    'staff_user_id',
+  )
+  if (exists) {
+    return
+  }
+
+  await executor.execute(
+    `ALTER TABLE staff_daily_attendance
+    ADD CONSTRAINT fk_staff_daily_attendance_staff_user
+    FOREIGN KEY (staff_user_id)
+    REFERENCES users(id)
+    ON UPDATE CASCADE
+    ON DELETE CASCADE`,
   )
 }
 
@@ -321,7 +457,11 @@ export class StaffAttendanceServiceError extends Error {
 export const ensureStaffAttendanceSchema = async (
   executor: SqlExecutor = dbPool,
 ): Promise<void> => {
+  await ensureAuthSchema(executor)
   await ensureStaffAttendanceTable(executor)
+  await ensureStaffAttendanceColumnType(executor)
+  await reconcileStaffAttendanceReferences(executor)
+  await ensureStaffAttendanceForeignKey(executor)
 }
 
 let staffAttendanceSchemaReadyPromise: Promise<void> | null = null
