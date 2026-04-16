@@ -1,5 +1,6 @@
 ﻿import { type FormEvent, useMemo, useState } from 'react'
 import { religionOptions, servicePackageOptions } from '../../../constants/options'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useEffect } from 'react'
 import { AppDatePickerField } from '../../../components/common/DatePickerFields'
 import type {
@@ -21,7 +22,10 @@ interface DataAnakPageProps {
   viewerRole: UserRole
   canManageData?: boolean
   registrationCodesByChildId?: Record<string, ChildRegistrationCode | null | undefined>
-  onSave?: (input: ChildProfileInput, editingId?: string) => Promise<boolean>
+  onSave?: (
+    input: ChildProfileInput,
+    editingId?: string,
+  ) => Promise<{ success: boolean; errorMessage?: string }>
   onDelete?: (id: string) => Promise<boolean>
   onLoadRegistrationCode?: (childId: string) => Promise<void>
   onGenerateRegistrationCode?: (childId: string) => Promise<boolean>
@@ -165,31 +169,14 @@ const removeErrorKey = (errors: FieldErrors, key: string): FieldErrors => {
 const validateAdminMandatoryFields = (input: ChildProfileInput): FieldErrors => {
   const errors: FieldErrors = {}
   const requiredKeys: (keyof ChildProfileInput)[] = [
-    // Biodata anak
     'fullName',
     'nickName',
-    'gender',
-    'childOrder',
     'birthPlace',
     'birthDate',
-    'religion',
-    'outsideActivities',
-    // Data orang tua
     'fatherName',
     'motherName',
-    'email',
-    'whatsappNumber',
-    'homePhone',
-    'otherPhone',
-    'homeAddress',
-    'officeAddress',
-    // Layanan
     'servicePackage',
     'serviceStartDate',
-    'arrivalTime',
-    'departureTime',
-    'pickupPersons',
-    'depositPurpose',
   ]
 
   requiredKeys.forEach((key) => {
@@ -209,8 +196,93 @@ const validateAdminMandatoryFields = (input: ChildProfileInput): FieldErrors => 
   return errors
 }
 
-const ADMIN_MANDATORY_FIELD_ERROR_MESSAGE =
-  'Field wajib hanya pada bagian Data Anak, Data Orangtua, dan Layanan. Bagian Perkembangan Kondisi Anak serta Kebiasaan Sehari-hari bersifat opsional.'
+const ADMIN_MANDATORY_FIELD_LABELS: Partial<Record<keyof ChildProfileInput, string>> = {
+  fullName: 'Nama lengkap',
+  nickName: 'Nama panggilan',
+  gender: 'Jenis kelamin',
+  childOrder: 'Anak ke',
+  birthPlace: 'Tempat lahir',
+  birthDate: 'Tanggal lahir',
+  religion: 'Agama',
+  outsideActivities: 'Kegiatan diluar lembaga',
+  fatherName: 'Nama ayah',
+  motherName: 'Nama ibu',
+  email: 'Email',
+  whatsappNumber: 'No. WhatsApp',
+  homePhone: 'No. telepon rumah',
+  otherPhone: 'No. telepon lain',
+  homeAddress: 'Alamat rumah',
+  officeAddress: 'Alamat kantor',
+  servicePackage: 'Paket layanan',
+  serviceStartDate: 'Tanggal mulai masuk',
+  arrivalTime: 'Jam datang',
+  departureTime: 'Jam pulang',
+  pickupPersons: 'Nama pengantar/penjemput',
+  depositPurpose: 'Tujuan menitipkan anak',
+}
+
+const normalizePickupPersonsForSubmit = (
+  pickupPersons: string[],
+  pickupInput: string,
+): string[] => {
+  const result: string[] = []
+  const seen = new Set<string>()
+  const append = (value: string) => {
+    const normalized = value.trim()
+    if (!normalized) {
+      return
+    }
+    const key = normalized.toLowerCase()
+    if (seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    result.push(normalized)
+  }
+
+  pickupPersons.forEach(append)
+  append(pickupInput)
+  return result
+}
+
+const buildAdminMandatoryErrorMessage = (errors: FieldErrors): string => {
+  const missingLabels = Object.keys(errors)
+    .map((key) => ADMIN_MANDATORY_FIELD_LABELS[key as keyof ChildProfileInput] ?? key)
+    .filter((label, index, source) => source.indexOf(label) === index)
+    .filter(Boolean)
+
+  if (missingLabels.length === 0) {
+    return 'Ada field wajib yang belum valid. Periksa kembali data pada bagian Data Anak, Data Orangtua, dan Layanan.'
+  }
+
+  return `Lengkapi field wajib berikut: ${missingLabels.join(', ')}.`
+}
+
+const CHILD_FORM_FIELD_LABELS: Partial<Record<keyof ChildProfileInput, string>> = {
+  fullName: 'Nama lengkap',
+  email: 'Email',
+  servicePackage: 'Paket layanan',
+  serviceStartDate: 'Tanggal mulai masuk',
+  departureTime: 'Jam pulang',
+}
+
+const buildChildValidationErrorMessage = (errors: FieldErrors): string => {
+  const messages = Object.entries(errors)
+    .map(([key, message]) => {
+      const label = CHILD_FORM_FIELD_LABELS[key as keyof ChildProfileInput]
+      if (!label) {
+        return message
+      }
+      return `${label}: ${message}`
+    })
+    .filter(Boolean)
+
+  if (messages.length === 0) {
+    return 'Periksa kembali field yang salah.'
+  }
+
+  return messages.join(' ')
+}
 
 const formatWhatsAppLink = (phone: string): string => {
   const cleaned = phone.replace(/\D/g, '')
@@ -353,15 +425,21 @@ const DataAnakPage = ({
     if (isAdminDraftEnabled) {
       const draft = loadAdminChildDraft()
       if (draft) {
+        // Normalize pickup persons saat memulihkan draft
+        const normalizedPickupPersons = normalizePickupPersonsForSubmit(
+          draft.form.pickupPersons,
+          draft.pickupInput,
+        )
         setForm({
           ...createInitialForm(),
           ...draft.form,
+          pickupPersons: normalizedPickupPersons,
           serviceStartDate: draft.form.serviceStartDate || getLocalDateIso(),
         })
         setErrors({})
         setSaveError(null)
         setEditingId(null)
-        setPickupInput(draft.pickupInput)
+        setPickupInput('') // Kosongkan pickupInput karena sudah di-normalize ke pickupPersons
         setDraftNotice('Draft terakhir berhasil dipulihkan (maksimal 10 menit).')
       } else {
         resetForm()
@@ -374,8 +452,22 @@ const DataAnakPage = ({
   }
 
   const closeModal = () => {
+    // Simpan draft sebelum menutup modal jika draft enabled dan tidak sedang edit
+    if (isAdminDraftEnabled && !editingId && hasDraftData(form, pickupInput)) {
+      saveAdminChildDraft({
+        form,
+        pickupInput,
+      })
+    }
     setModalOpen(false)
-    resetForm()
+    // Jangan reset form jika dalam mode draft enabled, biarkan draft tersimpan
+    if (!isAdminDraftEnabled) {
+      resetForm()
+    } else {
+      setSaveError(null)
+      setErrors({})
+      // Jangan reset pickupInput agar draft tetap terjaga
+    }
   }
 
   useEffect(() => {
@@ -395,13 +487,12 @@ const DataAnakPage = ({
   }, [isAdminDraftEnabled, isModalOpen, editingId, form, pickupInput])
 
   const addPickupPerson = () => {
-    const candidate = pickupInput.trim()
-    if (!candidate) return
-    if (form.pickupPersons.some((p) => p.toLowerCase() === candidate.toLowerCase())) {
+    const nextPickupPersons = normalizePickupPersonsForSubmit(form.pickupPersons, pickupInput)
+    if (nextPickupPersons.length === form.pickupPersons.length) {
       setPickupInput('')
       return
     }
-    setField('pickupPersons', [...form.pickupPersons, candidate])
+    setField('pickupPersons', nextPickupPersons)
     setPickupInput('')
   }
 
@@ -457,34 +548,70 @@ const DataAnakPage = ({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!canManageData || !onSave) return
+    if (!canManageData || !onSave) {
+      setSaveError('Fungsi simpan tidak tersedia.')
+      return
+    }
+
     setSaveError(null)
+    const normalizedPickupPersons = normalizePickupPersonsForSubmit(form.pickupPersons, pickupInput)
     const normalized: ChildProfileInput = {
       ...form,
-      pickupPersons: form.pickupPersons.map((p) => p.trim()).filter(Boolean),
+      pickupPersons: normalizedPickupPersons,
       email: form.email.trim(),
     }
     const strictErrors = viewerRole === 'ADMIN' ? validateAdminMandatoryFields(normalized) : {}
     if (Object.keys(strictErrors).length > 0) {
       setErrors(strictErrors)
-      setSaveError(ADMIN_MANDATORY_FIELD_ERROR_MESSAGE)
+      setSaveError(buildAdminMandatoryErrorMessage(strictErrors))
       return
     }
 
     const nextErrors = validateChildProfileInput(normalized)
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors)
+      setSaveError(buildChildValidationErrorMessage(nextErrors))
       return
     }
-    const success = await onSave(normalized, editingId ?? undefined)
-    if (success) {
-      if (isAdminDraftEnabled && !editingId) {
-        clearAdminChildDraft()
+
+    setErrors({})
+
+    try {
+      const result = await onSave(normalized, editingId ?? undefined)
+      if (result.success) {
+        if (isAdminDraftEnabled && !editingId) {
+          clearAdminChildDraft()
+        }
+        closeModal()
+        return
       }
-      closeModal()
+      setSaveError(
+        result.errorMessage ?? 'Gagal menyimpan data anak. Periksa koneksi database atau field yang diisi.',
+      )
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : 'Terjadi kesalahan saat menyimpan data anak.',
+      )
+    }
+  }
+
+  const handleFormKeyDown = (event: ReactKeyboardEvent<HTMLFormElement>) => {
+    if (event.key !== 'Enter') {
       return
     }
-    setSaveError('Gagal menyimpan data anak. Periksa koneksi database atau field yang diisi.')
+
+    const target = event.target
+    if (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLButtonElement ||
+      target instanceof HTMLAnchorElement
+    ) {
+      return
+    }
+
+    event.preventDefault()
   }
 
   const handleEdit = (record: ChildProfile, e: React.MouseEvent) => {
@@ -973,13 +1100,22 @@ const DataAnakPage = ({
 
       {/*  Modal Form  */}
       {canManageData && isModalOpen ? (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeModal() }}>
-          <div className="modal-content modal-content--large">
+        <div className="modal-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            e.preventDefault()
+            e.stopPropagation()
+            closeModal()
+          }
+        }}>
+          <div className="modal-content modal-content--large" onClick={(e) => {
+            e.stopPropagation()
+          }}>
             <div className="modal-header">
               <h2>{editingId ? 'Edit Data Anak' : 'Tambah Anak Baru'}</h2>
               <button type="button" className="modal-close" onClick={closeModal}>x</button>
             </div>
-            <form onSubmit={handleSubmit} className="modal-body">
+            <form noValidate onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
+              <div className="modal-body modal-body--scrollable">
               {/* Photo Upload */}
               <div className="child-photo-upload">
                 <label
@@ -1118,7 +1254,7 @@ const DataAnakPage = ({
                     </div>
                     <div className="field-group">
                       <label className="label" htmlFor="email">Email</label>
-                      <input id="email" className="input" type="email" value={form.email}
+                      <input id="email" className="input" type="text" inputMode="email" autoComplete="email" value={form.email}
                         onChange={(e) => setField('email', e.target.value)} />
                       {errors.email ? <p className="field-error">{errors.email}</p> : null}
                     </div>
@@ -1186,6 +1322,7 @@ const DataAnakPage = ({
                   <label className="label" htmlFor="departureTime">Jam pulang</label>
                   <input id="departureTime" className="input" type="time" value={form.departureTime}
                     onChange={(e) => setField('departureTime', e.target.value)} />
+                  {errors.departureTime ? <p className="field-error">{errors.departureTime}</p> : null}
                 </div>
               </div>
 
@@ -1309,14 +1446,29 @@ const DataAnakPage = ({
                 <textarea id="otherHabits" className="textarea" rows={2} value={form.otherHabits}
                   onChange={(e) => setField('otherHabits', e.target.value)} />
               </div>
+              </div>
 
-              <div className="form-actions">
-                {draftNotice ? <p className="field-hint">{draftNotice}</p> : null}
-                {saveError ? <p className="field-error">{saveError}</p> : null}
-                <button className="button" type="submit">
-                  {editingId ? 'Update Data Anak' : 'Simpan Data Anak'}
-                </button>
-                <button className="button button--ghost" type="button" onClick={closeModal}>Batal</button>
+              <div className="modal-footer">
+                <div className="form-actions">
+                  {draftNotice ? <p className="field-hint">{draftNotice}</p> : null}
+                  {saveError ? <p className="field-error">{saveError}</p> : null}
+                  <button
+                    key="save-button"
+                    id="save-child-button"
+                    className="button"
+                    type="submit"
+                  >
+                    {editingId ? 'Update Data Anak' : 'Simpan Data Anak'}
+                  </button>
+                  <button
+                    key="cancel-button"
+                    className="button button--ghost"
+                    type="button"
+                    onClick={closeModal}
+                  >
+                    Batal
+                  </button>
+                </div>
               </div>
             </form>
           </div>

@@ -1777,7 +1777,7 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
   const upsertChildProfileAdmin = async (
     input: ChildProfileInput,
     editingId?: string,
-  ): Promise<boolean> => {
+  ): Promise<{ success: boolean; errorMessage?: string }> => {
     setErrorMessage(null)
     setMessage(null)
     try {
@@ -1805,11 +1805,11 @@ const AdminSection = ({ user, onLogout }: AdminSectionProps) => {
             ? `Data anak berhasil ditambahkan. Kode registrasi: ${generatedCode.code}`
             : 'Data anak berhasil ditambahkan, tetapi kode registrasi belum berhasil dibuat.',
       )
-      return true
+      return { success: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Gagal menyimpan data anak.'
       setErrorMessage(message)
-      return false
+      return { success: false, errorMessage: message }
     }
   }
 

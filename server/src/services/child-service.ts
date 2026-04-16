@@ -58,6 +58,63 @@ const ensureChildrenServiceStartDateColumn = async (
     }
 }
 
+/**
+ * Migrate the religion ENUM so it matches the DbReligion type used by
+ * toDbReligion():  CHRISTIAN, CATHOLIC, BUDDHIST, CONFUCIAN.
+ *
+ * Older schemas created the column with the Indonesian labels
+ * (KRISTEN, KATOLIK, BUDHA, KONGHUCU).  This helper:
+ *   1. Widens the ENUM to accept both old and new values.
+ *   2. Converts existing rows with the old values to the new ones.
+ *   3. Narrows the ENUM to only the canonical values.
+ */
+const ensureChildrenReligionEnum = async (
+    executor: SqlExecutor,
+): Promise<void> => {
+    const [rows] = (await executor.execute(
+        `SELECT COLUMN_TYPE
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'children'
+           AND COLUMN_NAME = 'religion'
+         LIMIT 1`,
+    )) as [RowDataPacket[], unknown]
+
+    if (rows.length === 0) {
+        return // table or column does not exist yet
+    }
+
+    const columnType = String(rows[0].COLUMN_TYPE ?? '').toUpperCase()
+
+    // If the column already contains 'CHRISTIAN' it has been migrated.
+    if (columnType.includes("'CHRISTIAN'")) {
+        return
+    }
+
+    // Step 1 – widen ENUM to accept both old and new identifiers
+    await executor.execute(
+        `ALTER TABLE children
+         MODIFY COLUMN religion
+         ENUM('ISLAM','KRISTEN','KATOLIK','HINDU','BUDHA','KONGHUCU','OTHER',
+              'CHRISTIAN','CATHOLIC','BUDDHIST','CONFUCIAN')
+         NOT NULL DEFAULT 'OTHER'`,
+    )
+
+    // Step 2 – convert old values to canonical DbReligion values
+    await executor.execute(`UPDATE children SET religion = 'CHRISTIAN'  WHERE religion = 'KRISTEN'`)
+    await executor.execute(`UPDATE children SET religion = 'CATHOLIC'   WHERE religion = 'KATOLIK'`)
+    await executor.execute(`UPDATE children SET religion = 'BUDDHIST'   WHERE religion = 'BUDHA'`)
+    await executor.execute(`UPDATE children SET religion = 'CONFUCIAN'  WHERE religion = 'KONGHUCU'`)
+
+    // Step 3 – narrow ENUM to only the canonical values
+    await executor.execute(
+        `ALTER TABLE children
+         MODIFY COLUMN religion
+         ENUM('ISLAM','CHRISTIAN','CATHOLIC','HINDU','BUDDHIST','CONFUCIAN','OTHER')
+         NOT NULL DEFAULT 'OTHER'`,
+    )
+}
+
 const normalizeAssetUrl = (value: string): string => {
     const normalized = toText(value).trim()
     if (!normalized) return ''
@@ -210,7 +267,7 @@ export const ensureChildrenTable = async (executor: SqlExecutor): Promise<void> 
             birth_place VARCHAR(160) NOT NULL,
             birth_date DATE NOT NULL,
             child_order VARCHAR(40) NOT NULL,
-            religion ENUM('ISLAM', 'KRISTEN', 'KATOLIK', 'HINDU', 'BUDHA', 'KONGHUCU', 'OTHER') NOT NULL,
+            religion ENUM('ISLAM', 'CHRISTIAN', 'CATHOLIC', 'HINDU', 'BUDDHIST', 'CONFUCIAN', 'OTHER') NOT NULL,
             outside_activities TEXT NULL,
             allergy TEXT NULL,
             service_package ENUM('DAILY', 'BIWEEKLY', 'MONTHLY') NOT NULL DEFAULT 'MONTHLY',
@@ -242,6 +299,7 @@ export const ensureChildrenTable = async (executor: SqlExecutor): Promise<void> 
         )`,
     )
     await ensureChildrenServiceStartDateColumn(executor)
+    await ensureChildrenReligionEnum(executor)
 }
 
 const childWithParentProfileQuery = `
@@ -333,7 +391,7 @@ export const createChild = async (input: ChildProfileInput): Promise<ChildProfil
         when_crying, when_playing, sleeping_habit, other_habits,
         pickup_persons_json,
         parent_profile_id, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
             [
                 toText(input.fullName).trim(),
                 toText(input.nickName).trim(),
